@@ -80,3 +80,31 @@ def require_roles(allowed_roles: List[MembershipRole]):
             )
         return membership
     return role_checker
+
+
+ROLE_PERMISSIONS: dict[str, List[MembershipRole]] = {
+    "monitoring.read": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.DEVOPS, MembershipRole.DEVELOPER, MembershipRole.SECURITY, MembershipRole.COMPLIANCE, MembershipRole.AUDITOR, MembershipRole.VIEWER],
+    "monitoring.manage": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.DEVOPS],
+    "logs.read": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.DEVOPS, MembershipRole.DEVELOPER, MembershipRole.SECURITY, MembershipRole.COMPLIANCE, MembershipRole.AUDITOR, MembershipRole.VIEWER],
+    "alerts.read": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.DEVOPS, MembershipRole.DEVELOPER, MembershipRole.SECURITY, MembershipRole.COMPLIANCE, MembershipRole.AUDITOR, MembershipRole.VIEWER],
+    "alerts.manage": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.DEVOPS],
+    "incident.read": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.DEVOPS, MembershipRole.DEVELOPER, MembershipRole.SECURITY, MembershipRole.COMPLIANCE, MembershipRole.AUDITOR, MembershipRole.VIEWER],
+    "incident.create": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.DEVOPS, MembershipRole.DEVELOPER, MembershipRole.SECURITY],
+    "incident.manage": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.DEVOPS, MembershipRole.SECURITY],
+    "backup.read": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.DEVOPS, MembershipRole.COMPLIANCE, MembershipRole.AUDITOR, MembershipRole.DEVELOPER, MembershipRole.VIEWER],
+    "backup.manage": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.DEVOPS],
+    "restore.execute": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.DEVOPS],
+    "security.signal.read": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.SECURITY, MembershipRole.DEVOPS, MembershipRole.COMPLIANCE, MembershipRole.AUDITOR, MembershipRole.VIEWER],
+    "cost.read": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.DEVOPS, MembershipRole.DEVELOPER, MembershipRole.VIEWER],
+    "cost.manage": [MembershipRole.OWNER, MembershipRole.ADMIN],
+    "compliance.monitor.read": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.COMPLIANCE, MembershipRole.AUDITOR, MembershipRole.SECURITY, MembershipRole.VIEWER],
+    "compliance.exception.manage": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.COMPLIANCE, MembershipRole.SECURITY],
+    "auto_rollback.manage": [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.DEVOPS],
+}
+
+
+def require_permission(permission: str):
+    """Enforces specific Phase 5 operational RBAC permission based on membership role."""
+    allowed_roles = ROLE_PERMISSIONS.get(permission, [MembershipRole.OWNER, MembershipRole.ADMIN])
+    return require_roles(allowed_roles)
+

@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     LAUNCHCOMPLY_AWS_ACCOUNT_ID: str = "012345678901"
     LAUNCHCOMPLY_EXTERNAL_ID_PREFIX: str = "launchcomply-ext-"
 
+    # Phase 5 Execution Safety Flags
+    ENABLE_REAL_MONITORING: bool = False
+    ENABLE_REAL_RESTORE_DRILLS: bool = False
+    ENABLE_REAL_SECURITY_INGESTION: bool = False
+    ENABLE_REAL_COST_INGESTION: bool = False
+    ENABLE_AUTO_ROLLBACK: bool = False
+
     model_config = SettingsConfigDict(
         case_sensitive=True,
         env_file=".env",

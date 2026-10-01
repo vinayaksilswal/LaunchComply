@@ -37,6 +37,7 @@ import { useState } from "react";
 
 const NAV_ITEMS = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Operations", href: "/dashboard/operations", icon: Activity },
   { name: "Applications", href: "/dashboard/applications", icon: Boxes },
   { name: "Architecture", href: "/dashboard/architecture", icon: Network },
   { name: "Deployments", href: "/dashboard/deployments", icon: Rocket },
@@ -45,19 +46,14 @@ const NAV_ITEMS = [
   { name: "Security", href: "/dashboard/security", icon: ShieldAlert },
   { name: "VAPT", href: "/dashboard/vapt", icon: Target },
   { name: "Compliance", href: "/dashboard/compliance", icon: FileCheck2 },
-  { name: "Privacy", href: "/dashboard/privacy", icon: Lock },
-  { name: "Contracts", href: "/dashboard/contracts", icon: FileText },
   { name: "Backup & DR", href: "/dashboard/backups", icon: DatabaseBackup },
   { name: "Incidents", href: "/dashboard/incidents", icon: AlertTriangle },
-  { name: "Subprocessors", href: "/dashboard/subprocessors", icon: Building2 },
+  { name: "Cost", href: "/dashboard/cost", icon: DollarSign },
+  { name: "Logs", href: "/dashboard/logs", icon: ScrollText },
   { name: "Evidence", href: "/dashboard/evidence", icon: Vault },
   { name: "Reports", href: "/dashboard/reports", icon: FileSpreadsheet },
-  { name: "Monitoring", href: "/dashboard/monitoring", icon: Activity },
-  { name: "Cost", href: "/dashboard/cost", icon: DollarSign },
-  { name: "Services", href: "/dashboard/services", icon: Briefcase },
   { name: "Team", href: "/dashboard/team", icon: Users },
   { name: "Audit Logs", href: "/dashboard/audit-logs", icon: ScrollText },
-  { name: "Integrations", href: "/dashboard/integrations", icon: Plug },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 

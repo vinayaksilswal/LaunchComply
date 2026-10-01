@@ -31,6 +31,23 @@ from app.models.release import (
     RuntimeSecretBinding,
     ReleaseEvidence,
 )
+from app.models.operations import (
+    MonitoringConfiguration,
+    HealthSnapshot,
+    AlertRule,
+    AlertEvent,
+    UptimeCheck,
+    UptimeResult,
+    Incident,
+    IncidentTimelineEvent,
+    OperationalChange,
+    BackupObservation,
+    RestoreDrill,
+    SecuritySignal,
+    CostSnapshot,
+    EvidenceFreshness,
+)
+from datetime import datetime, timedelta
 
 async def seed_initial_data(db: AsyncSession):
     # Check if demo org already exists
@@ -1117,5 +1134,264 @@ async def seed_initial_data(db: AsyncSession):
     env.domain_name = "app.acmecloud.io"
     env.https_active = True
 
+    # 16. Phase 5 Operations & Observability Foundation
+    mon_cfg = MonitoringConfiguration(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        environment_id=env.id,
+        enabled=True,
+        provider="CLOUDWATCH",
+        poll_interval_seconds=60,
+        retention_days=90,
+    )
+    db.add(mon_cfg)
+
+    health_snap = HealthSnapshot(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        environment_id=env.id,
+        overall_status="HEALTHY",
+        component_status_json={
+            "ingress": "HEALTHY",
+            "ecs": "HEALTHY",
+            "database": "HEALTHY",
+            "uptime": "HEALTHY",
+            "backup": "HEALTHY",
+            "security": "HEALTHY",
+            "drift": "HEALTHY",
+        },
+        reasons_json=["All monitored components operating within baseline SLO thresholds."],
+        captured_at=datetime.utcnow(),
+    )
+    db.add(health_snap)
+
+    rule1 = AlertRule(
+        organization_id=demo_org.id,
+        environment_id=env.id,
+        name="ALB 5xx Error Rate Exceeds 1.0%",
+        metric="alb_5xx_rate",
+        condition="GT",
+        threshold=1.0,
+        window_minutes=5,
+        severity="CRITICAL",
+        enabled=True,
+        auto_create_incident=True,
+        auto_rollback_release=True,
+        created_by="admin@launchcomply.io",
+    )
+    rule2 = AlertRule(
+        organization_id=demo_org.id,
+        environment_id=env.id,
+        name="API p95 Latency Exceeds 800ms",
+        metric="api_latency_p95",
+        condition="GT",
+        threshold=800.0,
+        window_minutes=5,
+        severity="HIGH",
+        enabled=True,
+        auto_create_incident=True,
+        auto_rollback_release=False,
+        created_by="admin@launchcomply.io",
+    )
+    rule3 = AlertRule(
+        organization_id=demo_org.id,
+        environment_id=env.id,
+        name="RDS Free Storage Below 10GB",
+        metric="rds_storage_low",
+        condition="LT",
+        threshold=10.0,
+        window_minutes=10,
+        severity="HIGH",
+        enabled=True,
+        auto_create_incident=True,
+        auto_rollback_release=False,
+        created_by="admin@launchcomply.io",
+    )
+    db.add(rule1)
+    db.add(rule2)
+    db.add(rule3)
+
+    uptime_chk = UptimeCheck(
+        organization_id=demo_org.id,
+        environment_id=env.id,
+        name="Production Web & API Ingress Health",
+        url="https://app.acmecloud.io/health",
+        check_type="HTTPS",
+        interval_seconds=60,
+        timeout_seconds=10,
+        expected_status=200,
+        enabled=True,
+    )
+    db.add(uptime_chk)
+    await db.flush()
+
+    db.add(UptimeResult(
+        uptime_check_id=uptime_chk.id,
+        status="UP",
+        response_code=200,
+        latency_ms=48.2,
+        checked_at=datetime.utcnow(),
+    ))
+
+    backup_obs = BackupObservation(
+        organization_id=demo_org.id,
+        environment_id=env.id,
+        resource_id="rds-postgresql-primary",
+        resource_name="RDS PostgreSQL Production Cluster",
+        backup_type="AUTOMATED_SNAPSHOT",
+        status="SUCCESS",
+        started_at=datetime.utcnow() - timedelta(hours=2),
+        completed_at=datetime.utcnow() - timedelta(hours=1, minutes=48),
+        recovery_point="rds:acme-prod-snapshot-2026-10-01-0200",
+        provider_backup_id="arn:aws:rds:ap-south-1:012345678901:snapshot:acme-prod-snapshot",
+        size_bytes=14200000000,
+    )
+    db.add(backup_obs)
+    await db.flush()
+
+    drill = RestoreDrill(
+        organization_id=demo_org.id,
+        environment_id=env.id,
+        resource_id="rds-postgresql-primary",
+        backup_observation_id=backup_obs.id,
+        status="COMPLETED",
+        started_at=datetime.utcnow() - timedelta(days=12),
+        completed_at=datetime.utcnow() - timedelta(days=12) + timedelta(seconds=1122),
+        rto_seconds=1122.0,
+        data_validation_status="PASSED",
+        target_temp_db_id="lc-drill-temp-rds-20260918",
+    )
+    db.add(drill)
+
+    sec_signal = SecuritySignal(
+        organization_id=demo_org.id,
+        environment_id=env.id,
+        provider="GUARDDUTY",
+        signal_type="Recon:IAMUser/AnomalousBehavior",
+        severity="MEDIUM",
+        resource_id="arn:aws:iam::012345678901:user/ops-deployer",
+        title="Unusual IAM API Call Volume Detected",
+        description="API call volume for ListBuckets deviated from historical 14-day baseline by 320%.",
+        status="ACTIVE",
+        detected_at=datetime.utcnow() - timedelta(hours=6),
+    )
+    db.add(sec_signal)
+
+    cost_snap = CostSnapshot(
+        organization_id=demo_org.id,
+        environment_id=env.id,
+        currency="INR",
+        total=18420.0,
+        forecast_monthly=42800.0,
+        service_breakdown_json={
+            "Amazon Elastic Container Service (ECS)": 14200.0,
+            "Amazon Relational Database Service (RDS)": 12800.0,
+            "Elastic Load Balancing (ALB)": 4600.0,
+            "Amazon VPC (NAT Gateway)": 5100.0,
+            "Amazon CloudFront": 2100.0,
+            "Amazon Simple Storage Service (S3)": 1400.0,
+            "AWS WAF": 1600.0,
+            "Amazon CloudWatch": 1000.0,
+        },
+        daily_trend_json=[
+            {"date": (datetime.utcnow() - timedelta(days=i)).strftime("%Y-%m-%d"), "amount": 1420.0}
+            for i in range(7, 0, -1)
+        ],
+        period_start=datetime.utcnow().replace(day=1, hour=0, minute=0, second=0),
+        period_end=datetime.utcnow(),
+        captured_at=datetime.utcnow(),
+    )
+    db.add(cost_snap)
+
+    # Compliance Freshness Records (SOC2 & ISO27001)
+    ev_records = [
+        ("SOC2", "CC6.1-ENCRYPTION-AT-REST", "ev-kms-rds-aes256", "RDS PostgreSQL & S3 KMS AES-256", 30),
+        ("SOC2", "CC6.6-BOUNDARY-PROTECTION", "ev-waf-public-block", "AWS WAF & S3 Public Access Block", 14),
+        ("SOC2", "CC7.2-SECURITY-MONITORING", "ev-guardduty-cloudtrail", "GuardDuty & CloudTrail Multi-Region", 7),
+        ("SOC2", "CC9.1-BACKUP-RESTORE-TEST", "ev-restore-drill-20260918", "Isolated RDS Restore Drill (18m 42s)", 90),
+        ("ISO27001", "A.12.1.2-CHANGE-MANAGEMENT", "ev-release-verification-v142", "Release Engine Smoke Tests", 30),
+        ("ISO27001", "A.14.1.2-TLS-IN-TRANSIT", "ev-acm-tls13-alb", "ACM Managed Certificate on ALB", 60),
+    ]
+    for fw, cid, eid, rref, ttl in ev_records:
+        db.add(EvidenceFreshness(
+            organization_id=demo_org.id,
+            framework=fw,
+            control_id=cid,
+            evidence_id=eid,
+            last_collected_at=datetime.utcnow() - timedelta(days=2),
+            expires_at=datetime.utcnow() + timedelta(days=ttl - 2),
+            freshness_status="CURRENT",
+            resource_ref=rref,
+        ))
+
+    # Historical Resolved Incident
+    hist_inc = Incident(
+        organization_id=demo_org.id,
+        environment_id=env.id,
+        application_id=app.id,
+        release_id=release_v142.id,
+        title="ALB Target Connection Flap during v1.4.1 migration",
+        severity="SEV2",
+        commander="Alex Mercer",
+        impact="Transient 502 errors observed for 4 minutes during rolling blue/green shift.",
+        status="RESOLVED",
+        root_cause="Connection draining timeout on target group was 10s while ECS tasks took 15s to gracefully terminate.",
+        corrective_actions="Increased ALB deregistration delay to 30s across all production target groups.",
+        detected_at=datetime.utcnow() - timedelta(days=3),
+        resolved_at=datetime.utcnow() - timedelta(days=3) + timedelta(minutes=14),
+        postmortem_markdown="# Postmortem: ALB Target Connection Flap\\n\\n## Root Cause\\nConnection draining delay was lower than SIGTERM graceful shutdown timeout.",
+    )
+    db.add(hist_inc)
+    await db.flush()
+
+    db.add(IncidentTimelineEvent(
+        incident_id=hist_inc.id,
+        event_type="ALERT_FIRED",
+        message="ALB 5xx rate exceeded 1.0% threshold (spiked to 3.2%)",
+        actor="AlertEngine",
+        source="LaunchComply",
+        timestamp=datetime.utcnow() - timedelta(days=3),
+    ))
+    db.add(IncidentTimelineEvent(
+        incident_id=hist_inc.id,
+        event_type="RELEASE_DEPLOYED",
+        message="Release v1.4.1 was promoted to 100% traffic weight",
+        actor="System",
+        source="ReleaseEngine",
+        timestamp=datetime.utcnow() - timedelta(days=3),
+    ))
+    db.add(IncidentTimelineEvent(
+        incident_id=hist_inc.id,
+        event_type="HEALTH_RESTORED",
+        message="Health returned to HEALTHY after deregistration timeout was adjusted",
+        actor="Alex Mercer",
+        source="LaunchComply",
+        timestamp=datetime.utcnow() - timedelta(days=3) + timedelta(minutes=14),
+    ))
+
+    # Operational changes
+    db.add(OperationalChange(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        environment_id=env.id,
+        change_type="RELEASE",
+        source="ReleaseEngine",
+        release_id=release_v142.id,
+        actor="Alex Mercer",
+        summary="Application release v1.4.2 promoted to LIVE (Traffic 100%, Blue/Green zero-downtime)",
+        occurred_at=datetime.utcnow() - timedelta(hours=3),
+    ))
+    db.add(OperationalChange(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        environment_id=env.id,
+        change_type="RESTORE_DRILL",
+        source="BackupDREngine",
+        actor="Alex Mercer",
+        summary="Isolated temporary RDS restore drill completed in 18m 42s (PASSED)",
+        occurred_at=datetime.utcnow() - timedelta(days=12),
+    ))
+
     await db.commit()
+
 

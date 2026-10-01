@@ -14,6 +14,7 @@ from app.api.v1.source_control import router as source_control_router
 from app.api.v1.analysis import router as analysis_router
 from app.api.v1.infrastructure import router as infrastructure_router
 from app.api.v1.releases import router as releases_router
+from app.api.v1.operations import router as operations_router
 
 api_v1_router = APIRouter()
 
@@ -32,3 +33,5 @@ api_v1_router.include_router(source_control_router)
 api_v1_router.include_router(analysis_router)
 api_v1_router.include_router(infrastructure_router, prefix="/infrastructure", tags=["Infrastructure"])
 api_v1_router.include_router(releases_router)
+api_v1_router.include_router(operations_router)
+
