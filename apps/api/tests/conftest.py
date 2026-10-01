@@ -17,3 +17,15 @@ async def init_test_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await engine.dispose()
+
+@pytest.fixture
+def workspace_temp_dir():
+    import tempfile
+    import shutil
+    from pathlib import Path
+    base = Path("./.test_tmp")
+    base.mkdir(parents=True, exist_ok=True)
+    temp_dir = tempfile.mkdtemp(dir=str(base))
+    yield Path(temp_dir)
+    shutil.rmtree(temp_dir, ignore_errors=True)
+

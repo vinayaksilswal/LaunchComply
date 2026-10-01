@@ -43,3 +43,7 @@ Thumbs.db
 # Database
 *.sqlite3
 *.db
+
+# Pytest
+.test_tmp/
+.pytest_cache/

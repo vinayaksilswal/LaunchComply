@@ -374,4 +374,274 @@ async def seed_initial_data(db: AsyncSession):
         details={"findings_count": 12, "critical": 1, "high": 3}
     ))
 
+    # 16. Phase 2: Source Control Connection & GitHub Repositories
+    from app.models.source_control import (
+        SourceControlConnection, SourceControlProviderType, ConnectionStatus,
+        Repository, RepositoryBranch, ApplicationRepository
+    )
+    from app.models.analysis import (
+        AnalysisRun, AnalysisStatus, DetectedService, ServiceType,
+        DetectedPort, DetectedEnvironmentVariable, DetectedDatabase,
+        DetectedExternalIntegration, DetectedDataFlow, AnalysisFinding,
+        ArchitectureRecommendation
+    )
+
+    gh_conn = SourceControlConnection(
+        organization_id=demo_org.id,
+        provider=SourceControlProviderType.GITHUB,
+        provider_account_id="gh_acc_acmecloud_8912",
+        provider_account_name="acmecloud",
+        installation_id="inst_acme_8912",
+        status=ConnectionStatus.ACTIVE,
+        connected_by_user_id=demo_user.id
+    )
+    db.add(gh_conn)
+    await db.flush()
+
+    repo1 = Repository(
+        organization_id=demo_org.id,
+        source_control_connection_id=gh_conn.id,
+        provider_repository_id="gh_repo_101",
+        name="acme-core",
+        full_name="acmecloud/acme-core",
+        owner="acmecloud",
+        default_branch="main",
+        visibility="private",
+        html_url="https://github.com/acmecloud/acme-core",
+        language="Python / TypeScript",
+        archived=False
+    )
+    repo2 = Repository(
+        organization_id=demo_org.id,
+        source_control_connection_id=gh_conn.id,
+        provider_repository_id="gh_repo_102",
+        name="acme-frontend",
+        full_name="acmecloud/acme-frontend",
+        owner="acmecloud",
+        default_branch="main",
+        visibility="private",
+        html_url="https://github.com/acmecloud/acme-frontend",
+        language="TypeScript (Next.js)",
+        archived=False
+    )
+    db.add(repo1)
+    db.add(repo2)
+    await db.flush()
+
+    branch1 = RepositoryBranch(
+        organization_id=demo_org.id,
+        repository_id=repo1.id,
+        name="main",
+        commit_sha="a7b3e9f42c10b88d3e21",
+        is_default=True
+    )
+    db.add(branch1)
+
+    app_repo_link = ApplicationRepository(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        repository_id=repo1.id,
+        branch="main",
+        root_path="/",
+        is_primary=True
+    )
+    db.add(app_repo_link)
+
+    # 17. Phase 2: Completed Deep Analysis Run
+    analysis_run = AnalysisRun(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        repository_id=repo1.id,
+        branch="main",
+        commit_sha="a7b3e9f42c10b88d3e21",
+        status=AnalysisStatus.COMPLETED,
+        progress_percent=100,
+        current_stage="Analysis complete. Architecture recommendation ready.",
+        analyzer_version="v2.0.0-static",
+        summary="Static inspection complete. Detected Next.js 15 frontend, FastAPI Python backend, Celery worker, PostgreSQL database, and Redis cache. Generated dynamic AWS production topology.",
+        metrics_json={"total_files": 482, "total_size_bytes": 1420800, "categories": {"source": 320, "config": 48, "manifest": 14}}
+    )
+    db.add(analysis_run)
+    await db.flush()
+
+    svc_front = DetectedService(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        name="Next.js Web Frontend",
+        service_type=ServiceType.FRONTEND,
+        framework="Next.js 15",
+        runtime="Node.js 20",
+        build_command="npm run build",
+        start_command="npm start",
+        root_path="/apps/web",
+        confidence_score=1.0
+    )
+    svc_api = DetectedService(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        name="FastAPI Core API",
+        service_type=ServiceType.BACKEND,
+        framework="FastAPI",
+        runtime="Python 3.11",
+        build_command="pip install -r requirements.txt",
+        start_command="uvicorn app.main:app --host 0.0.0.0 --port 8000",
+        root_path="/apps/api",
+        confidence_score=1.0
+    )
+    svc_worker = DetectedService(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        name="Celery Background Worker",
+        service_type=ServiceType.WORKER,
+        framework="Celery / ARQ",
+        runtime="Python 3.11",
+        start_command="celery -A app.worker worker --loglevel=info",
+        root_path="/apps/api",
+        confidence_score=0.90
+    )
+    db.add(svc_front)
+    db.add(svc_api)
+    db.add(svc_worker)
+    await db.flush()
+
+    db.add(DetectedPort(
+        organization_id=demo_org.id,
+        detected_service_id=svc_front.id,
+        port=3000,
+        protocol="HTTP",
+        public_required=True
+    ))
+    db.add(DetectedPort(
+        organization_id=demo_org.id,
+        detected_service_id=svc_api.id,
+        port=8000,
+        protocol="HTTP",
+        public_required=False
+    ))
+
+    # Environment Contract
+    db.add(DetectedEnvironmentVariable(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        name="DATABASE_URL",
+        category="DATABASE",
+        required=True,
+        secret_likely=True,
+        source_file="apps/api/app/core/config.py",
+        description="Async PostgreSQL connection string with password authentication"
+    ))
+    db.add(DetectedEnvironmentVariable(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        name="REDIS_URL",
+        category="BACKEND_ONLY",
+        required=True,
+        secret_likely=False,
+        source_file="apps/api/app/core/config.py",
+        description="Redis cluster connection for task queues and caching"
+    ))
+    db.add(DetectedEnvironmentVariable(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        name="JWT_SECRET",
+        category="SECRET",
+        required=True,
+        secret_likely=True,
+        source_file="apps/api/app/core/config.py",
+        description="HMAC-SHA256 signing secret for authentication tokens"
+    ))
+    db.add(DetectedEnvironmentVariable(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        name="NEXT_PUBLIC_API_URL",
+        category="PUBLIC_FRONTEND",
+        required=True,
+        secret_likely=False,
+        source_file="apps/web/next.config.mjs",
+        description="Public API ingress endpoint for browser requests"
+    ))
+
+    # Database & Integrations
+    db.add(DetectedDatabase(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        engine="PostgreSQL 16",
+        orm="SQLAlchemy 2",
+        driver="asyncpg / psycopg2",
+        connection_source="DATABASE_URL"
+    ))
+    db.add(DetectedExternalIntegration(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        provider_name="Stripe",
+        category="payment"
+    ))
+    db.add(DetectedExternalIntegration(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        provider_name="OpenAI",
+        category="AI"
+    ))
+
+    # Data Flows
+    db.add(DetectedDataFlow(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        source_service="Next.js Frontend",
+        target_service="FastAPI Core API",
+        protocol="HTTPS / JSON",
+        port=8000
+    ))
+    db.add(DetectedDataFlow(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        source_service="FastAPI Core API",
+        target_service="RDS PostgreSQL Multi-AZ",
+        protocol="TLS 1.3 / TCP",
+        port=5432
+    ))
+    db.add(DetectedDataFlow(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        source_service="Celery Background Worker",
+        target_service="ElastiCache Redis",
+        protocol="TCP / AUTH",
+        port=6379
+    ))
+
+    # Static Analysis Findings
+    db.add(AnalysisFinding(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        category="Container Security",
+        severity="HIGH",
+        title="Container Runs as Root User in Dockerfile",
+        description="The production Dockerfile does not declare an unprivileged USER instruction, permitting processes to execute with root privileges.",
+        source_file="Dockerfile",
+        recommendation="Add 'RUN useradd -m -u 1000 appuser && USER appuser' to ensure least-privilege container execution."
+    ))
+    db.add(AnalysisFinding(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        category="Storage Resilience",
+        severity="HIGH",
+        title="Container Ephemeral Upload Directory Risk",
+        description="Application stores incoming media directly on local disk path /var/uploads. ECS Fargate task storage is ephemeral and is wiped on container recycling.",
+        source_file="apps/api/app/uploads",
+        recommendation="Store tenant attachments in an S3 KMS encrypted bucket using AWS presigned upload URLs."
+    ))
+
+    # Architecture Recommendation
+    db.add(ArchitectureRecommendation(
+        organization_id=demo_org.id,
+        analysis_run_id=analysis_run.id,
+        architecture_id=arch.id,
+        status="RECOMMENDED",
+        profile_type="BALANCED",
+        summary="High-availability multi-tier AWS architecture featuring CloudFront CDN, AWS WAF, ALB, ECS Fargate auto-scaling tasks, and isolated Multi-AZ RDS PostgreSQL cluster.",
+        estimated_monthly_cost_min=32000,
+        estimated_monthly_cost_max=45000,
+        currency="INR"
+    ))
+
     await db.commit()

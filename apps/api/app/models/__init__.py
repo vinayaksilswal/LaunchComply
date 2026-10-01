@@ -13,6 +13,30 @@ from app.models.entities import (
     Subprocessor,
     ServiceRequest
 )
+from app.models.source_control import (
+    SourceControlConnection,
+    SourceControlProviderType,
+    ConnectionStatus,
+    Repository,
+    RepositoryBranch,
+    ApplicationRepository,
+)
+from app.models.analysis import (
+    AnalysisRun,
+    AnalysisStatus,
+    DetectedService,
+    ServiceType,
+    DetectedPort,
+    DetectedEnvironmentVariable,
+    DetectedDependency,
+    DetectedHealthCheck,
+    DetectedDatabase,
+    DetectedExternalIntegration,
+    DetectedDataFlow,
+    AnalysisFinding,
+    ArchitectureRecommendation,
+    AnalysisArtifact,
+)
 
 __all__ = [
     "BaseModel",
@@ -33,4 +57,24 @@ __all__ = [
     "BackupPolicy",
     "Subprocessor",
     "ServiceRequest",
+    "SourceControlConnection",
+    "SourceControlProviderType",
+    "ConnectionStatus",
+    "Repository",
+    "RepositoryBranch",
+    "ApplicationRepository",
+    "AnalysisRun",
+    "AnalysisStatus",
+    "DetectedService",
+    "ServiceType",
+    "DetectedPort",
+    "DetectedEnvironmentVariable",
+    "DetectedDependency",
+    "DetectedHealthCheck",
+    "DetectedDatabase",
+    "DetectedExternalIntegration",
+    "DetectedDataFlow",
+    "AnalysisFinding",
+    "ArchitectureRecommendation",
+    "AnalysisArtifact",
 ]
