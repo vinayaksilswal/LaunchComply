@@ -184,3 +184,112 @@ export interface AnalysisRun {
   data_flows?: DetectedDataFlow[];
 }
 
+export interface InfrastructureStack {
+  id: string;
+  application_id: string;
+  environment_id: string;
+  provider: string;
+  region: string;
+  profile: "LEAN" | "BALANCED" | "HIGH_AVAILABILITY";
+  status: "DRAFT" | "READY_TO_PLAN" | "PLANNING" | "PLAN_READY" | "AWAITING_APPROVAL" | "APPROVED" | "PROVISIONING" | "READY" | "FAILED";
+  current_version: string;
+  resource_count: number;
+  created_at?: string;
+}
+
+export interface InfrastructurePlan {
+  id: string;
+  stack_id: string;
+  status: "READY" | "BLOCKED" | "APPROVED" | "APPLIED";
+  plan_key: string;
+  resources_add: number;
+  resources_change: number;
+  resources_destroy: number;
+  estimated_cost_delta: string;
+  policy_report?: {
+    overall_status: "PASS" | "WARN" | "BLOCK";
+    pass_count: number;
+    warn_count: number;
+    block_count: number;
+    can_approve: boolean;
+    policies: Array<{
+      code: string;
+      title: string;
+      category: string;
+      severity: string;
+      status: string;
+      message: string;
+      frameworks: string[];
+    }>;
+  };
+  summary?: Record<string, number>;
+}
+
+export interface ProvisioningStep {
+  step: string;
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  message: string;
+  completed_at?: string;
+}
+
+export interface ProvisioningRun {
+  id: string;
+  status: "QUEUED" | "INITIALIZING" | "VALIDATING" | "APPLYING" | "DISCOVERING" | "VERIFYING" | "COMPLETED" | "FAILED";
+  started_at: string;
+  completed_at?: string;
+  failure_reason?: string;
+  steps: ProvisioningStep[];
+}
+
+export interface CloudResource {
+  id: string;
+  provider_resource_id: string;
+  provider_resource_arn?: string;
+  resource_type: string;
+  category: string;
+  region: string;
+  availability_zone?: string;
+  status: "AVAILABLE" | "HEALTHY" | "DRIFTED" | "CREATING";
+  managed_by: "MANAGED" | "DISCOVERED" | "EXTERNAL";
+  architecture_node_id?: string;
+  tags?: Record<string, string>;
+  last_verified_at: string;
+}
+
+export interface DriftReport {
+  run_id: string;
+  status: "NO_DRIFT" | "DRIFT_DETECTED";
+  drift_count: number;
+  summary: {
+    total_resources_scanned: number;
+    drift_count: number;
+    status: string;
+  };
+  completed_at: string;
+}
+
+export interface InfrastructureEvidence {
+  id: string;
+  evidence_type: string;
+  control_code: string;
+  framework: string;
+  title: string;
+  sha256_hash: string;
+  snapshot?: Record<string, any>;
+  verified_at: string;
+}
+
+export interface AWSValidationReport {
+  valid: boolean;
+  account_id: string;
+  role_arn: string;
+  region: string;
+  overall_status: string;
+  capabilities: Array<{
+    service: string;
+    status: string;
+    required: boolean;
+    detail: string;
+  }>;
+}
+

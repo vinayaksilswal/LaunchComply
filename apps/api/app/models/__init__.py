@@ -38,6 +38,20 @@ from app.models.analysis import (
     AnalysisArtifact,
 )
 
+from app.models.infrastructure import (
+    InfrastructureStack,
+    InfrastructureVersion,
+    InfrastructurePlan,
+    ProvisioningRun,
+    ProvisioningStep,
+    CloudResource,
+    InfrastructureOutput,
+    DriftDetectionRun,
+    ResourceDrift,
+    TerraformStateReference,
+    InfrastructureEvidence,
+)
+
 __all__ = [
     "BaseModel",
     "User",
@@ -77,4 +91,15 @@ __all__ = [
     "AnalysisFinding",
     "ArchitectureRecommendation",
     "AnalysisArtifact",
+    "InfrastructureStack",
+    "InfrastructureVersion",
+    "InfrastructurePlan",
+    "ProvisioningRun",
+    "ProvisioningStep",
+    "CloudResource",
+    "InfrastructureOutput",
+    "DriftDetectionRun",
+    "ResourceDrift",
+    "TerraformStateReference",
+    "InfrastructureEvidence",
 ]

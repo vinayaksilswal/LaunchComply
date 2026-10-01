@@ -644,4 +644,217 @@ async def seed_initial_data(db: AsyncSession):
         currency="INR"
     ))
 
+    # Phase 3: Infrastructure Stack, Plan, Run, Discovered Cloud Resources & Compliance Evidence
+    from app.models.infrastructure import (
+        InfrastructureStack,
+        InfrastructurePlan,
+        ProvisioningRun,
+        ProvisioningStep,
+        CloudResource,
+        InfrastructureOutput,
+        DriftDetectionRun,
+        InfrastructureEvidence,
+    )
+    from datetime import datetime, timezone
+
+    stack_spec = {
+        "version": "1.0",
+        "provider": "aws",
+        "region": "ap-south-1",
+        "environment": "production",
+        "profile": "BALANCED",
+        "name_prefix": "launchcomply-acme-saas-production",
+        "tags": {"ManagedBy": "LaunchComply", "Environment": "production", "Application": "acme-saas"},
+        "networking": {
+            "vpc_cidr": "10.0.0.0/16",
+            "availability_zones": ["ap-south-1a", "ap-south-1b"],
+            "public_subnets": ["10.0.1.0/24", "10.0.2.0/24"],
+            "private_app_subnets": ["10.0.10.0/24", "10.0.11.0/24"],
+            "isolated_db_subnets": ["10.0.20.0/24", "10.0.21.0/24"],
+            "nat_strategy": "multi_nat"
+        },
+        "database": {
+            "engine": "postgres",
+            "engine_version": "16.3",
+            "instance_class": "db.t4g.medium",
+            "multi_az": True,
+            "publicly_accessible": False,
+            "storage_encrypted": True,
+            "backup_retention_days": 35
+        },
+        "compute": {
+            "cluster_name": "launchcomply-acme-saas-production-cluster",
+            "api_service": {"desired_count": 2, "cpu": 512, "memory": 1024}
+        },
+        "storage": {
+            "bucket_name": "launchcomply-acme-saas-production-vault",
+            "block_public_access": True,
+            "kms_encrypted": True
+        }
+    }
+
+    cloud_acc = CloudAccount(
+        organization_id=demo_org.id,
+        provider="AWS",
+        account_id="012345678901",
+        role_arn="arn:aws:iam::012345678901:role/LaunchComplyProvisioningRole",
+        external_id="launchcomply-ext-demo-acme",
+        region="ap-south-1",
+        status="CONNECTED"
+    )
+    db.add(cloud_acc)
+    await db.flush()
+
+    stack = InfrastructureStack(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        environment_id=env.id,
+        architecture_id=arch.id,
+        cloud_account_id=cloud_acc.id,
+        provider="AWS",
+        region="ap-south-1",
+        profile="BALANCED",
+        status="READY",
+        specification_json=stack_spec,
+        current_version="v1.0.0"
+    )
+    db.add(stack)
+    await db.flush()
+
+    # Plan
+    plan = InfrastructurePlan(
+        organization_id=demo_org.id,
+        infrastructure_stack_id=stack.id,
+        status="APPLIED",
+        plan_key="plan-acme-prod-init",
+        resources_add=32,
+        resources_change=0,
+        resources_destroy=0,
+        estimated_cost_delta="₹38,500 / mo",
+        requested_by=demo_user.id,
+        approved_by=demo_user.id,
+        approved_at=datetime.now(timezone.utc),
+        plan_summary_json={
+            "resources_add": 32,
+            "resources_change": 0,
+            "resources_destroy": 0,
+            "estimated_cost_delta": "₹38,500 / mo",
+            "policy_report": {"overall_status": "PASS", "pass_count": 8, "warn_count": 0, "block_count": 0, "can_approve": True}
+        }
+    )
+    db.add(plan)
+    await db.flush()
+
+    # Provisioning Run
+    run = ProvisioningRun(
+        organization_id=demo_org.id,
+        infrastructure_stack_id=stack.id,
+        infrastructure_plan_id=plan.id,
+        status="COMPLETED",
+        worker_job_id="job-init-acme-01",
+        started_at=datetime.now(timezone.utc),
+        completed_at=datetime.now(timezone.utc),
+        triggered_by=demo_user.id
+    )
+    db.add(run)
+    await db.flush()
+
+    # Steps
+    steps = [
+        ("INITIALIZE", "Isolated OpenTofu execution environment initialized. State lock acquired on S3 backend."),
+        ("VALIDATE", "Terraform configuration syntax validated. All 8 security policies passed with 0 BLOCK rules."),
+        ("APPLY", "Plan applied successfully. 32 AWS resources created in ap-south-1."),
+        ("DISCOVERY", "Discovered 8 primary cloud resources. Endpoints and ARNs registered."),
+        ("EVIDENCE", "Generated 4 cryptographically signed compliance evidence records."),
+        ("VERIFY", "Infrastructure health verification passed. Target groups healthy. DB accepting connections.")
+    ]
+    for step_name, msg in steps:
+        db.add(ProvisioningStep(
+            organization_id=demo_org.id,
+            provisioning_run_id=run.id,
+            step=step_name,
+            status="COMPLETED",
+            started_at=datetime.now(timezone.utc),
+            completed_at=datetime.now(timezone.utc),
+            message=msg
+        ))
+
+    # Cloud Resources
+    cloud_resources = [
+        ("node-dns", "app.acmecloud.io", "arn:aws:route53:::hostedzone/Z01928374", "aws_route53_zone", "DNS & Routing", "Global Edge", "Public"),
+        ("node-cdn", "E2QW4T9EXAMPLE", "arn:aws:cloudfront::012345678901:distribution/E2QW4T9EXAMPLE", "aws_cloudfront_distribution", "Content Delivery", "Global (450+ PoPs)", "Public"),
+        ("node-waf", "acme-prod-waf-acl", "arn:aws:wafv2:ap-south-1:012345678901:regional/webacl/acme-prod-waf-acl/8a2b3c4d", "aws_wafv2_web_acl", "Edge Protection", "ap-south-1", "Public"),
+        ("node-alb", "acme-prod-alb", "arn:aws:elasticloadbalancing:ap-south-1:012345678901:loadbalancer/app/acme-prod-alb/50dc6c495c0c9188", "aws_lb", "Traffic Distribution", "ap-south-1", "Public"),
+        ("node-ecs", "acme-prod-fastapi-api", "arn:aws:ecs:ap-south-1:012345678901:service/acme-prod-cluster/acme-prod-fastapi-api", "aws_ecs_service", "Container Compute", "ap-south-1a / ap-south-1b", "Private"),
+        ("node-redis", "acme-prod-redis-001", "arn:aws:elasticache:ap-south-1:012345678901:cluster:acme-prod-redis", "aws_elasticache_cluster", "In-Memory Cache", "ap-south-1a", "Private"),
+        ("node-rds", "acme-prod-postgres-primary", "arn:aws:rds:ap-south-1:012345678901:db:acme-prod-postgres-primary", "aws_db_instance", "Relational Database", "ap-south-1 (Multi-AZ)", "Isolated"),
+        ("node-s3", "launchcomply-acme-saas-production-vault", "arn:aws:s3:::launchcomply-acme-saas-production-vault", "aws_s3_bucket", "Object Storage", "ap-south-1", "Private"),
+        ("node-secrets", "acme-prod-env-secrets", "arn:aws:secretsmanager:ap-south-1:012345678901:secret:acme-prod-env-secrets-12aB3c", "aws_secretsmanager_secret", "Secrets & Keys", "ap-south-1", "Private"),
+    ]
+
+    for node_id, res_id, arn, r_type, cat, az, vis in cloud_resources:
+        db.add(CloudResource(
+            organization_id=demo_org.id,
+            infrastructure_stack_id=stack.id,
+            application_id=app.id,
+            environment_id=env.id,
+            architecture_node_id=node_id,
+            provider_resource_id=res_id,
+            provider_resource_arn=arn,
+            resource_type=r_type,
+            category=cat,
+            region="ap-south-1",
+            availability_zone=az,
+            status="AVAILABLE",
+            managed_by_launchcomply="MANAGED",
+            tags_json={"ManagedBy": "LaunchComply", "Environment": "production", "Application": "acme-saas"}
+        ))
+
+    # Evidence
+    evidences_seed = [
+        ("ENCRYPTION_AT_REST", "ISO-27001-A.8.24", "ISO 27001", "RDS PostgreSQL Tablespace KMS CMK Encryption", "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"),
+        ("ISOLATED_DATABASE_NETWORK", "SOC2-CC6.6", "SOC 2", "Air-Gapped Database Subnets Without Public Route", "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3"),
+        ("STORAGE_PUBLIC_ACCESS_BLOCK", "DPDP-SEC-8", "DPDP Act 2023", "S3 Bucket Public Access Block Strict Enforcement", "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"),
+        ("MULTI_AZ_RESILIENCE", "ISO-27001-A.8.14", "ISO 27001", "Synchronous Multi-AZ Standby Replica in ap-south-1", "d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5")
+    ]
+    for ev_type, code, fw, title, sha in evidences_seed:
+        db.add(InfrastructureEvidence(
+            organization_id=demo_org.id,
+            infrastructure_stack_id=stack.id,
+            evidence_type=ev_type,
+            control_code=code,
+            framework=fw,
+            title=title,
+            sha256_hash=sha,
+            raw_snapshot_json={"status": "COMPLIANT", "framework": fw, "verified_by": "LaunchComply Compliance Engine"}
+        ))
+
+    # Drift Detection Run: NO_DRIFT
+    db.add(DriftDetectionRun(
+        organization_id=demo_org.id,
+        infrastructure_stack_id=stack.id,
+        status="NO_DRIFT",
+        drift_count=0,
+        summary_json={"status": "In Sync with Desired State", "drift_count": 0, "total_resources_scanned": 8}
+    ))
+
+    # Outputs
+    db.add(InfrastructureOutput(
+        organization_id=demo_org.id,
+        infrastructure_stack_id=stack.id,
+        key="alb_dns_name",
+        value="acme-prod-alb-1294829.ap-south-1.elb.amazonaws.com",
+        sensitive=False
+    ))
+    db.add(InfrastructureOutput(
+        organization_id=demo_org.id,
+        infrastructure_stack_id=stack.id,
+        key="rds_endpoint",
+        value="acme-prod-postgres.c9a1b2c3.ap-south-1.rds.amazonaws.com:5432",
+        sensitive=False
+    ))
+
+    # Update environment status to READY_FOR_APPLICATION_DEPLOYMENT
+    env.status = "READY_FOR_APPLICATION_DEPLOYMENT"
+
     await db.commit()
