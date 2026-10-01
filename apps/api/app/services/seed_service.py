@@ -15,6 +15,22 @@ from app.models.entities import (
     ServiceRequest
 )
 from app.models.audit import AuditEvent
+from app.models.release import (
+    ApplicationRelease,
+    BuildRun,
+    BuildArtifact,
+    ContainerImage,
+    DatabaseMigrationRun,
+    ApplicationDeployment,
+    DeploymentService,
+    TrafficShift,
+    ReleaseVerification,
+    RollbackRun,
+    DomainBinding,
+    CertificateRecord,
+    RuntimeSecretBinding,
+    ReleaseEvidence,
+)
 
 async def seed_initial_data(db: AsyncSession):
     # Check if demo org already exists
@@ -854,7 +870,252 @@ async def seed_initial_data(db: AsyncSession):
         sensitive=False
     ))
 
-    # Update environment status to READY_FOR_APPLICATION_DEPLOYMENT
-    env.status = "READY_FOR_APPLICATION_DEPLOYMENT"
+    # =========================================================================
+    # PHASE 4: APPLICATION DELIVERY ENGINE SEED DATA (ACMECLOUD DEMO)
+    # =========================================================================
+
+    # 1. Previous Release v1.4.1 (SUPERSEDED) - available for rollback demonstration
+    release_v141 = ApplicationRelease(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        environment_id=env.id,
+        branch="main",
+        commit_sha="7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b",
+        version="v1.4.1",
+        status="SUPERSEDED",
+        created_by=demo_user.id,
+        approved_by=admin_user.id
+    )
+    db.add(release_v141)
+    await db.flush()
+
+    # 2. Current Live Release v1.4.2 (LIVE)
+    release_v142 = ApplicationRelease(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        environment_id=env.id,
+        branch="main",
+        commit_sha="a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+        version="v1.4.2",
+        status="LIVE",
+        created_by=demo_user.id,
+        approved_by=admin_user.id
+    )
+    db.add(release_v142)
+    await db.flush()
+
+    # 3. Build Run for v1.4.2
+    build_run_v142 = BuildRun(
+        organization_id=demo_org.id,
+        application_release_id=release_v142.id,
+        status="COMPLETED",
+        worker_job_id="job-build-v142-acme",
+        duration_seconds=18.4,
+        builder_version="LaunchComply-Worker-v2.4",
+        source_commit_sha="a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+    )
+    db.add(build_run_v142)
+    await db.flush()
+
+    # 4. Immutable Build Artifacts (API, Web, Worker)
+    artifact_api = BuildArtifact(
+        organization_id=demo_org.id,
+        build_run_id=build_run_v142.id,
+        artifact_type="CONTAINER_IMAGE",
+        service_name="api",
+        image_repository="launchcomply-acme-saas-production-api",
+        image_tag="release-v1.4.2-commit-a1b2c3d",
+        image_digest="sha256:d8c6b7e0e7a4f5c90b6a7d8c6b7e0e7a4f5c90b6a7d8c6b7e0e7a4f5c90b6a7d",
+        sbom_key=f"sboms/{release_v142.id}/api-cyclonedx.json",
+        size_bytes=142857140,
+        sha256="d8c6b7e0e7a4f5c90b6a7d8c6b7e0e7a4f5c90b6a7d8c6b7e0e7a4f5c90b6a7d"
+    )
+    artifact_web = BuildArtifact(
+        organization_id=demo_org.id,
+        build_run_id=build_run_v142.id,
+        artifact_type="CONTAINER_IMAGE",
+        service_name="web",
+        image_repository="launchcomply-acme-saas-production-web",
+        image_tag="release-v1.4.2-commit-a1b2c3d",
+        image_digest="sha256:e9a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1",
+        sbom_key=f"sboms/{release_v142.id}/web-cyclonedx.json",
+        size_bytes=118400200,
+        sha256="e9a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1"
+    )
+    artifact_worker = BuildArtifact(
+        organization_id=demo_org.id,
+        build_run_id=build_run_v142.id,
+        artifact_type="CONTAINER_IMAGE",
+        service_name="worker",
+        image_repository="launchcomply-acme-saas-production-worker",
+        image_tag="release-v1.4.2-commit-a1b2c3d",
+        image_digest="sha256:f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0b2",
+        sbom_key=f"sboms/{release_v142.id}/worker-cyclonedx.json",
+        size_bytes=98200100,
+        sha256="f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0b2"
+    )
+    db.add(artifact_api)
+    db.add(artifact_web)
+    db.add(artifact_worker)
+
+    # 5. Container Images with Verified Vulnerability Scans
+    for s_name, digest in [
+        ("api", artifact_api.image_digest),
+        ("web", artifact_web.image_digest),
+        ("worker", artifact_worker.image_digest)
+    ]:
+        db.add(ContainerImage(
+            organization_id=demo_org.id,
+            application_release_id=release_v142.id,
+            service_name=s_name,
+            ecr_repository=f"launchcomply-acme-saas-production-{s_name}",
+            image_tag="release-v1.4.2-commit-a1b2c3d",
+            image_digest=digest,
+            scan_status="PASS",
+            critical_vulnerabilities=0,
+            high_vulnerabilities=0,
+            medium_vulnerabilities=0
+        ))
+
+    # 6. Database Migration Run
+    mig_run = DatabaseMigrationRun(
+        organization_id=demo_org.id,
+        application_release_id=release_v142.id,
+        environment_id=env.id,
+        migration_type="alembic",
+        status="COMPLETED",
+        output_summary="Running Alembic upgrade head... Revision rev_20261001_004 applied cleanly. Pre-deploy RDS snapshot recorded.",
+        migration_version_before="rev_20260915_001",
+        migration_version_after="rev_20261001_004"
+    )
+    db.add(mig_run)
+
+    # 7. Application Deployment (Blue/Green)
+    deployment_v142 = ApplicationDeployment(
+        organization_id=demo_org.id,
+        application_release_id=release_v142.id,
+        environment_id=env.id,
+        strategy="BLUE_GREEN",
+        status="COMPLETED",
+        previous_release_id=release_v141.id,
+        target_release_id=release_v142.id,
+        traffic_percentage=100
+    )
+    db.add(deployment_v142)
+    await db.flush()
+
+    # 8. Deployment Services (API, Web, Worker)
+    for s_name, s_type, port, count in [("api", "api", 8000, 2), ("web", "frontend", 3000, 2), ("worker", "worker", None, 1)]:
+        db.add(DeploymentService(
+            organization_id=demo_org.id,
+            application_deployment_id=deployment_v142.id,
+            service_name=s_name,
+            service_type=s_type,
+            ecs_service_arn=f"arn:aws:ecs:ap-south-1:012345678901:service/acme-prod-cluster/acme-prod-{s_name}-green",
+            task_definition_arn=f"arn:aws:ecs:ap-south-1:012345678901:task-definition/launchcomply-acme-saas-prod-{s_name}:4",
+            desired_count=count,
+            running_count=count,
+            healthy_count=count,
+            status="HEALTHY"
+        ))
+
+    # 9. Traffic Shift
+    db.add(TrafficShift(
+        organization_id=demo_org.id,
+        application_deployment_id=deployment_v142.id,
+        from_target="Blue-TG-Active",
+        to_target="Green-TG-Candidate",
+        percentage=100,
+        status="COMPLETED"
+    ))
+
+    # 10. Release Verification Probes (Smoke Tests)
+    verifications_seed = [
+        ("HEALTH_CHECK", "https://app.acmecloud.io/api/v1/health", 200, 42.5, {"status": "UP", "database": "connected", "redis": "connected"}),
+        ("HTTP_ROOT", "https://app.acmecloud.io/", 200, 68.2, {"content_type": "text/html", "server": "LaunchComply-ALB"}),
+        ("API_PING", "https://app.acmecloud.io/api/v1/ping", 200, 28.1, {"pong": True}),
+        ("TLS_PROBE", "https://app.acmecloud.io", 200, 18.4, {"tls_version": "TLSv1.3", "cipher": "TLS_AES_256_GCM_SHA384", "valid": True})
+    ]
+    for v_type, ep, code, lat, details in verifications_seed:
+        db.add(ReleaseVerification(
+            organization_id=demo_org.id,
+            application_release_id=release_v142.id,
+            environment_id=env.id,
+            verification_type=v_type,
+            status="PASSED",
+            endpoint=ep,
+            response_code=code,
+            latency_ms=lat,
+            details_json=details
+        ))
+
+    # 11. Custom Domain & Route53 Automation
+    domain_binding = DomainBinding(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        environment_id=env.id,
+        domain="app.acmecloud.io",
+        dns_provider="ROUTE53",
+        status="ACTIVE",
+        target_type="ALB_CNAME",
+        target_value="acme-prod-alb-1294829.ap-south-1.elb.amazonaws.com",
+    )
+    db.add(domain_binding)
+    await db.flush()
+
+    # 12. Certificate Record (AWS ACM)
+    cert_record = CertificateRecord(
+        organization_id=demo_org.id,
+        domain_binding_id=domain_binding.id,
+        provider="AWS_ACM",
+        certificate_arn="arn:aws:acm:ap-south-1:012345678901:certificate/8f9a0b1c-2d3e-4f5a-6b7c-8d9e0f1a2b3c",
+        status="ISSUED",
+        validation_method="DNS"
+    )
+    db.add(cert_record)
+    domain_binding.certificate_id = cert_record.id
+
+    # 13. Runtime Secret Bindings (Write-Only Metadata)
+    secret_bindings = [
+        ("api", "DATABASE_URL", "arn:aws:secretsmanager:ap-south-1:012345678901:secret:acme-prod-db-url-12aB3c", True),
+        ("api", "JWT_SECRET", "arn:aws:secretsmanager:ap-south-1:012345678901:secret:acme-prod-jwt-secret-45dE6f", True),
+        ("api", "STRIPE_SECRET_KEY", "arn:aws:secretsmanager:ap-south-1:012345678901:secret:acme-prod-stripe-key-78gH9i", True),
+        ("worker", "RESEND_API_KEY", "arn:aws:secretsmanager:ap-south-1:012345678901:secret:acme-prod-resend-key-90jK1l", False),
+    ]
+    for s_name, env_key, arn, req in secret_bindings:
+        db.add(RuntimeSecretBinding(
+            organization_id=demo_org.id,
+            environment_id=env.id,
+            service_name=s_name,
+            environment_variable_name=env_key,
+            secrets_manager_arn=arn,
+            required=req,
+            configured=True
+        ))
+
+    # 14. Release Supply Chain Integrity Evidences
+    release_evidences_seed = [
+        ("BUILD_INTEGRITY", "LocalIsolatedBuildProvider", f"releases/{release_v142.id}/build-manifest.json", "7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7a8b9c0d1e2f3a4b5c6d7e8f"),
+        ("CONTAINER_SECURITY_SCAN", "LaunchComply-Image-Scanner", f"releases/{release_v142.id}/cve-scan.json", "8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7a8b9c0d1e2f3a4b5c6d7e8f9a"),
+        ("SOFTWARE_BILL_OF_MATERIALS", "CycloneDX-1.5-Engine", f"releases/{release_v142.id}/sbom-cyclonedx.json", "9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7a8b9c0d1e2f3a4b5c6d7e8f9a0b"),
+        ("DATABASE_MIGRATION", "AlembicMigrationProvider", f"releases/{release_v142.id}/migration-run.json", "0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c"),
+        ("PRODUCTION_VERIFICATION", "SmokeTestProvider", f"releases/{release_v142.id}/smoke-tests.json", "1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d"),
+    ]
+    for ev_type, src, art_key, sha in release_evidences_seed:
+        db.add(ReleaseEvidence(
+            organization_id=demo_org.id,
+            application_release_id=release_v142.id,
+            evidence_type=ev_type,
+            source=src,
+            artifact_key=art_key,
+            sha256=sha
+        ))
+
+    # 15. Update Environment status to LIVE
+    env.status = "LIVE"
+    env.is_live = True
+    env.domain_name = "app.acmecloud.io"
+    env.https_active = True
 
     await db.commit()
+

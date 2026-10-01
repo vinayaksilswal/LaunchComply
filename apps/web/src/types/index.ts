@@ -293,3 +293,162 @@ export interface AWSValidationReport {
   }>;
 }
 
+export interface ApplicationRelease {
+  id: string;
+  organization_id: string;
+  application_id: string;
+  environment_id: string;
+  repository_id?: string;
+  branch: string;
+  commit_sha: string;
+  version: string;
+  status:
+    | "DRAFT"
+    | "QUEUED"
+    | "BUILDING"
+    | "BUILD_FAILED"
+    | "ARTIFACT_READY"
+    | "SECURITY_SCANNING"
+    | "SECURITY_BLOCKED"
+    | "AWAITING_APPROVAL"
+    | "APPROVED"
+    | "MIGRATING"
+    | "MIGRATION_FAILED"
+    | "DEPLOYING"
+    | "VERIFYING"
+    | "TRAFFIC_SHIFTING"
+    | "LIVE"
+    | "FAILED"
+    | "ROLLBACK_PENDING"
+    | "ROLLING_BACK"
+    | "ROLLED_BACK"
+    | "SUPERSEDED";
+  created_by: string;
+  created_at: string;
+  approved_by?: string;
+  approved_at?: string;
+  deployed_at?: string;
+  rollback_of_release_id?: string;
+}
+
+export interface BuildArtifact {
+  id: string;
+  service_name: string;
+  artifact_type: string;
+  image_repository: string;
+  image_tag: string;
+  image_digest: string;
+  sbom_key?: string;
+  size_bytes?: number;
+  sha256: string;
+  created_at: string;
+}
+
+export interface ContainerImage {
+  id: string;
+  service_name: string;
+  ecr_repository: string;
+  image_tag: string;
+  image_digest: string;
+  scan_status: "PASS" | "WARN" | "BLOCKED";
+  critical_vulnerabilities: number;
+  high_vulnerabilities: number;
+  medium_vulnerabilities: number;
+  created_at: string;
+}
+
+export interface BuildRun {
+  id: string;
+  status: "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED";
+  worker_job_id: string;
+  started_at: string;
+  completed_at?: string;
+  duration_seconds?: number;
+  builder_version: string;
+  source_commit_sha: string;
+  artifacts?: BuildArtifact[];
+  images?: ContainerImage[];
+  logs?: string[];
+}
+
+export interface DatabaseMigrationRun {
+  id: string;
+  application_release_id: string;
+  environment_id: string;
+  migration_type: string;
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  started_at: string;
+  completed_at?: string;
+  output_summary?: string;
+  migration_version_before?: string;
+  migration_version_after?: string;
+}
+
+export interface DeploymentService {
+  id?: string;
+  service_name: string;
+  service_type: string;
+  ecs_service_arn?: string;
+  task_definition_arn?: string;
+  desired_count: number;
+  running_count: number;
+  healthy_count: number;
+  status: string;
+}
+
+export interface ApplicationDeployment {
+  id: string;
+  application_release_id: string;
+  environment_id: string;
+  strategy: "BLUE_GREEN" | "ROLLING";
+  status: "QUEUED" | "DEPLOYING" | "VERIFYING" | "COMPLETED" | "FAILED" | "ROLLED_BACK";
+  started_at: string;
+  completed_at?: string;
+  previous_release_id?: string;
+  target_release_id: string;
+  traffic_percentage: number;
+  services?: DeploymentService[];
+  logs?: string[];
+}
+
+export interface ReleaseVerification {
+  id: string;
+  verification_type: string;
+  status: "PASSED" | "FAILED" | "WARN";
+  endpoint: string;
+  response_code: number;
+  latency_ms: number;
+  details_json?: Record<string, any>;
+  checked_at: string;
+}
+
+export interface DomainBinding {
+  id: string;
+  domain: string;
+  dns_provider: string;
+  status: "PENDING_DNS" | "ACTIVE" | "FAILED";
+  certificate_id?: string;
+  target_type: string;
+  target_value: string;
+  created_at: string;
+  verified_at?: string;
+  validation_records?: Array<{
+    record_type: string;
+    name: string;
+    value: string;
+    ttl: number;
+    status: string;
+  }>;
+}
+
+export interface RuntimeSecretBinding {
+  id: string;
+  service_name: string;
+  environment_variable_name: string;
+  secrets_manager_arn: string;
+  required: boolean;
+  configured: boolean;
+  last_rotated_at?: string;
+}
+
+

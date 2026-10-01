@@ -51,6 +51,22 @@ from app.models.infrastructure import (
     TerraformStateReference,
     InfrastructureEvidence,
 )
+from app.models.release import (
+    ApplicationRelease,
+    BuildRun,
+    BuildArtifact,
+    ContainerImage,
+    DatabaseMigrationRun,
+    ApplicationDeployment,
+    DeploymentService,
+    TrafficShift,
+    ReleaseVerification,
+    RollbackRun,
+    DomainBinding,
+    CertificateRecord,
+    RuntimeSecretBinding,
+    ReleaseEvidence,
+)
 
 __all__ = [
     "BaseModel",
@@ -102,4 +118,18 @@ __all__ = [
     "ResourceDrift",
     "TerraformStateReference",
     "InfrastructureEvidence",
+    "ApplicationRelease",
+    "BuildRun",
+    "BuildArtifact",
+    "ContainerImage",
+    "DatabaseMigrationRun",
+    "ApplicationDeployment",
+    "DeploymentService",
+    "TrafficShift",
+    "ReleaseVerification",
+    "RollbackRun",
+    "DomainBinding",
+    "CertificateRecord",
+    "RuntimeSecretBinding",
+    "ReleaseEvidence",
 ]
