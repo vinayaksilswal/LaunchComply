@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: launchcomply-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: launchcomply
+      POSTGRES_PASSWORD: launchcomply_secure_dev_password
+      POSTGRES_DB: launchcomply_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U launchcomply -d launchcomply_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: launchcomply-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: launchcomply-api
+    restart: always
+    environment:
+      DATABASE_URL: postgresql+asyncpg://launchcomply:launchcomply_secure_dev_password@postgres:5432/launchcomply_db
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: launchcomply_dev_secret_jwt_key_must_be_overridden_in_prod_32chars
+      ENVIRONMENT: development
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: launchcomply-web
+    restart: always
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
