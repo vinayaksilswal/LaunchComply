@@ -1,4 +1,5 @@
-from sqlalchemy import Column, String, ForeignKey, JSON
+from datetime import datetime
+from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, JSON, Boolean
 from app.models.base import BaseModel
 
 class Architecture(BaseModel):
@@ -22,6 +23,27 @@ class CloudAccount(BaseModel):
     region = Column(String(50), default="ap-south-1", nullable=False)
     status = Column(String(50), default="CONNECTED", nullable=False)
 
+    # Phase 16 Connection State Machine & Automation Fields (§51, §53, §54, §56, §58)
+    connection_state = Column(String(50), default="NOT_STARTED", nullable=False)
+    setup_method = Column(String(50), default="CLOUDFORMATION", nullable=False)
+    stack_name = Column(String(255), nullable=True)
+    stack_status = Column(String(50), default="UNKNOWN", nullable=True)
+    template_version = Column(String(50), default="v1.0.0", nullable=True)
+    template_checksum = Column(String(64), nullable=True)
+    permission_profiles_json = Column(JSON, nullable=True)
+    sts_result_hash = Column(String(64), nullable=True)
+    assumed_role_arn = Column(String(500), nullable=True)
+    session_expiry = Column(DateTime, nullable=True)
+    health_status = Column(String(50), default="HEALTHY", nullable=False)
+    last_verified_at = Column(DateTime, nullable=True)
+    drift_detected = Column(Boolean, default=False, nullable=False)
+    drift_details_json = Column(JSON, nullable=True)
+    discovered_resources_json = Column(JSON, nullable=True)
+    setup_started_at = Column(DateTime, nullable=True)
+    connected_at = Column(DateTime, nullable=True)
+    operator_minutes_spent = Column(Integer, default=0, nullable=False)
+    help_requested = Column(Boolean, default=False, nullable=False)
+
 class Deployment(BaseModel):
     __tablename__ = "deployments"
     
@@ -31,6 +53,10 @@ class Deployment(BaseModel):
     status = Column(String(50), default="LIVE", nullable=False) # DRAFT, PLANNING, PROVISIONING, BUILDING, DEPLOYING, VERIFYING, LIVE, FAILED, ROLLING_BACK
     commit_sha = Column(String(50), default="a7b3e9f", nullable=False)
     initiated_by = Column(String(255), default="System Onboarding", nullable=False)
+    deployment_mode = Column(String(50), default="SIMULATED", nullable=False)  # SIMULATED, TEST_AWS, STAGING, CUSTOMER_PRODUCTION
+    evidence_level = Column(String(50), default="SIMULATED", nullable=False)  # NOT_STARTED, CONFIGURED, SIMULATED, TEST_VERIFIED, CUSTOMER_VERIFIED, PRODUCTION_VERIFIED
+    is_customer_approved = Column(Boolean, default=False, nullable=False)
+    approval_id = Column(String(36), nullable=True)
     logs_json = Column(JSON, nullable=True)
 
 class SecurityFinding(BaseModel):
@@ -38,15 +64,38 @@ class SecurityFinding(BaseModel):
     
     organization_id = Column(String(36), nullable=False, index=True)
     application_id = Column(String(36), nullable=False, index=True)
+    environment_id = Column(String(36), nullable=True, index=True)
+    assessment_id = Column(String(36), nullable=True, index=True)
+    
     title = Column(String(255), nullable=False)
-    severity = Column(String(20), nullable=False) # CRITICAL, HIGH, MEDIUM, LOW
-    status = Column(String(50), default="OPEN", nullable=False) # OPEN, IN_PROGRESS, RESOLVED, ACCEPTED_RISK
+    severity = Column(String(20), nullable=False) # CRITICAL, HIGH, MEDIUM, LOW, INFORMATIONAL
+    status = Column(String(50), default="OPEN", nullable=False, index=True) # OPEN, CONFIRMED, IN_PROGRESS, READY_FOR_RETEST, RESOLVED, ACCEPTED_RISK, FALSE_POSITIVE, REOPENED
     cvss_score = Column(String(10), default="7.5", nullable=False)
-    category = Column(String(100), default="Database Security", nullable=False)
+    cvss_vector = Column(String(100), nullable=True)
+    category = Column(String(100), default="Application Security", nullable=False)
     owasp_mapping = Column(String(100), default="A01:2021-Broken Access Control", nullable=False)
-    description = Column(String(1000), nullable=False)
-    suggested_fix = Column(String(2000), nullable=True)
-    affected_asset = Column(String(255), default="RDS PostgreSQL / Backend API", nullable=False)
+    cwe = Column(String(50), nullable=True)
+    description = Column(String(2000), nullable=False)
+    suggested_fix = Column(String(4000), nullable=True)
+    affected_asset = Column(String(255), default="Production Application", nullable=False)
+    
+    scanner = Column(String(50), default="LAUNCHCOMPLY_SECURITY_ENGINE", nullable=False)
+    finding_type = Column(String(100), default="VULNERABILITY", nullable=False)
+    endpoint = Column(String(500), nullable=True)
+    file = Column(String(500), nullable=True)
+    line = Column(Integer, nullable=True)
+    evidence = Column(Text, nullable=True)
+    confidence = Column(String(20), default="HIGH", nullable=False)
+    business_impact = Column(String(1000), nullable=True)
+    technical_impact = Column(String(1000), nullable=True)
+    remediation = Column(Text, nullable=True)
+    
+    detected_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_seen_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+    retest_status = Column(String(50), default="NONE", nullable=False) # NONE, QUEUED, FIXED, STILL_PRESENT, REOPENED
+    sla_due_date = Column(DateTime, nullable=True)
+    fingerprint = Column(String(64), nullable=True, index=True)
 
 class VAPTProject(BaseModel):
     __tablename__ = "vapt_projects"

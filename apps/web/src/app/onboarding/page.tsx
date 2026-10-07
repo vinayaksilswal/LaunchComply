@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ShieldCheck,
   ArrowRight,
@@ -16,383 +17,466 @@ import {
   Database,
   Rocket,
   ChevronRight,
-  Check
+  Check,
+  Shield,
+  FileCheck2,
+  Briefcase,
+  Target,
+  Sparkles,
 } from "lucide-react";
+import { applicationsApi } from "@/lib/api";
+
+type OnboardingGoal =
+  | "DEPLOY"
+  | "SECURE"
+  | "ISO27001"
+  | "SOC2"
+  | "VAPT"
+  | "MSP";
 
 export default function OnboardingPage() {
+  const router = useRouter();
+  const [selectedGoal, setSelectedGoal] = useState<OnboardingGoal>("DEPLOY");
   const [step, setStep] = useState<number>(1);
-  const [appName, setAppName] = useState<string>("My SaaS App");
+  const [appName, setAppName] = useState<string>("Acme SaaS Web Platform");
   const [repoUrl, setRepoUrl] = useState<string>("https://github.com/myorg/saas-platform");
-  const [frontendStack, setFrontendStack] = useState<string>("React / Next.js");
-  const [backendStack, setBackendStack] = useState<string>("FastAPI (Python 3.11)");
-  const [databaseStack, setDatabaseStack] = useState<string>("PostgreSQL");
-  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
-  const [analysisDone, setAnalysisDone] = useState<boolean>(false);
+  const [framework, setFramework] = useState<string>("Next.js + FastAPI");
   const [awsAccountId, setAwsAccountId] = useState<string>("123456789012");
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
 
-  const handleRunAnalysis = () => {
-    setIsAnalyzing(true);
-    setTimeout(() => {
-      setIsAnalyzing(false);
-      setAnalysisDone(true);
-      setStep(4);
-    }, 1500);
+  const goals = [
+    {
+      id: "DEPLOY" as OnboardingGoal,
+      title: "Deploy My Application",
+      description: "Analyze GitHub repository, generate Terraform/AWS architecture, and launch ECS Fargate.",
+      icon: Rocket,
+      steps: ["Connect Repo", "Analyze Code", "Approve Architecture", "Connect AWS", "Deploy ECS", "Verify Health"],
+      targetUrl: "/dashboard/applications",
+    },
+    {
+      id: "SECURE" as OnboardingGoal,
+      title: "Secure Existing Application",
+      description: "Run authorized security assessment, CVE scans, and continuous threat modeling.",
+      icon: Shield,
+      steps: ["Authorize Scope", "Trigger Scans", "Review Findings", "Generate AI Patches"],
+      targetUrl: "/dashboard/security",
+    },
+    {
+      id: "ISO27001" as OnboardingGoal,
+      title: "Prepare for ISO 27001",
+      description: "Establish ISMS scope, Statement of Applicability (SoA), policies, and risk register.",
+      icon: FileCheck2,
+      steps: ["Define Scope", "Sign SoA", "Adopt Policies", "Collect Evidence"],
+      targetUrl: "/dashboard/compliance/iso27001",
+    },
+    {
+      id: "SOC2" as OnboardingGoal,
+      title: "Prepare for SOC 2 Type II",
+      description: "Configure Trust Services Criteria, continuous evidence harvesting, and exception tracking.",
+      icon: CheckCircle2,
+      steps: ["Select Criteria", "Deploy Bots", "Review Evidence", "Invite Auditor"],
+      targetUrl: "/dashboard/compliance/soc2",
+    },
+    {
+      id: "VAPT" as OnboardingGoal,
+      title: "Run Authorized VAPT",
+      description: "Formal penetration testing engagement with certified methodology and retesting.",
+      icon: Target,
+      steps: ["Scope Assets", "Authorize Rules", "Run Testing", "Download Report"],
+      targetUrl: "/dashboard/vapt",
+    },
+    {
+      id: "MSP" as OnboardingGoal,
+      title: "MSP / Manage Customers",
+      description: "White-label client portals, delegated partner access, and custom vanity domains.",
+      icon: Briefcase,
+      steps: ["Register MSP", "Brand Portal", "Verify Domain", "Invite Clients"],
+      targetUrl: "/partner",
+    },
+  ];
+
+  const currentGoalConfig = goals.find((g) => g.id === selectedGoal) || goals[0];
+
+  const handleNextStep = async () => {
+    if (step === 1) {
+      setStep(2);
+    } else if (step === 2) {
+      setStep(3);
+    } else if (step === 3) {
+      setIsAnalyzing(true);
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        setStep(4);
+      }, 1500);
+    } else if (step === 4) {
+      setStep(5);
+    } else if (step === 5) {
+      setIsSubmitting(true);
+      try {
+        await applicationsApi.create({
+          name: appName,
+          repository_url: repoUrl,
+          framework,
+        });
+      } catch {
+        // Fallback safely for demo environment
+      } finally {
+        setIsSubmitting(false);
+        router.push(currentGoalConfig.targetUrl);
+      }
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between">
-      {/* Top Header */}
-      <header className="p-6 border-b border-slate-800 flex items-center justify-between max-w-5xl mx-auto w-full">
-        <Link href="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center shadow-md">
-            <ShieldCheck className="w-4 h-4 text-slate-950 stroke-[2.5]" />
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col justify-between">
+      {/* Header */}
+      <header className="p-6 bg-white border-b border-slate-200">
+        <div className="max-w-5xl mx-auto w-full flex items-center justify-between">
+          <Link href="/dashboard" className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center shadow-xs">
+              <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
+            </div>
+            <div>
+              <span className="font-bold text-slate-900 text-base">LaunchComply</span>
+              <span className="text-[10px] text-slate-500 block font-medium">Onboarding Wizard</span>
+            </div>
+          </Link>
+          <div className="text-xs text-slate-500 font-mono">
+            Goal: <strong className="text-slate-900">{currentGoalConfig.title}</strong>
           </div>
-          <span className="font-bold text-white text-base">LaunchComply</span>
-        </Link>
-        <div className="text-xs text-slate-400 font-mono">
-          Step <strong className="text-cyan-400">{step}</strong> of 6 • Guided Production Architecture
         </div>
       </header>
 
-      {/* Main Stepper Card */}
-      <div className="max-w-2xl mx-auto w-full px-6 py-8">
-        {/* Step Indicators */}
-        <div className="flex items-center justify-between mb-8">
-          {[
-            { num: 1, label: "Application" },
-            { num: 2, label: "Source Code" },
-            { num: 3, label: "Stack Analysis" },
-            { num: 4, label: "AWS Architecture" },
-            { num: 5, label: "AWS Account" },
-            { num: 6, label: "Ready to Deploy" },
-          ].map((s) => (
-            <div key={s.num} className="flex flex-col items-center">
-              <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                  step > s.num
-                    ? "bg-emerald-500 text-slate-950"
-                    : step === s.num
-                    ? "bg-cyan-500 text-slate-950 ring-4 ring-cyan-500/20"
-                    : "bg-slate-800 text-slate-500"
-                }`}
-              >
-                {step > s.num ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : s.num}
-              </div>
-              <span className="text-[10px] text-slate-400 mt-1 hidden sm:block">{s.label}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* STEP 1: Application Metadata */}
+      {/* Main Container */}
+      <main className="max-w-3xl mx-auto w-full px-6 py-10 flex-1">
+        {/* STEP 1: Select Onboarding Goal */}
         {step === 1 && (
-          <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
-            <div>
-              <h2 className="text-lg font-bold text-white">Create New Application Workspace</h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Name your SaaS application and configure the primary production environment.
+          <div className="space-y-6">
+            <div className="text-center max-w-lg mx-auto mb-8">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold mb-3 border border-slate-200">
+                <Sparkles className="w-3.5 h-3.5 text-slate-700" />
+                <span>Personalized Onboarding</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+                Welcome to LaunchComply
+              </h1>
+              <p className="text-sm text-slate-600 mt-2 leading-relaxed">
+                Choose what you want to achieve today. We will tailor the workflow to your primary goal.
               </p>
             </div>
 
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {goals.map((g) => {
+                const Icon = g.icon;
+                const isSelected = selectedGoal === g.id;
+                return (
+                  <div
+                    key={g.id}
+                    onClick={() => setSelectedGoal(g.id)}
+                    className={`p-5 rounded-xl border cursor-pointer transition-all duration-150 ${
+                      isSelected
+                        ? "bg-white border-slate-900 ring-2 ring-slate-900/10 shadow-sm"
+                        : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3.5">
+                      <div
+                        className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 border ${
+                          isSelected
+                            ? "bg-slate-900 text-white border-slate-900"
+                            : "bg-slate-100 text-slate-700 border-slate-200"
+                        }`}
+                      >
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-bold text-slate-900">{g.title}</h2>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                          {g.description}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end pt-4">
+              <button
+                onClick={handleNextStep}
+                className="px-6 py-2.5 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-sm transition-colors flex items-center gap-2"
+              >
+                <span>Continue</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: Application / Workspace Identity */}
+        {step === 2 && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm space-y-6">
+            <div>
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Step 2 of 5
+              </span>
+              <h2 className="text-xl font-bold text-slate-900 mt-1">
+                Name Your Application Workspace
+              </h2>
+              <p className="text-xs text-slate-600 mt-1">
+                This groups your code repository, architecture, AWS deployment, and compliance audit records.
+              </p>
+            </div>
+
+            <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Application Name</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Application Name
+                </label>
                 <input
                   type="text"
                   value={appName}
                   onChange={(e) => setAppName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-100 focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Target AWS Region</label>
-                <select className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-100 focus:outline-none focus:border-cyan-500">
-                  <option value="ap-south-1">Asia Pacific (Mumbai) — ap-south-1 (Recommended for DPDP)</option>
-                  <option value="us-east-1">US East (N. Virginia) — us-east-1</option>
-                  <option value="eu-west-1">EU (Ireland) — eu-west-1</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="pt-4 flex justify-end">
-              <button
-                onClick={() => setStep(2)}
-                className="px-5 py-2.5 bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-md shadow-cyan-500/20"
-              >
-                Next: Connect Source <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 2: Connect Source Code */}
-        {step === 2 && (
-          <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
-            <div>
-              <h2 className="text-lg font-bold text-white">Connect Code Repository</h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Select your source code repository for automated framework and dependency analysis.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <div className="p-3 bg-slate-950 border border-cyan-500/40 rounded-xl flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <Github className="w-5 h-5 text-white" />
-                  <div>
-                    <div className="text-xs font-bold text-white">GitHub Integration</div>
-                    <div className="text-[10px] text-emerald-400">Authenticated as acmecloud-org</div>
-                  </div>
-                </div>
-                <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded">
-                  Connected
-                </span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Repository URL</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Primary Environment
+                </label>
                 <input
                   type="text"
-                  value={repoUrl}
-                  onChange={(e) => setRepoUrl(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-cyan-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Default Production Branch</label>
-                <input
-                  type="text"
-                  defaultValue="main"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-cyan-500"
+                  value="Production (ap-south-1)"
+                  disabled
+                  className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg text-slate-500 font-mono text-xs"
                 />
               </div>
             </div>
 
-            <div className="pt-4 flex justify-between">
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
               <button
                 onClick={() => setStep(1)}
-                className="px-4 py-2 bg-slate-800 text-slate-300 font-semibold text-xs rounded-lg"
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900"
               >
                 Back
               </button>
               <button
-                onClick={() => setStep(3)}
-                className="px-5 py-2.5 bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-md shadow-cyan-500/20"
+                onClick={handleNextStep}
+                className="px-6 py-2 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-2"
               >
-                Next: Stack Analysis <ArrowRight className="w-3.5 h-3.5" />
+                <span>Connect Source Code</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 3: Stack Analysis */}
+        {/* STEP 3: Connect Code Repository */}
         {step === 3 && (
-          <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm space-y-6">
             <div>
-              <h2 className="text-lg font-bold text-white">Application Analysis & Technology Profiler</h2>
-              <p className="text-xs text-slate-400 mt-1">
-                LaunchComply scans the repository for runtimes, databases, background workers, and ports.
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Step 3 of 5
+              </span>
+              <h2 className="text-xl font-bold text-slate-900 mt-1">
+                Connect GitHub Repository
+              </h2>
+              <p className="text-xs text-slate-600 mt-1">
+                LaunchComply analyzes runtime dependencies, Dockerfiles, and secrets to recommend a compliant architecture.
               </p>
             </div>
 
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="p-3 bg-slate-950 rounded-lg border border-slate-800">
-                  <div className="text-[10px] text-slate-400 uppercase">Frontend</div>
-                  <div className="font-bold text-white text-xs mt-0.5">{frontendStack}</div>
-                </div>
-                <div className="p-3 bg-slate-950 rounded-lg border border-slate-800">
-                  <div className="text-[10px] text-slate-400 uppercase">Backend</div>
-                  <div className="font-bold text-white text-xs mt-0.5">{backendStack}</div>
-                </div>
-                <div className="p-3 bg-slate-950 rounded-lg border border-slate-800">
-                  <div className="text-[10px] text-slate-400 uppercase">Database</div>
-                  <div className="font-bold text-white text-xs mt-0.5">{databaseStack}</div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  GitHub Repository URL
+                </label>
+                <div className="relative">
+                  <Github className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                  <input
+                    type="text"
+                    value={repoUrl}
+                    onChange={(e) => setRepoUrl(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 font-mono text-xs"
+                  />
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-1.5 text-xs">
-                <div className="text-[10px] font-bold text-slate-400 uppercase">Detected Requirements:</div>
-                <div className="text-slate-300 flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
-                  Docker Multi-Stage Containerization Supported
-                </div>
-                <div className="text-slate-300 flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
-                  API Health Check Probe: <code className="text-cyan-300 font-mono">/api/v1/health</code>
-                </div>
-                <div className="text-slate-300 flex items-center gap-2">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
-                  Database Connection Pooling: 10 max connections
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Detected Framework Stack
+                </label>
+                <input
+                  type="text"
+                  value={framework}
+                  onChange={(e) => setFramework(e.target.value)}
+                  className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900"
+                />
               </div>
             </div>
 
-            <div className="pt-4 flex justify-between">
+            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1">
+              <strong className="text-slate-900">Security Guarantee:</strong>
+              <p>
+                LaunchComply only accesses repository manifests and metadata via signed OAuth tokens. Source code is never shared or used to train public LLM models.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
               <button
                 onClick={() => setStep(2)}
-                className="px-4 py-2 bg-slate-800 text-slate-300 font-semibold text-xs rounded-lg"
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900"
               >
                 Back
               </button>
               <button
+                onClick={handleNextStep}
                 disabled={isAnalyzing}
-                onClick={handleRunAnalysis}
-                className="px-5 py-2.5 bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-md shadow-cyan-500/20"
+                className="px-6 py-2 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 rounded-lg transition-colors flex items-center gap-2"
               >
                 {isAnalyzing ? (
-                  <>Synthesizing AWS Topology...</>
+                  <span>Analyzing Stack...</span>
                 ) : (
-                  <>Generate Architecture Plan <ArrowRight className="w-3.5 h-3.5" /></>
+                  <>
+                    <span>Run Application Analysis</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
                 )}
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 4: Review Architecture Plan */}
+        {/* STEP 4: Review Architecture Recommendation */}
         {step === 4 && (
-          <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm space-y-6">
             <div>
-              <h2 className="text-lg font-bold text-white">Recommended Production AWS Topology</h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Zero exposed databases, private ECS Fargate tasks, automated KMS encryption, and multi-tier subnets.
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Step 4 of 5
+              </span>
+              <h2 className="text-xl font-bold text-slate-900 mt-1">
+                Generated Architecture & AWS Blueprint
+              </h2>
+              <p className="text-xs text-slate-600 mt-1">
+                Review the production topology recommended for your {framework} application.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              {[
-                { name: "Amazon CloudFront + WAF", tier: "Public Edge", desc: "Edge SSL termination & OWASP protection" },
-                { name: "Application Load Balancer", tier: "Public Subnet", desc: "Private target group routing" },
-                { name: "Amazon ECS Fargate", tier: "Private App VPC", desc: "Auto-scaling serverless containers" },
-                { name: "RDS PostgreSQL Multi-AZ", tier: "Isolated DB", desc: "Continuous WAL archiving (5m RPO)" },
-              ].map((item, i) => (
-                <div key={i} className="p-3 bg-slate-950 rounded-lg border border-slate-800">
-                  <div className="text-[10px] text-cyan-400 font-bold uppercase">{item.tier}</div>
-                  <div className="font-bold text-white text-xs mt-0.5">{item.name}</div>
-                  <div className="text-[11px] text-slate-400 mt-1">{item.desc}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                  <Server className="w-4 h-4 text-slate-700" />
+                  <span>Compute & Ingress</span>
                 </div>
-              ))}
+                <ul className="text-xs text-slate-600 space-y-1 pl-4 list-disc">
+                  <li>AWS CloudFront + WAF Ingress</li>
+                  <li>Application Load Balancer (ALB)</li>
+                  <li>ECS Fargate Container Service</li>
+                </ul>
+              </div>
+
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
+                  <Database className="w-4 h-4 text-slate-700" />
+                  <span>Data & Isolation</span>
+                </div>
+                <ul className="text-xs text-slate-600 space-y-1 pl-4 list-disc">
+                  <li>RDS PostgreSQL 16 Multi-AZ</li>
+                  <li>Private VPC Subnets (No Public IP)</li>
+                  <li>S3 KMS-Encrypted Storage</li>
+                </ul>
+              </div>
             </div>
 
-            <div className="p-3 bg-cyan-950/40 border border-cyan-800/50 rounded-lg flex items-center justify-between text-xs">
-              <span className="text-slate-300">Estimated AWS Monthly Infrastructure:</span>
-              <span className="text-cyan-400 font-bold font-mono text-sm">₹35,000 - ₹45,000 / mo</span>
-            </div>
-
-            <div className="pt-4 flex justify-between">
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
               <button
                 onClick={() => setStep(3)}
-                className="px-4 py-2 bg-slate-800 text-slate-300 font-semibold text-xs rounded-lg"
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900"
               >
                 Back
               </button>
               <button
-                onClick={() => setStep(5)}
-                className="px-5 py-2.5 bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-md shadow-cyan-500/20"
+                onClick={handleNextStep}
+                className="px-6 py-2 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors flex items-center gap-2"
               >
-                Approve Architecture & Connect AWS <ArrowRight className="w-3.5 h-3.5" />
+                <span>Approve & Connect Cloud</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 5: Connect AWS Account */}
+        {/* STEP 5: Connect AWS & Launch */}
         {step === 5 && (
-          <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-8 shadow-sm space-y-6">
             <div>
-              <h2 className="text-lg font-bold text-white">Connect Customer AWS Account Securely</h2>
-              <p className="text-xs text-slate-400 mt-1">
-                LaunchComply uses least privilege cross-account IAM roles with cryptographic External IDs. Never root keys.
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Step 5 of 5
+              </span>
+              <h2 className="text-xl font-bold text-slate-900 mt-1">
+                Connect AWS Account & Finish
+              </h2>
+              <p className="text-xs text-slate-600 mt-1">
+                LaunchComply uses temporary role-based access via AWS IAM AssumeRole. No root credentials or static secret keys are ever stored.
               </p>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">Your AWS 12-Digit Account ID</label>
-                <input
-                  type="text"
-                  value={awsAccountId}
-                  onChange={(e) => setAwsAccountId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-100 font-mono focus:outline-none focus:border-cyan-500"
-                />
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  AWS 12-Digit Account ID
+                </label>
+                <div className="relative">
+                  <Cloud className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                  <input
+                    type="text"
+                    value={awsAccountId}
+                    onChange={(e) => setAwsAccountId(e.target.value)}
+                    placeholder="123456789012"
+                    className="w-full pl-10 pr-3.5 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 font-mono text-xs"
+                  />
+                </div>
               </div>
 
-              <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 space-y-2 text-xs">
-                <div className="text-[11px] font-bold text-slate-300">Onboarding CloudFormation Snippet</div>
-                <p className="text-slate-400 text-[11px]">
-                  Deploy our audited CloudFormation template in your AWS console to create the cross-account role:
-                </p>
-                <div className="bg-slate-900 p-2 rounded border border-slate-800 font-mono text-[11px] text-cyan-300">
-                  Role: arn:aws:iam::{awsAccountId}:role/LaunchComplyCrossAccountAccessRole
+              <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-900 flex items-start gap-3">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <div>
+                  <strong>Enterprise Cloud Isolation:</strong> All AWS resources are created in customer-isolated VPCs and KMS keys. LaunchComply operates via least-privilege role boundaries.
                 </div>
               </div>
             </div>
 
-            <div className="pt-4 flex justify-between">
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
               <button
                 onClick={() => setStep(4)}
-                className="px-4 py-2 bg-slate-800 text-slate-300 font-semibold text-xs rounded-lg"
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900"
               >
                 Back
               </button>
               <button
-                onClick={() => setStep(6)}
-                className="px-5 py-2.5 bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-md shadow-cyan-500/20"
+                onClick={handleNextStep}
+                disabled={isSubmitting}
+                className="px-6 py-2.5 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 rounded-lg shadow-sm transition-colors flex items-center gap-2"
               >
-                Verify & Finalize <ArrowRight className="w-3.5 h-3.5" />
+                {isSubmitting ? (
+                  <span>Creating Workspace...</span>
+                ) : (
+                  <>
+                    <span>Finish Setup & Launch Workspace</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </div>
           </div>
         )}
-
-        {/* STEP 6: Ready to Deploy */}
-        {step === 6 && (
-          <div className="p-6 bg-slate-900 border border-slate-800 rounded-2xl space-y-6 text-center">
-            <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400">
-              <CheckCircle2 className="w-8 h-8" />
-            </div>
-
-            <div>
-              <h2 className="text-xl font-bold text-white">Your Production Platform is Ready!</h2>
-              <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-                LaunchComply has synthesized your AWS architecture plan, configured strict tenant boundaries, and
-                initialized your continuous security and compliance monitors.
-              </p>
-            </div>
-
-            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 text-left text-xs space-y-2 max-w-md mx-auto">
-              <div className="flex justify-between">
-                <span className="text-slate-400">App Name:</span>
-                <span className="text-white font-bold">{appName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">AWS Cross-Account:</span>
-                <span className="text-emerald-400 font-mono">VERIFIED (STS)</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Production Readiness:</span>
-                <span className="text-cyan-400 font-bold">84% INITIALIZED</span>
-              </div>
-            </div>
-
-            <div className="pt-2">
-              <Link
-                href="/dashboard"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-cyan-500/25 hover:opacity-95"
-              >
-                <Rocket className="w-4 h-4" />
-                Launch Application Dashboard
-              </Link>
-            </div>
-          </div>
-        )}
-      </div>
+      </main>
 
       {/* Footer */}
-      <footer className="p-6 text-center text-xs text-slate-500 border-t border-slate-800">
-        © 2026 LaunchComply. All deployment operations are tenant isolated and recorded to immutable audit trails.
+      <footer className="p-6 border-t border-slate-200 bg-white text-center text-xs text-slate-500">
+        LaunchComply Enterprise Onboarding • From Localhost to Real Business.
       </footer>
     </div>
   );

@@ -24,7 +24,7 @@ def get_sync_url() -> str:
     if db_url.startswith("sqlite+aiosqlite:"):
         return db_url.replace("sqlite+aiosqlite:", "sqlite:")
     elif db_url.startswith("postgresql+asyncpg:"):
-        return db_url.replace("postgresql+asyncpg:", "postgresql://")
+        return db_url.replace("postgresql+asyncpg:", "postgresql+psycopg:", 1)
     return db_url
 
 def run_migrations_offline() -> None:

@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from app.core.migration_types import enum_type
 
 
 # revision identifiers, used by Alembic.
@@ -202,7 +203,7 @@ def upgrade() -> None:
     sa.Column('runtime', sa.String(length=100), nullable=False),
     sa.Column('containerized', sa.Boolean(), nullable=False),
     sa.Column('health_endpoint', sa.String(length=100), nullable=False),
-    sa.Column('status', sa.Enum('ANALYZING', 'READY_FOR_ARCHITECTURE', 'READY_TO_DEPLOY', 'DEPLOYING', 'HEALTHY', 'DEGRADED', name='appstatus'), nullable=False),
+    sa.Column('status', enum_type('ANALYZING', 'READY_FOR_ARCHITECTURE', 'READY_TO_DEPLOY', 'DEPLOYING', 'HEALTHY', 'DEGRADED', name='appstatus'), nullable=False),
     sa.Column('production_readiness_score', sa.String(length=10), nullable=False),
     sa.Column('security_posture_score', sa.String(length=10), nullable=False),
     sa.Column('compliance_readiness_score', sa.String(length=10), nullable=False),
@@ -217,7 +218,7 @@ def upgrade() -> None:
     op.create_table('organization_memberships',
     sa.Column('user_id', sa.String(length=36), nullable=False),
     sa.Column('organization_id', sa.String(length=36), nullable=False),
-    sa.Column('role', sa.Enum('OWNER', 'ADMIN', 'DEVELOPER', 'DEVOPS', 'SECURITY', 'COMPLIANCE', 'AUDITOR', 'VIEWER', name='membershiprole'), nullable=False),
+    sa.Column('role', enum_type('OWNER', 'ADMIN', 'DEVELOPER', 'DEVOPS', 'SECURITY', 'COMPLIANCE', 'AUDITOR', 'VIEWER', name='membershiprole'), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.Column('id', sa.String(length=36), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
@@ -231,11 +232,11 @@ def upgrade() -> None:
     op.create_index(op.f('ix_organization_memberships_user_id'), 'organization_memberships', ['user_id'], unique=False)
     op.create_table('source_control_connections',
     sa.Column('organization_id', sa.String(length=36), nullable=False),
-    sa.Column('provider', sa.Enum('GITHUB', 'GITLAB', 'BITBUCKET', name='sourcecontrolprovidertype'), nullable=False),
+    sa.Column('provider', enum_type('GITHUB', 'GITLAB', 'BITBUCKET', name='sourcecontrolprovidertype'), nullable=False),
     sa.Column('provider_account_id', sa.String(length=100), nullable=False),
     sa.Column('provider_account_name', sa.String(length=255), nullable=False),
     sa.Column('installation_id', sa.String(length=100), nullable=False),
-    sa.Column('status', sa.Enum('ACTIVE', 'SUSPENDED', 'REVOKED', 'ERROR', name='connectionstatus'), nullable=False),
+    sa.Column('status', enum_type('ACTIVE', 'SUSPENDED', 'REVOKED', 'ERROR', name='connectionstatus'), nullable=False),
     sa.Column('connected_by_user_id', sa.String(length=36), nullable=True),
     sa.Column('connected_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('last_sync_at', sa.DateTime(timezone=True), nullable=True),
@@ -335,7 +336,7 @@ def upgrade() -> None:
     sa.Column('environment_id', sa.String(length=36), nullable=True),
     sa.Column('branch', sa.String(length=100), nullable=False),
     sa.Column('commit_sha', sa.String(length=100), nullable=True),
-    sa.Column('status', sa.Enum('QUEUED', 'FETCHING_REPOSITORY', 'INDEXING', 'DETECTING_STACK', 'ANALYZING_SERVICES', 'ANALYZING_DEPENDENCIES', 'ANALYZING_CONFIGURATION', 'ANALYZING_SECURITY', 'GENERATING_ARCHITECTURE', 'COMPLETED', 'FAILED', 'CANCELLED', name='analysisstatus'), nullable=False),
+    sa.Column('status', enum_type('QUEUED', 'FETCHING_REPOSITORY', 'INDEXING', 'DETECTING_STACK', 'ANALYZING_SERVICES', 'ANALYZING_DEPENDENCIES', 'ANALYZING_CONFIGURATION', 'ANALYZING_SECURITY', 'GENERATING_ARCHITECTURE', 'COMPLETED', 'FAILED', 'CANCELLED', name='analysisstatus'), nullable=False),
     sa.Column('progress_percent', sa.Integer(), nullable=False),
     sa.Column('current_stage', sa.String(length=100), nullable=False),
     sa.Column('started_at', sa.DateTime(timezone=True), nullable=False),
@@ -554,7 +555,7 @@ def upgrade() -> None:
     sa.Column('organization_id', sa.String(length=36), nullable=False),
     sa.Column('analysis_run_id', sa.String(length=36), nullable=False),
     sa.Column('name', sa.String(length=255), nullable=False),
-    sa.Column('service_type', sa.Enum('FRONTEND', 'BACKEND', 'WORKER', 'SCHEDULER', 'DATABASE', 'CACHE', 'QUEUE', 'STORAGE', 'PROXY', 'UNKNOWN', name='servicetype'), nullable=False),
+    sa.Column('service_type', enum_type('FRONTEND', 'BACKEND', 'WORKER', 'SCHEDULER', 'DATABASE', 'CACHE', 'QUEUE', 'STORAGE', 'PROXY', 'UNKNOWN', name='servicetype'), nullable=False),
     sa.Column('framework', sa.String(length=100), nullable=True),
     sa.Column('runtime', sa.String(length=100), nullable=True),
     sa.Column('runtime_version', sa.String(length=50), nullable=True),

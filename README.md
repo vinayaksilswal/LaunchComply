@@ -33,6 +33,10 @@ LaunchComply/
 
 ---
 
+## Deployment sequence
+
+Start with Vercel (`apps/web`) and Render (FastAPI + private PostgreSQL) for owner testing. Follow [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md), then [OWNER_DOGFOOD_RUNBOOK.md](OWNER_DOGFOOD_RUNBOOK.md). Move to AWS after acceptance and a migration rehearsal; open a controlled B2B beta before enterprise GA. Current verified results and launch blockers are in [CURRENT_PRODUCTION_REALITY.md](CURRENT_PRODUCTION_REALITY.md).
+
 ## Getting Started
 
 ### Backend (`apps/api`)
@@ -52,3 +56,7 @@ npm install
 npm run dev
 ```
 Open [http://localhost:3000](http://localhost:3000) to view LaunchComply.
+
+## Local verification
+
+See [deployment verification](DEPLOYMENT_VERIFICATION.md) for fresh results and unresolved launch gates. Hosting preparation does not establish a completed real application deployment or enterprise readiness.

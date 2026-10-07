@@ -100,3 +100,157 @@ async def get_dashboard_overview(
         compliance_scores=comp_scores,
         recent_findings=dashboard_findings
     )
+
+
+@router.get("/my-actions")
+async def get_my_actions(
+    membership: OrganizationMembership = Depends(get_current_membership),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Action Center: Unifies tasks across Security, Compliance, Continuous Assurance,
+    and Operations into an actionable priority stream.
+    """
+    org_id = membership.organization_id
+    actions = []
+
+    # 1. Fetch compliance tasks
+    from app.models.compliance_operations import ComplianceTask
+    try:
+        tasks_res = await db.execute(
+            select(ComplianceTask)
+            .where(
+                ComplianceTask.organization_id == org_id,
+                ComplianceTask.status.notin_(["DONE", "COMPLETED", "CANCELLED"])
+            )
+            .order_by(ComplianceTask.due_date.asc())
+        )
+        tasks = tasks_res.scalars().all()
+        for t in tasks:
+            actions.append({
+                "id": f"TASK-{t.id[:8]}",
+                "title": t.title,
+                "category": t.category,
+                "framework": "Compliance OS",
+                "priority": t.priority,
+                "due_date": t.due_date.strftime("%Y-%m-%d") if t.due_date else "2026-10-15",
+                "owner": t.owner or "Compliance Lead",
+                "description": f"Compliance task: {t.title}. Source: {t.source_type}",
+                "action_url": "/dashboard/compliance/actions",
+                "action_label": "Review Task",
+                "status": t.status,
+                "source": "COMPLIANCE"
+            })
+    except Exception:
+        pass
+
+    # 2. Fetch open critical & high security findings
+    findings_res = await db.execute(
+        select(SecurityFinding)
+        .where(
+            SecurityFinding.organization_id == org_id,
+            SecurityFinding.status.in_(["OPEN", "IN_PROGRESS"]),
+            SecurityFinding.severity.in_(["CRITICAL", "HIGH"])
+        )
+        .order_by(SecurityFinding.created_at.desc())
+        .limit(5)
+    )
+    findings = findings_res.scalars().all()
+    for f in findings:
+        actions.append({
+            "id": f"SEC-{f.id[:8]}",
+            "title": f.title,
+            "category": "SECURITY_FINDING",
+            "framework": "ISO 27001 / SOC 2",
+            "priority": f.severity,
+            "due_date": "2026-10-10",
+            "owner": "Security Lead",
+            "description": f.description[:180] + "..." if len(f.description) > 180 else f.description,
+            "action_url": "/dashboard/security",
+            "action_label": "Remediate Finding",
+            "status": "OPEN",
+            "source": "SECURITY"
+        })
+
+    # 3. Fetch continuous assurance failing controls
+    from app.models.assurance import ContinuousControlMonitor
+    try:
+        ctrls_res = await db.execute(
+            select(ContinuousControlMonitor)
+            .where(
+                ContinuousControlMonitor.organization_id == org_id,
+                ContinuousControlMonitor.status == "FAILING"
+            )
+            .limit(5)
+        )
+        ctrls = ctrls_res.scalars().all()
+        for c in ctrls:
+            actions.append({
+                "id": f"CTRL-{c.id[:8]}",
+                "title": f"Failing Continuous Control: {c.code}",
+                "category": "CONTINUOUS_ASSURANCE",
+                "framework": c.framework or "SOC 2",
+                "priority": "CRITICAL" if c.severity == "CRITICAL" else "HIGH",
+                "due_date": "2026-10-08",
+                "owner": "DevOps / Security",
+                "description": c.causal_explanation or f"Automated audit bots detected non-compliance for {c.title}.",
+                "action_url": "/dashboard/assurance/controls",
+                "action_label": "Inspect Control",
+                "status": "FAILING",
+                "source": "ASSURANCE"
+            })
+    except Exception:
+        pass
+
+    # If empty, provide standardized onboarding actions so first-time users have clear steps
+    if not actions:
+        actions = [
+            {
+                "id": "ACT-001",
+                "title": "Review & Approve Production Architecture Plan",
+                "category": "ARCHITECTURE",
+                "framework": "Launch Baseline",
+                "priority": "HIGH",
+                "due_date": "2026-10-06",
+                "owner": "Platform Architect",
+                "description": "Review the multi-tier ECS Fargate + RDS Multi-AZ architecture before initial cloud provisioning.",
+                "action_url": "/dashboard/architecture",
+                "action_label": "Review Architecture",
+                "status": "PENDING",
+                "source": "BUILD"
+            },
+            {
+                "id": "ACT-002",
+                "title": "Authorize Security & VAPT Assessment Scope",
+                "category": "SECURITY_SCOPE",
+                "framework": "ISO 27001 A.8.8",
+                "priority": "HIGH",
+                "due_date": "2026-10-08",
+                "owner": "CISO / Security Lead",
+                "description": "Provide explicit signed authorization for automated vulnerability scanning and asset testing.",
+                "action_url": "/dashboard/vapt",
+                "action_label": "Authorize Scope",
+                "status": "PENDING",
+                "source": "SECURITY"
+            },
+            {
+                "id": "ACT-003",
+                "title": "Enable Statement of Applicability (SoA) for ISO 27001",
+                "category": "COMPLIANCE",
+                "framework": "ISO 27001:2022",
+                "priority": "MEDIUM",
+                "due_date": "2026-10-15",
+                "owner": "Compliance Lead",
+                "description": "Sign off the 83 applicable Annex A security controls and define remediation dates.",
+                "action_url": "/dashboard/compliance/iso27001",
+                "action_label": "Review SoA",
+                "status": "PENDING",
+                "source": "COMPLY"
+            }
+        ]
+
+    return {
+        "actions": actions,
+        "total_count": len(actions),
+        "critical_count": sum(1 for a in actions if a.get("priority") == "CRITICAL")
+    }

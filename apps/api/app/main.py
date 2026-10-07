@@ -6,16 +6,28 @@ from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.services.seed_service import seed_initial_data
 from app.api.v1.router import api_v1_router
+from sqlalchemy import text
+import asyncio
 import app.models  # Ensure all models are registered with Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create tables and seed demo data
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
-    async with AsyncSessionLocal() as session:
-        await seed_initial_data(session)
+    valid, blockers, _ = settings.validate_hosted_environment()
+    if not valid:
+        raise RuntimeError("Invalid hosted configuration: " + " ".join(blockers))
+
+    # Hosted schemas are managed by Alembic before deployment, never by startup.
+    if settings.ENVIRONMENT.lower() in ("development", "test", "demo"):
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        if settings.DEMO_MODE:
+            async with AsyncSessionLocal() as session:
+                await seed_initial_data(session)
+    else:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+            from app.core.schema_check import check_hosted_schema
+            await conn.run_sync(check_hosted_schema)
         
     yield
     # Shutdown
@@ -63,15 +75,31 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {
-        "status": "HEALTHY",
-        "database": "CONNECTED",
-        "readiness": "100%",
-        "version": settings.VERSION
-    }
+    result = await readiness()
+    if isinstance(result, dict):
+        result["status"] = "HEALTHY"
+    return result
+
+@app.get("/health/live")
+async def liveness():
+    return {"status": "ALIVE"}
+
+@app.get("/health/ready")
+async def readiness():
+    try:
+        async with asyncio.timeout(5):
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+    except Exception:
+        return JSONResponse(status_code=503, content={"status": "NOT_READY", "database": "UNAVAILABLE"})
+    return {"status": "READY", "database": "CONNECTED", "version": settings.VERSION}
 
 # Mount API V1
 app.include_router(api_v1_router, prefix=settings.API_V1_STR)
+
+# Mount Public Enterprise Assurance API
+from app.api.v1.assurance import public_assurance_router
+app.include_router(public_assurance_router, prefix="/api")
 
 if __name__ == "__main__":
     import uvicorn

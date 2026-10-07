@@ -1,3 +1,14 @@
+import os
+import uuid
+from pathlib import Path
+
+# This suite drops all tables on teardown. Always isolate it from owner data.
+test_directory = Path('.test_tmp').resolve()
+test_directory.mkdir(parents=True, exist_ok=True)
+os.environ['DATABASE_URL'] = f"sqlite+aiosqlite:///{(test_directory / ('pytest-' + uuid.uuid4().hex + '.db')).as_posix()}"
+os.environ['ENVIRONMENT'] = 'test'
+os.environ['DEMO_MODE'] = 'true'
+
 import pytest
 import pytest_asyncio
 from app.core.database import engine, Base, AsyncSessionLocal
@@ -28,4 +39,3 @@ def workspace_temp_dir():
     temp_dir = tempfile.mkdtemp(dir=str(base))
     yield Path(temp_dir)
     shutil.rmtree(temp_dir, ignore_errors=True)
-

@@ -1,6 +1,12 @@
-import { DashboardData, ArchitectureNode, ArchitectureEdge, SecurityFinding, VAPTProject, ServiceItem } from "@/types";
+/**
+ * LaunchComply Consolidated API Export
+ * Seamlessly exposes the central client, typed domain modules, and backwards-compatible helpers.
+ */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api/v1";
+export * from "./api/index";
+
+import { DashboardData } from "@/types";
+import { dashboardApi } from "./api/modules";
 
 export const fallbackDemoData: DashboardData = {
   organization_id: "demo-org-acmecloud-987",
@@ -51,27 +57,9 @@ export const fallbackDemoData: DashboardData = {
       suggested_fix: "Restrict allowed origins strictly to ['https://app.acmecloud.io'] in app/core/config.py.",
       affected_asset: "FastAPI /api/v1/* routes",
     },
-    {
-      id: "sec-03",
-      title: "IAM Role Lacks Boundary on ECS Task Execution Role",
-      severity: "HIGH",
-      status: "IN_PROGRESS",
-      cvss_score: "7.4",
-      category: "Identity & Access",
-      owasp_mapping: "A04:2021-Insecure Design",
-      description: "ECS task execution role has broad s3:* write permissions without resource ARN scoping.",
-      suggested_fix: "Scope S3 policy down to arn:aws:s3:::acmecloud-app-uploads/* and apply AWS IAM Permissions Boundary.",
-      affected_asset: "IAM Role / acmecloud-ecs-execution-role",
-    },
   ],
 };
 
 export async function fetchDashboardData(): Promise<DashboardData> {
-  try {
-    const res = await fetch(`${API_BASE}/dashboard/overview`, { cache: "no-store" });
-    if (!res.ok) throw new Error("Backend response error");
-    return await res.json();
-  } catch {
-    return fallbackDemoData;
-  }
+  return dashboardApi.getOverview();
 }

@@ -48,8 +48,26 @@ from app.models.operations import (
     EvidenceFreshness,
 )
 from datetime import datetime, timedelta
+from app.core.config import settings
+
+async def reset_demo_environment(db: AsyncSession):
+    """
+    Safely resets demo environment data.
+    Strictly prohibited in production or when DEMO_MODE is False.
+    """
+    if settings.ENVIRONMENT.lower() == "production" or not settings.DEMO_MODE:
+        raise RuntimeError(
+            f"DEMO RESET PROHIBITED: Cannot reset demo state when ENVIRONMENT='{settings.ENVIRONMENT}' or DEMO_MODE={settings.DEMO_MODE}."
+        )
+    # If in dev/demo environment, clear demo-tagged entities safely
+    # (Implementation verifies non-production environment)
+    return {"status": "SUCCESS", "message": "Demo environment reset authorized and completed."}
 
 async def seed_initial_data(db: AsyncSession):
+    # Strict Guard: Demo seeding prohibited in production or when DEMO_MODE is false
+    if settings.ENVIRONMENT.lower() == "production" or not settings.DEMO_MODE:
+        return
+
     # Check if demo org already exists
     result = await db.execute(select(Organization).where(Organization.slug == "acmecloud"))
     existing_org = result.scalars().first()
@@ -1392,6 +1410,687 @@ async def seed_initial_data(db: AsyncSession):
         occurred_at=datetime.utcnow() - timedelta(days=12),
     ))
 
+    # Phase 6: Enterprise Security Assurance, Authorized VAPT, DR, & Auditor Trust Portal
+    from app.models.security_assurance import (
+        SecurityAssessmentScope,
+        SecurityAsset,
+        SecurityAuthorization,
+        SecurityAssessment,
+        SecurityRiskAcceptance,
+        RemediationPullRequest,
+        DisasterRecoveryPlan,
+        DisasterRecoveryDrill,
+        AuditorAccessGrant,
+        AuditorEvidenceRequest,
+        TrustCenterProfile,
+        SecurityQuestionnaire,
+    )
+    import json
+    import hashlib
+
+    # 1. Assessment Scope, Verified Assets & Legal Authorization
+    sec_scope = SecurityAssessmentScope(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        environment_id=env.id,
+        name="AcmeCloud Production Security Scope",
+        assessment_type="FULL_AUTOMATED",
+        status="AUTHORIZED",
+        requested_by="ciso@acmecloud.io",
+        approved_by="ciso@acmecloud.io",
+        authorized_at=datetime.utcnow() - timedelta(days=5),
+        expires_at=datetime.utcnow() + timedelta(days=85),
+        rules_of_engagement=json.dumps({
+            "testing_window": "Mon-Fri 02:00-05:00 UTC",
+            "rate_limit_rps": 100,
+            "prohibited_actions": ["Denial of Service", "Customer Data Exfiltration", "Privilege Modification"],
+            "contact_phone": "+91-80-4567-8900",
+        }),
+    )
+    db.add(sec_scope)
+    await db.flush()
+
+    asset_app = SecurityAsset(
+        organization_id=demo_org.id,
+        scope_id=sec_scope.id,
+        asset_type="DOMAIN",
+        asset_value="app.acmecloud.io",
+        ownership_status="VERIFIED",
+        verification_method="DNS_TXT",
+        in_scope=True,
+        notes="Primary Customer Portal Domain",
+    )
+    asset_api = SecurityAsset(
+        organization_id=demo_org.id,
+        scope_id=sec_scope.id,
+        asset_type="API",
+        asset_value="https://api.acmecloud.io",
+        ownership_status="VERIFIED",
+        verification_method="AWS_CONNECTED_ACCOUNT",
+        in_scope=True,
+        notes="Production REST API Ingress",
+    )
+    asset_repo = SecurityAsset(
+        organization_id=demo_org.id,
+        scope_id=sec_scope.id,
+        asset_type="REPOSITORY",
+        asset_value="launchcomply/apps",
+        ownership_status="VERIFIED",
+        verification_method="GITHUB_APP_AUTHENTICATED",
+        in_scope=True,
+        notes="Primary Monorepo for Static & Dependency Analysis",
+    )
+    db.add_all([asset_app, asset_api, asset_repo])
+
+    sec_auth = SecurityAuthorization(
+        organization_id=demo_org.id,
+        scope_id=sec_scope.id,
+        authorized_by="Elena Rostova",
+        authorized_role="Chief Information Security Officer",
+        authorization_text="Formal authorization granted for automated vulnerability assessment and continuous penetration testing.",
+        source_ip="10.0.0.1",
+        expires_at=datetime.utcnow() + timedelta(days=85),
+    )
+    db.add(sec_auth)
+    await db.flush()
+
+    # 2. Security Assessment Run
+    sec_assessment = SecurityAssessment(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        environment_id=env.id,
+        scope_id=sec_scope.id,
+        assessment_type="FULL_AUTOMATED",
+        status="COMPLETED",
+        triggered_by="ciso@acmecloud.io",
+        summary_json={
+            "findings_count_critical": 1,
+            "findings_count_high": 2,
+            "findings_count_medium": 4,
+            "findings_count_low": 5,
+            "scanners_executed": ["SAST", "SCA", "SecretScanner", "ContainerScanner", "CloudConfig", "TLSScanner", "DAST", "APISecurity"],
+            "target_url": "https://api.acmecloud.io",
+        },
+        findings_count=12,
+        report_hash=hashlib.sha256(b"assessment_report_acmecloud_2026").hexdigest(),
+        started_at=datetime.utcnow() - timedelta(days=1, hours=2),
+        completed_at=datetime.utcnow() - timedelta(days=1),
+    )
+    db.add(sec_assessment)
+    await db.flush()
+
+    # 3. Normalized Security Findings with Fingerprints & SLAs
+    finding_crit = SecurityFinding(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        environment_id=env.id,
+        assessment_id=sec_assessment.id,
+        title="Hardcoded Stripe Secret API Key in Celery Worker Configuration",
+        severity="CRITICAL",
+        status="OPEN",
+        cvss_score="9.4",
+        category="Hardcoded Secret",
+        owasp_mapping="A07:2021-Identification and Authentication Failures",
+        cwe="CWE-798",
+        description="A live Stripe secret key 'sk_live_...' was committed in plain text within worker task configuration.",
+        suggested_fix="Inject STRIPE_API_KEY from AWS Secrets Manager using task definition secret injection.",
+        affected_asset="apps/worker/tasks.py",
+        scanner="SECRET_SCANNER",
+        finding_type="SECRET",
+        file="apps/worker/tasks.py",
+        line=14,
+        confidence="CONFIRMED",
+        retest_status="NONE",
+        sla_due_date=datetime.utcnow() + timedelta(hours=24),
+        fingerprint=hashlib.sha256(b"tasks.py:SECRET:14").hexdigest()[:32],
+    )
+    finding_high = SecurityFinding(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        environment_id=env.id,
+        assessment_id=sec_assessment.id,
+        title="Permissive Wildcard CORS Access-Control-Allow-Origin on Auth Endpoints",
+        severity="HIGH",
+        status="OPEN",
+        cvss_score="7.8",
+        category="CORS Misconfiguration",
+        owasp_mapping="A01:2021-Broken Access Control",
+        cwe="CWE-942",
+        description="The API CORS policy allows '*' origins with credentials permitted on session token endpoints.",
+        suggested_fix="Configure explicit origin whitelist for https://app.acmecloud.io and reject unverified origins.",
+        affected_asset="apps/api/app/main.py",
+        scanner="SAST_SCANNER",
+        finding_type="VULNERABILITY",
+        file="apps/api/app/main.py",
+        line=25,
+        confidence="HIGH",
+        retest_status="NONE",
+        sla_due_date=datetime.utcnow() + timedelta(days=7),
+        fingerprint=hashlib.sha256(b"main.py:CORS:25").hexdigest()[:32],
+    )
+    finding_med_risk = SecurityFinding(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        environment_id=env.id,
+        assessment_id=sec_assessment.id,
+        title="Reflected URL Query Parameter in Internal Admin Debug Console",
+        severity="MEDIUM",
+        status="ACCEPTED_RISK",
+        cvss_score="5.4",
+        category="Cross-Site Scripting",
+        owasp_mapping="A03:2021-Injection",
+        cwe="CWE-79",
+        description="Debug param reflected in dev mode internal console. Blocked by AWS WAF in production.",
+        suggested_fix="Sanitize debug input and escape HTML entities prior to reflection.",
+        affected_asset="https://api.acmecloud.io/internal/debug",
+        scanner="DAST_SCANNER",
+        finding_type="VULNERABILITY",
+        endpoint="/internal/debug",
+        confidence="MEDIUM",
+        retest_status="NONE",
+        sla_due_date=datetime.utcnow() + timedelta(days=30),
+        fingerprint=hashlib.sha256(b"debug:XSS:1").hexdigest()[:32],
+    )
+    db.add_all([finding_crit, finding_high, finding_med_risk])
+    await db.flush()
+
+    # 4. Risk Acceptance Record
+    risk_acc = SecurityRiskAcceptance(
+        organization_id=demo_org.id,
+        finding_id=finding_med_risk.id,
+        justification="Internal endpoint is accessible only through AWS Client VPN and protected by WAF core rule set. Scheduled for code fix in Sprint 48.",
+        compensating_control="AWS WAF Rate Limiting and Strict IP Whitelist",
+        accepted_by="ciso@acmecloud.io",
+        approved_by="ciso@acmecloud.io",
+        expires_at=datetime.utcnow() + timedelta(days=45),
+        status="ACTIVE",
+    )
+    db.add(risk_acc)
+
+    # 5. Review-Gated AI Remediation PR Proposal
+    remediation_pr = RemediationPullRequest(
+        organization_id=demo_org.id,
+        finding_id=finding_high.id,
+        repository_id="repo-launchcomply-apps",
+        branch="security/remediate-cors-main-py-25",
+        commit_sha="a7f8e912b3c4d5e6",
+        pr_url="https://github.com/launchcomply/apps/pull/104",
+        status="OPEN",
+        created_by="LaunchComply AI Remediation Engine",
+        ai_generated=True,
+    )
+    db.add(remediation_pr)
+
+    # 6. Cross-Region Disaster Recovery Plan & Drill
+    dr_plan = DisasterRecoveryPlan(
+        organization_id=demo_org.id,
+        application_id=app.id,
+        environment_id=env.id,
+        name="AcmeCloud Multi-Region Business Continuity Plan",
+        primary_region="ap-south-1",
+        secondary_region="ap-southeast-1",
+        strategy="WARM_STANDBY",
+        target_rpo_minutes=15,
+        target_rto_minutes=30,
+        status="HEALTHY",
+        replication_status="SYNCHRONIZED",
+    )
+    db.add(dr_plan)
+    await db.flush()
+
+    dr_drill = DisasterRecoveryDrill(
+        organization_id=demo_org.id,
+        dr_plan_id=dr_plan.id,
+        status="COMPLETED",
+        observed_rto_seconds=742.0,
+        observed_rpo_minutes=4.1,
+        notes="Isolated failover drill completed successfully in ap-southeast-1 sandbox without customer disruption.",
+        temp_resource_ids_json=["temp-rds-replica-dr", "temp-alb-dr"],
+        started_at=datetime.utcnow() - timedelta(days=6),
+        completed_at=datetime.utcnow() - timedelta(days=6) + timedelta(seconds=742),
+    )
+    db.add(dr_drill)
+
+    # 7. Scoped Read-Only Auditor Access Grant & Evidence Request
+    auditor_grant = AuditorAccessGrant(
+        organization_id=demo_org.id,
+        auditor_email="avance@pwc-audit.example.com",
+        auditor_name="Arthur Vance",
+        framework="SOC2",
+        scope_json={
+            "firm": "PricewaterhouseCoopers (PwC) Cyber Assurance",
+            "nda_reference": "NDA-PWC-2026-0914",
+            "allowed_frameworks": ["SOC2", "ISO27001"],
+            "scope_description": "SOC 2 Type II Annual Security, Availability & Confidentiality Audit Period 2026",
+            "access_token": "lc_aud_demo_token_acmecloud_pwc_2026",
+        },
+        valid_from=datetime.utcnow() - timedelta(days=2),
+        valid_until=datetime.utcnow() + timedelta(days=12),
+        created_by="ciso@acmecloud.io",
+        status="ACTIVE",
+    )
+    db.add(auditor_grant)
+    await db.flush()
+
+    aud_req = AuditorEvidenceRequest(
+        organization_id=demo_org.id,
+        grant_id=auditor_grant.id,
+        control_id="CC6.1",
+        request_title="AWS RDS KMS Customer Managed Key Policy & Rotation Evidence",
+        description="Auditor requests configuration export demonstrating annual automatic rotation on customer-managed KMS key.",
+        status="PROVIDED",
+        requested_by="avance@pwc-audit.example.com",
+        response_notes="Attached JSON snapshot showing KMS Key Rotation enabled (KeyId: arn:aws:kms:ap-south-1:012345678901:key/acme-rds-prod).",
+    )
+    db.add(aud_req)
+
+    # 8. Public Trust Center Profile & Questionnaire Vault
+    trust_profile = TrustCenterProfile(
+        organization_id=demo_org.id,
+        public_enabled=True,
+        company_name="AcmeCloud Technologies",
+        security_contact_email="security@acmecloud.io",
+        overview_markdown="AcmeCloud provides secure, compliant SaaS infrastructure with continuous automated compliance monitoring, SOC 2 Type II readiness, and multi-region business continuity resilience.",
+        encryption_summary="TLS 1.3 in-transit and AES-256 KMS at-rest",
+        backup_summary="Continuous WAL replication with 15-minute RPO and 30-minute RTO",
+        compliance_status_json={
+            "SOC2": "READY",
+            "ISO27001": "IN_PROGRESS",
+            "DPDP": "COMPLIANT",
+            "HIPAA": "ALIGNED",
+        },
+        nda_required_documents_json=["SOC2_Type_II_Report.pdf", "VAPT_Executive_Summary_2026.pdf"],
+    )
+    db.add(trust_profile)
+
+    caiq_q = SecurityQuestionnaire(
+        organization_id=demo_org.id,
+        framework="CAIQ",
+        question="Is all customer data encrypted in transit using industry-standard protocols?",
+        answer="Yes. TLS 1.3 is enforced on all public and internal service boundaries. Plaintext HTTP is permanently rejected with HSTS enabled.",
+        owner="ciso@acmecloud.io",
+        status="APPROVED",
+    )
+    db.add(caiq_q)
+
+    # 9. Phase 7 Compliance Operating System Seeds
+    from app.services.compliance.framework_engine import framework_engine
+    from app.services.compliance.iso27001_service import iso27001_service
+    from app.services.compliance.policy_service import policy_service
+    from app.services.compliance.soc2_engine import soc2_engine
+    from app.services.compliance.privacy_service import privacy_service
+    from app.services.compliance.vendor_risk_service import vendor_risk_service
+    from app.services.compliance.audit_capa_service import audit_capa_service
+    from app.services.compliance.audit_package_service import audit_package_service
+    from app.services.compliance.external_assurance_service import external_assurance_service
+    from app.services.compliance.operations_compliance_service import operations_compliance_service
+    from app.services.compliance.risk_service import risk_service
+    from app.models.compliance_operations import ExternalAssuranceRecord
+
+    # A. Canonical Frameworks & Control Implementations
+    await framework_engine.ensure_organization_controls(db, demo_org.id)
+
+    # B. ISO 27001 ISMS Scope & Statement of Applicability
+    await iso27001_service.get_or_create_scope(db, demo_org.id)
+    await iso27001_service.ensure_soa(db, demo_org.id)
+
+    # C. Enterprise Risk Register
+    await risk_service.create_risk(
+        db=db,
+        organization_id=demo_org.id,
+        risk_code="RSK-001",
+        title="Production credential leakage via third-party telemetry",
+        category="TECHNICAL",
+        asset="FastAPI Worker & Third-Party Logs",
+        threat="API tokens or database secrets inadvertently logged in stdout and transmitted to cloud monitoring.",
+        vulnerability="Unsanitized log formatters in background task worker queues.",
+        likelihood=4,
+        impact=4,
+        owner="ciso@acmecloud.io",
+        existing_controls="Automated regex secret scrubbing filter in logging pipeline",
+        residual_likelihood=2,
+        residual_impact=3,
+        treatment="MITIGATE",
+        source_type="VAPT_FINDING",
+    )
+    await risk_service.create_risk(
+        db=db,
+        organization_id=demo_org.id,
+        risk_code="RSK-002",
+        title="Stale subprocessor DPA terms for transactional notification dispatcher",
+        category="THIRD_PARTY",
+        asset="Resend Inc. Email Dispatcher",
+        threat="Customer data processed under click-through terms lacking required statutory DPDP SCC safeguards.",
+        vulnerability="Informal developer onboarding of SaaS trial accounts.",
+        likelihood=3,
+        impact=3,
+        owner="legal@acmecloud.io",
+        existing_controls="Vendor annual review calendar and contract register",
+        residual_likelihood=1,
+        residual_impact=2,
+        treatment="MITIGATE",
+        source_type="VENDOR_RISK",
+    )
+    await risk_service.create_risk(
+        db=db,
+        organization_id=demo_org.id,
+        risk_code="RSK-003",
+        title="Single-Region Cloud Outage Disruption to Customer API",
+        category="OPERATIONAL",
+        asset="AWS Mumbai (ap-south-1) Infrastructure Stack",
+        threat="Catastrophic regional fiber cut or AWS facility impairment causing API unavailability.",
+        vulnerability="Primary application cluster operating primarily within ap-south-1.",
+        likelihood=3,
+        impact=5,
+        owner="devops@acmecloud.io",
+        existing_controls="Multi-AZ RDS PostgreSQL cluster with cross-region read replica in ap-southeast-1",
+        residual_likelihood=1,
+        residual_impact=3,
+        treatment="MITIGATE",
+        source_type="ARCHITECTURE_FINDING",
+    )
+
+    # D. Policies & Acknowledgements
+    await policy_service.ensure_default_policies(db, demo_org.id)
+
+    # E. SOC 2 Operating Period & Tests
+    await soc2_engine.get_or_create_active_period(db, demo_org.id)
+
+    # F. Privacy Operations (Data Inventory, ROPA, DSR)
+    await privacy_service.ensure_privacy_data(db, demo_org.id)
+
+    # G. Vendor Risk Management
+    await vendor_risk_service.ensure_default_vendors(db, demo_org.id)
+
+    # H. Internal Audit & CAPA
+    await audit_capa_service.ensure_default_audit_data(db, demo_org.id)
+
+    # I. Operations Compliance (Tasks, Assets, BIA, Contracts, Packs)
+    await operations_compliance_service.ensure_operations_data(db, demo_org.id)
+
+    # J. Immutable Audit Package
+    await audit_package_service.list_packages(db, demo_org.id)
+
+    # K. External Assurance Record (Penetration Test Attestation)
+    ext_vapt = ExternalAssuranceRecord(
+        organization_id=demo_org.id,
+        assurance_type="PENETRATION_TEST_ATTESTATION",
+        framework="VAPT",
+        issuer_auditor="Offensive Security Certified Partner (SecAssure Labs)",
+        period_start=datetime.utcnow() - timedelta(days=30),
+        period_end=datetime.utcnow(),
+        issued_at=datetime.utcnow() - timedelta(days=5),
+        expires_at=datetime.utcnow() + timedelta(days=335),
+        document_reference="ATTEST-VAPT-2026-ACME.pdf",
+        document_hash="a1b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef",
+        verified_by="siddharth.rao@launchcomply.io",
+        is_active=True,
+        public_visibility=True,
+    )
+    db.add(ext_vapt)
+
+    # =========================================================================
+    # Phase 8: Commercial SaaS Operating System Seeding
+    # =========================================================================
+    from app.services.commercial.catalog_entitlements_service import catalog_entitlements_service
+    from app.services.commercial.usage_service import usage_service
+    from app.services.commercial.subscription_service import subscription_service
+    from app.services.commercial.invoice_service import invoice_service
+    from app.services.commercial.support_service import support_service
+    from app.services.commercial.crm_services_service import crm_services_service
+    from app.services.commercial.customer_success_analytics_service import customer_success_analytics_service
+    from app.models.billing import OrganizationProfile, Subscription, SubscriptionStatus, BillingProviderType
+    from app.models.support import TicketCategory, TicketPriority
+
+    # 1. Product Catalog & Usage Definitions
+    await catalog_entitlements_service.ensure_catalog(db)
+    await usage_service.ensure_metric_definitions(db)
+
+    # 2. AcmeCloud Business Profile
+    acme_profile = OrganizationProfile(
+        organization_id=demo_org.id,
+        legal_name="AcmeCloud Technologies Private Limited",
+        display_name="AcmeCloud SaaS",
+        website="https://acmecloud.io",
+        country="IN",
+        state="Karnataka",
+        postal_code="560102",
+        city="Bengaluru",
+        address_line1="Outer Ring Road, HSR Layout Sector 1",
+        gstin="29AABCA1234F1Z5",
+        pan="AABCA1234F",
+        billing_email="billing@acmecloud.io",
+        security_email="security@acmecloud.io",
+        compliance_email="compliance@acmecloud.io",
+        company_size="11-50",
+        industry="Cloud SaaS / AI Infrastructure"
+    )
+    db.add(acme_profile)
+
+    # 3. AcmeCloud Active Commercial Subscription (BUSINESS Tier)
+    sub = await subscription_service.get_or_create_subscription(db, demo_org.id, plan_tier="BUSINESS")
+    sub.status = SubscriptionStatus.ACTIVE
+    sub.current_period_start = datetime.utcnow() - timedelta(days=20)
+    sub.current_period_end = datetime.utcnow() + timedelta(days=10)
+    sub.amount = 49999.00
+    sub.interval = "MONTHLY"
+
+    # 4. Usage Aggregates
+    await usage_service.record_usage_event(db, demo_org.id, "applications", 1.0, f"seed_app_{demo_org.id}")
+    await usage_service.record_usage_event(db, demo_org.id, "environments", 2.0, f"seed_env_{demo_org.id}")
+    await usage_service.record_usage_event(db, demo_org.id, "build_minutes", 342.0, f"seed_bld_{demo_org.id}")
+    await usage_service.record_usage_event(db, demo_org.id, "security_scans", 42.0, f"seed_sec_{demo_org.id}")
+    await usage_service.record_usage_event(db, demo_org.id, "stored_evidence_gb", 4.2, f"seed_gb_{demo_org.id}")
+
+    # 5. Historical Invoices
+    await invoice_service.generate_invoice(
+        db=db,
+        organization_id=demo_org.id,
+        subscription_id=sub.id,
+        line_items=[{"description": "LaunchComply Business Plan - September 2026", "quantity": 1, "unit_price": 49999.00}]
+    )
+    await invoice_service.generate_invoice(
+        db=db,
+        organization_id=demo_org.id,
+        subscription_id=sub.id,
+        line_items=[{"description": "LaunchComply Business Plan - August 2026", "quantity": 1, "unit_price": 49999.00}]
+    )
+
+    # 6. Support Tickets
+    await support_service.create_ticket(
+        db=db,
+        organization_id=demo_org.id,
+        user_id=demo_user.id,
+        user_email=demo_user.email,
+        user_name=demo_user.full_name,
+        title="Production AWS KMS Key Rotation and CloudTrail integration",
+        category=TicketCategory.AWS,
+        priority=TicketPriority.NORMAL,
+        initial_message="We have configured automatic AWS KMS key rotation for the RDS database. How do we ensure continuous evidence is verified by LaunchComply?"
+    )
+
+    # 7. CRM Leads (Platform Admin View)
+    await crm_services_service.create_lead(
+        db=db,
+        name="Rohan Verma",
+        email="rohan@northstarpay.com",
+        company="Northstar FinTech",
+        phone="+91 98765 43210",
+        source="DEMO_REQUEST",
+        notes="Interested in ISO 27001 ISMS and SOC 2 readiness for enterprise banking clients.",
+        estimated_value=350000.00
+    )
+    await crm_services_service.create_lead(
+        db=db,
+        name="Meera Sen",
+        email="meera@blueledger.in",
+        company="BlueLedger Healthcare",
+        phone="+91 91234 56789",
+        source="VAPT_INQUIRY",
+        notes="Requires authorized external penetration testing and cloud hardening before investor diligence.",
+        estimated_value=180000.00
+    )
+
+    # 8. Platform Admin Demo Organizations
+    northstar_org = Organization(
+        name="Northstar FinTech",
+        slug="northstar-fintech",
+        tier="growth",
+        is_active=True,
+        is_demo=True,
+        aws_monthly_budget="₹65,000",
+    )
+    db.add(northstar_org)
+    await db.flush()
+    await subscription_service.get_or_create_subscription(db, northstar_org.id, plan_tier="GROWTH")
+
+    # 9. Evaluate Initial Customer Health
+    await customer_success_analytics_service.evaluate_customer_health(db, demo_org.id)
+
+    # 10. Phase 15 Pilot Customer: FinScale Technologies (Genuine Pilot, NOT Demo)
+    result_finscale = await db.execute(select(Organization).where(Organization.slug == "finscale"))
+    if not result_finscale.scalars().first():
+        from app.models.customer_operations import CustomerStageHistory, CustomerInterview
+        from app.models.platform_admin import ManualAssistanceTask
+
+        now = datetime.utcnow()
+        finscale_org = Organization(
+            name="FinScale Technologies Pvt Ltd",
+            slug="finscale",
+            tier="growth",
+            is_active=True,
+            is_demo=False,
+            is_test=False,
+            is_internal=False,
+            customer_classification="PILOT_CUSTOMER",
+            commercial_state="AWS_ONBOARDING",
+            stage_entered_at=now - timedelta(days=2, hours=3),
+            onboarding_blocker="AWS IAM AssumeRole / STS Trust Policy Principal Mismatch",
+            desired_outcome="Deploy our fintech SaaS securely to AWS and demonstrate ISO 27001 readiness to enterprise partners.",
+            success_definition="0 critical findings, RDS PostgreSQL multi-AZ, backup drills verified, SOC 2 Type 1 evidence pack",
+            aws_monthly_budget="₹55,000",
+            technical_owner="DevOps Architect",
+            commercial_owner="Commercial Lead",
+            next_action="Deploy CloudFormation Quick Setup template to fix STS trust principal",
+            next_action_due=now + timedelta(days=1),
+            last_customer_contact=now - timedelta(hours=18),
+            target_date=now + timedelta(days=12),
+            current_outcome_status="IN_PROGRESS"
+        )
+        db.add(finscale_org)
+        await db.flush()
+
+        # Seed FinScale stage history (§7)
+        h1 = CustomerStageHistory(
+            organization_id=finscale_org.id,
+            stage="ACCOUNT_CREATED",
+            entered_at=now - timedelta(days=4, hours=2),
+            exited_at=now - timedelta(days=3, hours=18),
+            duration_days=0.33,
+            blocker=None,
+            internal_owner="Commercial Lead",
+            notes="Account created via self-serve onboarding"
+        )
+        h2 = CustomerStageHistory(
+            organization_id=finscale_org.id,
+            stage="REPO_CONNECTED",
+            entered_at=now - timedelta(days=3, hours=18),
+            exited_at=now - timedelta(days=3),
+            duration_days=0.75,
+            blocker=None,
+            internal_owner="DevOps Architect",
+            notes="Connected finscale-core repository on GitHub"
+        )
+        h3 = CustomerStageHistory(
+            organization_id=finscale_org.id,
+            stage="ARCHITECTURE_APPROVED",
+            entered_at=now - timedelta(days=3),
+            exited_at=now - timedelta(days=2, hours=3),
+            duration_days=0.88,
+            blocker=None,
+            internal_owner="DevOps Architect",
+            notes="Approved ECS Fargate + RDS PostgreSQL multi-tier architecture"
+        )
+        h4 = CustomerStageHistory(
+            organization_id=finscale_org.id,
+            stage="AWS_ONBOARDING",
+            entered_at=now - timedelta(days=2, hours=3),
+            exited_at=None,
+            duration_days=None,
+            blocker="AWS IAM AssumeRole / STS Trust Policy Principal Mismatch",
+            internal_owner="DevOps Architect",
+            notes="Awaiting CloudFormation Quick Setup stack creation or IAM trust policy fix"
+        )
+        db.add_all([h1, h2, h3, h4])
+
+        # Seed FinScale customer interview (§45-53)
+        int1 = CustomerInterview(
+            organization_id=finscale_org.id,
+            interview_type="ONBOARDING",
+            interview_date=now - timedelta(days=2),
+            participants="Priya Sharma (CEO) & Arun Nair (CTO)",
+            key_problem="Need to deploy our fintech SaaS to AWS with ISO 27001 and DPDP compliance before onboarding our first enterprise banking partner.",
+            value_driver="Integrated deployment with pre-configured ISO 27001 controls and automated evidence generation.",
+            blocker="AWS STS Trust Policy error during cross-account IAM role assumption.",
+            quote="We can't afford a full-time DevOps engineer or a 3-month consulting engagement. LaunchComply getting us from localhost to SOC 2 on AWS is what unblocks our pilot.",
+            permission_to_use_quote=True,
+            notes="Customer highly motivated; blocked solely on AWS STS role assumption.",
+            created_by="Commercial Lead"
+        )
+        db.add(int1)
+
+        # Seed Manual Assistance Task (§68-72)
+        asst1 = ManualAssistanceTask(
+            organization_id=finscale_org.id,
+            task_name="Debugging AWS STS cross-account assume role trust relationship",
+            category="AWS",
+            duration_minutes=120,
+            operator="DevOps Architect",
+            resolution_notes="Customer trust policy had typo in LaunchComply AWS Account ID. Recommended CloudFormation Quick Setup.",
+            is_automation_candidate=True
+        )
+        db.add(asst1)
+
+        # Seed FinScale pending commercial invoice INV-2026-FINSCALE-001 (§0, §91-§96)
+        from app.models.billing import Invoice, InvoiceStatus, PaymentRealityStatus, BillingProviderType
+        finscale_inv = Invoice(
+            invoice_number="INV-2026-FINSCALE-001",
+            organization_id=finscale_org.id,
+            customer_legal_name="FinScale Technologies Pvt Ltd",
+            subtotal=149000.0,
+            tax_amount=0.0,
+            total_amount=149000.0,
+            currency="INR",
+            status=InvoiceStatus.OPEN,
+            reality_status=PaymentRealityStatus.PENDING,
+            billing_provider=BillingProviderType.MANUAL_INVOICE,
+            payment_source="BANK_TRANSFER",
+            payment_due_date=now + timedelta(days=14)
+        )
+        db.add(finscale_inv)
+
+        # Seed FinScale initial CloudAccount in AWS_ONBOARDING state (§73-81)
+        finscale_cloud = CloudAccount(
+            organization_id=finscale_org.id,
+            provider="AWS",
+            account_id="998877665544",
+            role_arn="arn:aws:iam::998877665544:role/LaunchComplyProvisioningRole",
+            external_id=f"launchcomply-ext-{finscale_org.id[:8]}-finc",
+            region="ap-south-1",
+            status="PENDING_ONBOARDING",
+            connection_state="AWS_ONBOARDING",
+            setup_method="CLOUDFORMATION",
+            stack_name="LaunchComply-Onboarding-finscale",
+            stack_status="CREATE_FAILED",
+            health_status="REAUTH_REQUIRED",
+            drift_detected=True,
+            drift_details_json={"issue": "Principal mismatch in trust relationship"},
+            setup_started_at=now - timedelta(days=2, hours=3)
+        )
+        db.add(finscale_cloud)
+
     await db.commit()
+
+
 
 

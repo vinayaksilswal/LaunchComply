@@ -1,0 +1,42 @@
+# Paid owner-dogfood services; review charges in Render before applying.
+services:
+  - type: web
+    name: launchcomply-api
+    runtime: python
+    region: singapore
+    plan: 0.5c-512mb
+    rootDir: apps/api
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: python -m alembic upgrade head
+    startCommand: python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health/ready
+    autoDeployTrigger: off
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: ENVIRONMENT
+        value: staging
+      - key: DEBUG
+        value: "false"
+      - key: DEMO_MODE
+        value: "false"
+      - key: PILOT_MODE
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: launchcomply-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: BACKEND_CORS_ORIGINS
+        sync: false
+databases:
+  - name: launchcomply-db
+    region: singapore
+    plan: 0.1c-256mb
+    postgresMajorVersion: "16"
+    databaseName: launchcomply
+    user: launchcomply
+    ipAllowList: []

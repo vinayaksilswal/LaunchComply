@@ -47,3 +47,11 @@ Thumbs.db
 # Pytest
 .test_tmp/
 .pytest_cache/
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+# Scratch & Temporary
+scratch*
+scratch_*
+*.scratch.*

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.permissions import get_current_membership
 from app.models.auth import OrganizationMembership
 from app.models.source_control import (
@@ -19,6 +20,10 @@ from app.core.audit import log_audit_event
 
 router = APIRouter(prefix="/source-control", tags=["Source Control & GitHub App"])
 
+def require_fixture_provider_environment():
+    if settings.ENVIRONMENT in ("staging", "production") or not settings.DEMO_MODE:
+        raise HTTPException(status_code=503, detail="Real GitHub integration is not implemented. The fixture adapter is unavailable in this environment.")
+
 class CallbackPayload(BaseModel):
     installation_id: str
     code: Optional[str] = None
@@ -27,18 +32,18 @@ class CallbackPayload(BaseModel):
 @router.get("/providers")
 async def list_providers():
     return [
-        {"name": "GitHub App", "code": "GITHUB", "status": "AVAILABLE", "description": "Automated repository indexing, branch tracking, and commit webhooks via LaunchComply GitHub App."},
+        {"name": "GitHub App", "code": "GITHUB", "status": "SIMULATED" if settings.DEMO_MODE and settings.ENVIRONMENT not in ("staging", "production") else "NOT_CONFIGURED", "description": "Fixture adapter; real GitHub App token exchange and repository fetching require implementation."},
         {"name": "GitLab", "code": "GITLAB", "status": "COMING_SOON", "description": "Self-managed and GitLab.com integration."},
         {"name": "Bitbucket", "code": "BITBUCKET", "status": "COMING_SOON", "description": "Atlassian Bitbucket Cloud and Data Center."}
     ]
 
-@router.get("/github/install-url")
+@router.get("/github/install-url", dependencies=[Depends(require_fixture_provider_environment)])
 async def get_github_install_url(membership: OrganizationMembership = Depends(get_current_membership)):
     csrf_state = f"{membership.organization_id}:{uuid.uuid4().hex[:12]}"
     url = github_provider.get_installation_url(csrf_state)
     return {"install_url": url, "state": csrf_state}
 
-@router.post("/github/callback")
+@router.post("/github/callback", dependencies=[Depends(require_fixture_provider_environment)])
 async def github_callback(
     payload: CallbackPayload,
     membership: OrganizationMembership = Depends(get_current_membership),
@@ -186,7 +191,7 @@ async def list_branches(
     )
     return result.scalars().all()
 
-@router.post("/github/webhook")
+@router.post("/github/webhook", dependencies=[Depends(require_fixture_provider_environment)])
 async def github_webhook(
     request: Request,
     x_hub_signature_256: Optional[str] = Header(None, alias="X-Hub-Signature-256"),
