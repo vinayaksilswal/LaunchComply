@@ -46,7 +46,7 @@ If Render logs report default `JWT_SECRET`, default `ENCRYPTION_KEY`, or invalid
 
 For this owner's deployment, a local ignored file `apps/api/.env.render.local` contains the prepared database URL, independent stable secrets and safe runtime flags. In the Render service, open **Environment → Add from .env**, paste its contents, and choose **Save, rebuild, and deploy**. Merge/replace any existing entries with the same names. The file must never be committed or copied into the image.
 
-The initial allowlist is the known API origin, `https://launchcomply.onrender.com`, for backend/docs access. Add the actual Vercel frontend origin to the JSON array when configured; keep preview environments separate. Successful local validation does not mean Render has received these values.
+The prepared allowlist is `["https://launchcomply.onrender.com", "https://launch-comply-tau.vercel.app"]`, covering the known API and frontend origins. Keep preview environments separate. Successful local validation does not mean Render has received these values.
 
 After deployment, run the optional read-only pytest smoke checks from `apps/api`: set `LIVE_API_URL=https://launchcomply.onrender.com`, then run `.venv/Scripts/python.exe -m pytest tests/test_live_health.py -q`. They check the root response, liveness and database readiness without creating live users or changing database records. Default test runs skip these remote checks and use isolated SQLite.
 
@@ -64,7 +64,7 @@ Standard PostgreSQL URLs now use SQLAlchemy's async psycopg driver, preserving N
 ### Vercel setup
 
 1. Import the same Git repository. Select Next.js and set the Root Directory to `apps/web`; build with `npm run build` and install with `npm ci`. See [Vercel monorepo setup](https://vercel.com/docs/monorepos).
-2. Set server-side `BACKEND_URL` to the assigned HTTPS Render API origin, such as `https://your-api.onrender.com`, with no `/api/v1` suffix or credentials. The Vercel build rejects a missing, localhost, or non-HTTPS destination.
+2. Set server-side `BACKEND_URL=https://launchcomply.onrender.com`, with no `/api/v1` suffix or credentials. The Vercel build rejects a missing, localhost, or non-HTTPS destination. The owner entered this value and deployed `https://launch-comply-tau.vercel.app`; the homepage and login page returned HTTP 200. For future Preview isolation, configure a separate staging backend.
 3. Leave `NEXT_PUBLIC_API_URL` unset. The browser uses `/api/backend`; Next.js forwards it to the Render API. Existing `/api/v1` callers also have a forwarding rule. Optional direct browser access requires the complete API URL and the exact CORS origin allowlist.
 4. Redeploy after changing environment values: Next.js rewrites are configured at build time. Keep Preview deployments connected to a separate staging backend/database. See [Vercel environment variable documentation](https://vercel.com/docs/environment-variables).
 5. Check home, pricing, security, docs, signup, email verification, onboarding and the API proxy in the deployed browser. Complete signup with an owner-only test identity and confirm that subsequent authenticated requests use its token and organization. Record HTTP errors as failures.

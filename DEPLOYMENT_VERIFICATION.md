@@ -4,11 +4,17 @@ Date: 2026-10-07. Rollout: **Vercel + Render → owner projects → AWS migratio
 
 ## Docker and Neon follow-up
 
+### Vercel deployment follow-up
+
+The owner corrected the missing Vercel `BACKEND_URL` setting to `https://launchcomply.onrender.com` and supplied the deployed frontend `https://launch-comply-tau.vercel.app`. Read-only HTTP checks returned **200** for the homepage and `/login`. The frontend `/api/backend/source-control/providers` request and Render `/health/ready` request both timed out. Frontend delivery is confirmed; backend recovery and authenticated hosted operation remain unverified.
+
+The unchanged Next.js configuration passed **13 configuration regression tests**, covering production and preview destinations, local development, missing hosted configuration and unsafe origins. A production-mode build using the supplied Render origin passed with **81 generated pages** and two existing hook warnings. Both generated API rewrites target the Render `/api/v1` endpoint. The prepared ignored Render environment file now includes the exact Vercel origin and passes local hosted configuration validation; its private values still need to be saved in Render.
+
 ### Render startup incident
 
 The owner's Render log confirms that the Docker image built and was uploaded successfully. Runtime exits before migrations because `JWT_SECRET` and `ENCRYPTION_KEY` are unset/default and the CORS allowlist contains development origins. Production validation remains enforced. A clearer runtime setup instruction and a regression reproducing these three failures were added.
 
-Prepared `apps/api/.env.render.local` passes local production configuration validation and is excluded from Git and the image. It contains stable independent secrets, the owner database URL, safe runtime flags and the known backend HTTPS origin. It must be imported into the manually created Render service's Environment settings; Git pushes do not transfer its private values. No authenticated Render administration session was available to apply the values here. Add the actual Vercel origin when available.
+Prepared `apps/api/.env.render.local` passes local production configuration validation and is excluded from Git and the image. It contains stable independent secrets, the owner database URL, safe runtime flags and the known backend and Vercel HTTPS origins. It must be imported into the manually created Render service's Environment settings; Git pushes do not transfer its private values. No authenticated Render administration session was available to apply the values here.
 
 Fresh checks: focused startup/hosting pytest **22 passed**; full local pytest **190 passed, 3 skipped in 70.41 seconds**. Remote checks are opt-in and were separately executed with `LIVE_API_URL=https://launchcomply.onrender.com`: **3 failed in 104.95 seconds**, all with read timeouts (root, liveness and readiness). Live recovery is not verified. Production database migrations have not been executed here. The remaining immediate action is to save the prepared values in Render and redeploy, then rerun the read-only smoke tests.
 
