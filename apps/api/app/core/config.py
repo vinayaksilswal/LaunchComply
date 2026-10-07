@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     # Environment (development, test, demo, staging, production)
     ENVIRONMENT: Literal["development", "test", "demo", "staging", "production"] = "development"
     DEBUG: bool = Field(default=True)
+    MIGRATE_ON_STARTUP: bool = False
     
     # Database (Defaults to local SQLite async DB for effortless zero-setup dev & automated testing; PostgreSQL mandatory in production)
     DATABASE_URL: str = Field(
@@ -22,10 +23,10 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def normalize_database_url(cls, value: str) -> str:
-        # Render supplies a standard PostgreSQL URL; the API uses asyncpg.
+        # Psycopg supports async SQLAlchemy and preserves libpq TLS/channel binding.
         for prefix in ("postgres://", "postgresql://"):
             if value.startswith(prefix):
-                return "postgresql+asyncpg://" + value[len(prefix):]
+                return "postgresql+psycopg://" + value[len(prefix):]
         return value
     
     # JWT & Cryptography
@@ -191,8 +192,8 @@ class Settings(BaseSettings):
         valid, blockers, warnings = self.validate_production_environment()
         if self.ENVIRONMENT.lower() not in ("staging", "production"):
             return valid, blockers, warnings
-        if not self.DATABASE_URL.startswith("postgresql+asyncpg://"):
-            blockers.append("Hosted environments require PostgreSQL using asyncpg.")
+        if not self.DATABASE_URL.startswith(("postgresql+asyncpg://", "postgresql+psycopg://")):
+            blockers.append("Hosted environments require PostgreSQL using an async-capable driver.")
         if any(marker in secret.lower() for secret in (self.JWT_SECRET, self.ENCRYPTION_KEY)
                for marker in ("placeholder", "replace-with", "example", "dev_secret", "must_be_overridden")):
             blockers.append("Hosted authentication/encryption secrets must not be placeholders or development secrets.")

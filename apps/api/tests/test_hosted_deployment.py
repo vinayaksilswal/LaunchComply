@@ -17,8 +17,21 @@ def hosted_settings(**overrides):
 @pytest.mark.parametrize("prefix", ["postgres://", "postgresql://", "postgresql+asyncpg://"])
 def test_render_database_urls_use_async_driver(prefix):
     settings = hosted_settings(DATABASE_URL=prefix + "user:pass@database:5432/db")
-    assert settings.DATABASE_URL == "postgresql+asyncpg://user:pass@database:5432/db"
+    driver = "asyncpg" if prefix == "postgresql+asyncpg://" else "psycopg"
+    assert settings.DATABASE_URL == f"postgresql+{driver}://user:pass@database:5432/db"
     assert settings.validate_hosted_environment()[0]
+
+
+def test_neon_url_preserves_tls_and_channel_binding():
+    from sqlalchemy.ext.asyncio import create_async_engine
+    settings = hosted_settings(DATABASE_URL="postgresql://user:pass@database/db?sslmode=require&channel_binding=require")
+    assert settings.validate_hosted_environment()[0]
+    engine = create_async_engine(settings.DATABASE_URL)
+    assert engine.dialect.is_async
+    assert engine.dialect.driver == "psycopg"
+    _, arguments = engine.dialect.create_connect_args(engine.url)
+    assert arguments["sslmode"] == "require"
+    assert arguments["channel_binding"] == "require"
 
 
 @pytest.mark.parametrize("override", [

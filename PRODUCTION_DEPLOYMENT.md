@@ -4,16 +4,50 @@ This is LaunchComply's hosting plan. Customer application deployment remains a s
 
 ## Stage 1: owner testing
 
-Vercel serves `apps/web` (Next.js). Render runs `apps/api` (FastAPI) and a private PostgreSQL 16 database. Use provider-managed environment secrets. Keep separate databases and secrets for demo, owner testing, and eventual production. Do not use the existing SQLite file as a hosted database.
+Vercel serves `apps/web` (Next.js). Render runs `apps/api` (FastAPI) as a Docker container; Neon supplies the hosted PostgreSQL database. Use provider-managed environment secrets. Keep demo/test databases separate from the production database. Do not use the existing SQLite file as a hosted database.
 
-The root `render.yaml` defines paid services in Singapore, disables automatic deploys and external database connections, supplies the private database URL, generates independent JWT/encryption secrets, runs Alembic before deployment, and checks `/health/ready`. Review current charges before applying. No hosting resources have been created by this change. See the [Render Blueprint specification](https://render.com/docs/blueprint-spec) and [FastAPI deployment documentation](https://render.com/docs/deploy-fastapi).
+The root `render.yaml` defines a Free Docker API service in Singapore, enables deploys on commits, accepts the Neon URL through `DATABASE_URL`, generates independent JWT/encryption secrets, and checks `/health/ready`. It does not provision a second database. No hosting resources have been created by this change. See the [Render Blueprint specification](https://render.com/docs/blueprint-spec) and [Docker deployment documentation](https://render.com/docs/docker).
+
+### Manual Docker setup (the New Web Service screen)
+
+| Field | Value |
+| --- | --- |
+| Language | Docker |
+| Branch | main |
+| Region | Singapore |
+| Root Directory | apps/api |
+| Dockerfile Path | Dockerfile |
+| Docker Build Context Directory | . |
+| Docker Command | Leave blank; use the Dockerfile CMD |
+| Health Check Path | /health/ready |
+| Auto-Deploy | On Commit |
+
+These Docker paths are relative to the configured Root Directory. Do not enter `apps/api/Dockerfile` again when Root Directory is already `apps/api`. Render builds the image; there is no Python build/start command to fill in. [Root-relative Render settings](https://render.com/docs/monorepo-support).
+
+Set the following runtime environment variables (manual setup does not automatically import Blueprint values):
+
+| Variable | Value |
+| --- | --- |
+| DATABASE_URL | The Neon PostgreSQL URL, including sslmode/channel_binding; store as a secret |
+| ENVIRONMENT | production |
+| DEBUG | false |
+| DEMO_MODE | false |
+| PILOT_MODE | true |
+| MIGRATE_ON_STARTUP | true |
+| JWT_SECRET | An independent random value of at least 32 characters |
+| ENCRYPTION_KEY | A different random value of at least 32 characters |
+| BACKEND_CORS_ORIGINS | JSON array of the exact frontend HTTPS origin |
+
+The container validates configuration before attempting migrations and stops if migration fails. Startup migration is enabled here for one API instance, including the Free plan. Before running multiple instances, run migrations once through a separate deployment job and set `MIGRATE_ON_STARTUP=false` on the API instances. The hosted lifespan still checks the migration/schema before serving traffic. Never point demo seeds or destructive test suites at Neon.
+
+Standard PostgreSQL URLs now use SQLAlchemy's async psycopg driver, preserving Neon's libpq TLS and channel-binding options. Explicit `postgresql+asyncpg` URLs remain supported for compatible configurations. The owner-provided Neon URL passed a read-only connection probe; no migration revision table existed at that check. Migrations have not been executed against it in this session.
 
 ### Render setup
 
 1. Push the reviewed repository changes to your connected Git repository. Include the existing untracked application code and migration files that the current code imports; deploying only the files added in this pass will not work.
-2. In Render, create a Blueprint from this repository and choose `render.yaml`. Confirm API/database region, service names, compute/storage plans and costs in the review screen.
+2. In Render, create a Blueprint from this repository and choose `render.yaml`, or use the manual Docker settings above. Confirm the API service settings and provide the existing Neon URL as `DATABASE_URL`.
 3. Set `BACKEND_CORS_ORIGINS` to a JSON array of exact frontend origins, for example `["https://your-project.vercel.app"]`. Use your assigned project domain, not this example. Exclude wildcards, localhost, paths, and trailing slashes. Update it when adding a custom domain. Do not allow all Vercel preview domains.
-4. Keep `ENVIRONMENT=staging`, `DEBUG=false`, `DEMO_MODE=false`, and `PILOT_MODE=true` during owner testing. The same startup configuration gates apply in staging and production. Billing, email and real execution flags remain disabled until their implementations and providers are verified.
+4. Use `ENVIRONMENT=production`, `DEBUG=false`, `DEMO_MODE=false`, and `PILOT_MODE=true` for this deployment. Configuration mode does not establish enterprise readiness. Billing, email and real execution flags remain disabled until their implementations and providers are verified.
 5. Deploy, review migration/startup logs, and visit the assigned API origin followed by `/health/live` and `/health/ready`. Readiness must return HTTP 200 with a successful database probe; an unavailable database returns HTTP 503. This does not verify email, AWS, workers, backup or application acceptance.
 6. Keep the generated secrets stable between deploys. Replacing the encryption key without a migration plan can prevent decryption of stored data. Store them in a password/secret manager for the eventual AWS transfer; do not print or commit them.
 
@@ -45,9 +79,9 @@ Preserve the standard application interfaces: Next.js frontend, FastAPI API, Pos
 
 Map API to ECS/Fargate behind an ALB, PostgreSQL to private RDS, durable artifacts/state to private S3, secrets to Secrets Manager, and operational telemetry to CloudWatch. Add a durable worker/queue only when implemented. The frontend can remain on Vercel during the API/database move; moving every component at once is not required by this plan. Additional AWS services should follow measured needs and documented requirements.
 
-Before cutover: back up Render Postgres; restore into isolated RDS; apply the verified migration chain; compare row counts and critical records; migrate artifact/state references; validate auth, tenant isolation, jobs, billing webhooks and provider callbacks. Rehearse rollback before changing production origins or DNS.
+Before cutover: back up Neon PostgreSQL; restore into isolated RDS; apply the verified migration chain; compare row counts and critical records; migrate artifact/state references; validate auth, tenant isolation, jobs, billing webhooks and provider callbacks. Rehearse rollback before changing production origins or DNS.
 
-At cutover: enter maintenance/read-only mode; stop writes and jobs; take the final backup; restore and validate; update the API destination and callbacks; redeploy frontend; run smoke/acceptance checks; reopen writes. Keep only one database writable. Retain the old environment for the agreed recovery window. If writes have occurred on AWS, reverting to an earlier Render backup can lose data: reconcile those writes before rollback. A database downgrade is not the recovery plan.
+At cutover: enter maintenance/read-only mode; stop writes and jobs; take the final backup; restore and validate; update the API destination and callbacks; redeploy frontend; run smoke/acceptance checks; reopen writes. Keep only one database writable. Retain the old environment for the agreed recovery window. If writes have occurred on AWS, reverting to an earlier Neon backup can lose data: reconcile those writes before rollback. A database downgrade is not the recovery plan.
 
 ## Stage 4: B2B beta and enterprise gates
 

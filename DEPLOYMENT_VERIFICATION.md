@@ -2,6 +2,16 @@
 
 Date: 2026-10-07. Rollout: **Vercel + Render → owner projects → AWS migration → limited B2B beta → enterprise GA**.
 
+## Docker and Neon follow-up
+
+The API now has a non-root Dockerfile, an environment/database exclusion file and a validated startup entry point. Render is configured for Docker in Singapore with the existing Neon database, production configuration, one-instance startup migrations and deployment on commits to main. The Blueprint uses the Free service selected in the owner's setup screen. Manual setup needs the same runtime variables; see `PRODUCTION_DEPLOYMENT.md`.
+
+Neon's provided connection string passed a read-only query using async psycopg with its TLS/channel-binding requirements retained. No schema/data was changed; the migration revision table was absent. The local `.env` is Git-ignored and excluded from the Docker image. Independent JWT/encryption secrets were generated there without printing their values. Exact frontend CORS origin remains an owner setting.
+
+After these changes: **189 backend tests passed in 80.52 seconds**, including startup validation, migration failure handling, assigned-port behavior and connection-option preservation. Docker is unavailable on this machine, so image build/run is unverified locally. Render build/start logs and hosted readiness still need confirmation; public business/enterprise acceptance remains NO_GO.
+
+The earlier results below describe the pre-Docker baseline. Current Neon/Docker setup supersedes the earlier Render-managed database and paid-service configuration.
+
 ## Decision and scope
 
 **Public launch: NO_GO.** Hosting preparation is locally verified in the areas below. No hosting resources were created, live deployments performed, or owner repository/AWS account exercised. Provider setup, hosted PostgreSQL acceptance, and significant real integration work remain.

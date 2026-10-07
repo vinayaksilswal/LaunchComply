@@ -1,7 +1,13 @@
 from typing import AsyncGenerator
+import asyncio
+import sys
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import declarative_base
 from app.core.config import settings
+
+# Psycopg's Windows async connections require a selector event loop.
+if sys.platform == "win32" and settings.DATABASE_URL.startswith("postgresql+psycopg://"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 engine = create_async_engine(
     settings.DATABASE_URL,
