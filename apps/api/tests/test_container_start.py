@@ -37,6 +37,24 @@ def test_unsafe_settings_stop_before_database_mutation(monkeypatch):
     assert calls == []
 
 
+def test_render_missing_private_environment_values_stop_before_migrations(monkeypatch, capsys):
+    calls = configure(
+        monkeypatch,
+        JWT_SECRET=Settings.model_fields["JWT_SECRET"].default,
+        ENCRYPTION_KEY=Settings.model_fields["ENCRYPTION_KEY"].default,
+        BACKEND_CORS_ORIGINS=Settings.model_fields["BACKEND_CORS_ORIGINS"].default,
+    )
+    with pytest.raises(SystemExit):
+        container_start.main()
+    assert calls == []
+    message = capsys.readouterr().err
+    for name in ("JWT_SECRET", "ENCRYPTION_KEY", "BACKEND_CORS_ORIGINS"):
+        assert name in message
+    assert "Render's Environment settings" in message
+    assert Settings.model_fields["JWT_SECRET"].default not in message
+    assert Settings.model_fields["ENCRYPTION_KEY"].default not in message
+
+
 def test_failed_migration_never_starts_api(monkeypatch):
     calls = configure(monkeypatch)
     def fail(arguments, check):

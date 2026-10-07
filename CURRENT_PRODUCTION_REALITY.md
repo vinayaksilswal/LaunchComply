@@ -2,12 +2,12 @@
 
 Updated: 2026-10-07. Target: Vercel frontend + Render API/PostgreSQL for private owner testing, followed by AWS and a controlled B2B beta.
 
-Launch decision: **NO_GO for public customers**. Hosting preparation is implemented locally; no hosted environment, real owner application deployment, backup restore, or provider connectivity has been verified. This is a deployment audit with a focused authentication fix, not a completed repository security assessment. Existing working tree changes are preserved.
+Launch decision: **NO_GO for public customers**. Render's Docker image build is verified by the owner's log, but the API fails startup because private environment values are missing. A Neon read-only connection passed; schema migrations and application acceptance remain unverified there. No real owner application deployment or backup restore has been verified. This is a deployment audit with a focused authentication fix, not a completed repository security assessment.
 
 | Capability | Classification | Evidence / next check |
 | --- | --- | --- |
-| Hosting, public domain, TLS | IMPLEMENTED_NOT_EXTERNALLY_VERIFIED | Render Blueprint and Vercel/API configuration added. No hosting resources created or provider-side validation completed. |
-| PostgreSQL | IMPLEMENTED_NOT_EXTERNALLY_VERIFIED | Async/sync drivers and provider URL normalization added. No PostgreSQL server was available for runtime acceptance. |
+| Hosting, public domain, TLS | BROKEN at runtime | Docker image build succeeded on Render. Startup rejects missing secrets and unsafe/default CORS. Live HTTP checks time out; prepared runtime values require import. |
+| PostgreSQL | IMPLEMENTED_NOT_EXTERNALLY_VERIFIED | Neon read-only connection passed with TLS/channel binding required. No migration version table existed at that check; schema/runtime acceptance remains unverified. |
 | Clean schema migrations | REAL_AND_VERIFIED locally on SQLite | Clean upgrade and schema parity pass; representative upgrade preserves a user. PostgreSQL remains unverified. |
 | Existing local API database | BROKEN | A copied database stamped at `7462d21be55a` lacks required tables and fails upgrade. Original preserved; a matching version stamp is insufficient. Do not deploy this database. |
 | Hosted startup and health | REAL_AND_VERIFIED locally | Hosted config and schema gates, actual DB health probe and sanitized 503 behavior covered by tests. Hosted startup does not create or seed tables. |
@@ -27,4 +27,4 @@ Launch decision: **NO_GO for public customers**. Hosting preparation is implemen
 | Public website, SEO, analytics and status | IMPLEMENTED_NOT_EXTERNALLY_VERIFIED | Production build passes; full browser run has failures. Hosted crawling, real telemetry and public status unverified. |
 | Demo seed and sample metrics elsewhere | SIMULATED | Demo/test seed is separated from hosted startup. Remaining UI/service sample data requires review before business use. |
 
-Fresh local results: 181 backend tests passed; frontend lint has zero errors and two warnings; type check and production build passed. Full browser run: 29 passed, 57 failed (42 mobile cases blocked by missing Windows browser libraries; 15 desktop failures). Final targeted desktop login/proxy/reset checks: 2 passed. See `DEPLOYMENT_VERIFICATION.md` for scope and unresolved gates.
+Fresh backend results: 190 passed, 3 remote checks skipped locally; explicitly running the three remote checks produced three read timeouts. Earlier frontend results: lint has zero errors and two warnings; type check and production build passed. Full browser run: 29 passed, 57 failed (42 mobile cases blocked by missing Windows browser libraries; 15 desktop failures). Targeted desktop login/proxy/reset checks: 2 passed. See `DEPLOYMENT_VERIFICATION.md` for scope and unresolved gates.

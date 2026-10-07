@@ -40,6 +40,16 @@ Set the following runtime environment variables (manual setup does not automatic
 
 The container validates configuration before attempting migrations and stops if migration fails. Startup migration is enabled here for one API instance, including the Free plan. Before running multiple instances, run migrations once through a separate deployment job and set `MIGRATE_ON_STARTUP=false` on the API instances. The hosted lifespan still checks the migration/schema before serving traffic. Never point demo seeds or destructive test suites at Neon.
 
+### Fixing missing runtime values after manual service creation
+
+If Render logs report default `JWT_SECRET`, default `ENCRYPTION_KEY`, or invalid `BACKEND_CORS_ORIGINS`, the Docker build has succeeded but runtime setup is incomplete. Git-ignored local environment files and Blueprint-generated secrets do not populate a manually created Render service.
+
+For this owner's deployment, a local ignored file `apps/api/.env.render.local` contains the prepared database URL, independent stable secrets and safe runtime flags. In the Render service, open **Environment → Add from .env**, paste its contents, and choose **Save, rebuild, and deploy**. Merge/replace any existing entries with the same names. The file must never be committed or copied into the image.
+
+The initial allowlist is the known API origin, `https://launchcomply.onrender.com`, for backend/docs access. Add the actual Vercel frontend origin to the JSON array when configured; keep preview environments separate. Successful local validation does not mean Render has received these values.
+
+After deployment, run the optional read-only pytest smoke checks from `apps/api`: set `LIVE_API_URL=https://launchcomply.onrender.com`, then run `.venv/Scripts/python.exe -m pytest tests/test_live_health.py -q`. They check the root response, liveness and database readiness without creating live users or changing database records. Default test runs skip these remote checks and use isolated SQLite.
+
 Standard PostgreSQL URLs now use SQLAlchemy's async psycopg driver, preserving Neon's libpq TLS and channel-binding options. Explicit `postgresql+asyncpg` URLs remain supported for compatible configurations. The owner-provided Neon URL passed a read-only connection probe; no migration revision table existed at that check. Migrations have not been executed against it in this session.
 
 ### Render setup

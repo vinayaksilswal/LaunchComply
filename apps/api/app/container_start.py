@@ -10,6 +10,7 @@ def main():
     valid, blockers, _ = settings.validate_hosted_environment()
     if not valid:
         print("Invalid hosted configuration: " + " ".join(blockers), file=sys.stderr)
+        print("Set the required runtime environment variables in Render's Environment settings, then save and redeploy. Local .env files are excluded from the image.", file=sys.stderr)
         raise SystemExit(1)
     try:
         port = int(os.environ.get("PORT", "8000"))

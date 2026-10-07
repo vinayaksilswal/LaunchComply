@@ -4,6 +4,14 @@ Date: 2026-10-07. Rollout: **Vercel + Render → owner projects → AWS migratio
 
 ## Docker and Neon follow-up
 
+### Render startup incident
+
+The owner's Render log confirms that the Docker image built and was uploaded successfully. Runtime exits before migrations because `JWT_SECRET` and `ENCRYPTION_KEY` are unset/default and the CORS allowlist contains development origins. Production validation remains enforced. A clearer runtime setup instruction and a regression reproducing these three failures were added.
+
+Prepared `apps/api/.env.render.local` passes local production configuration validation and is excluded from Git and the image. It contains stable independent secrets, the owner database URL, safe runtime flags and the known backend HTTPS origin. It must be imported into the manually created Render service's Environment settings; Git pushes do not transfer its private values. No authenticated Render administration session was available to apply the values here. Add the actual Vercel origin when available.
+
+Fresh checks: focused startup/hosting pytest **22 passed**; full local pytest **190 passed, 3 skipped in 70.41 seconds**. Remote checks are opt-in and were separately executed with `LIVE_API_URL=https://launchcomply.onrender.com`: **3 failed in 104.95 seconds**, all with read timeouts (root, liveness and readiness). Live recovery is not verified. Production database migrations have not been executed here. The remaining immediate action is to save the prepared values in Render and redeploy, then rerun the read-only smoke tests.
+
 The API now has a non-root Dockerfile, an environment/database exclusion file and a validated startup entry point. Render is configured for Docker in Singapore with the existing Neon database, production configuration, one-instance startup migrations and deployment on commits to main. The Blueprint uses the Free service selected in the owner's setup screen. Manual setup needs the same runtime variables; see `PRODUCTION_DEPLOYMENT.md`.
 
 Neon's provided connection string passed a read-only query using async psycopg with its TLS/channel-binding requirements retained. No schema/data was changed; the migration revision table was absent. The local `.env` is Git-ignored and excluded from the Docker image. Independent JWT/encryption secrets were generated there without printing their values. Exact frontend CORS origin remains an owner setting.
