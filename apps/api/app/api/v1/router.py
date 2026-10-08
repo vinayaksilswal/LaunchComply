@@ -3,6 +3,9 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.applications import router as apps_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.architecture import router as architecture_router
+from app.api.v1.architecture_workspace import router as architecture_workspace_router
+from app.api.v1.workspace_records import router as workspace_records_router
+from app.api.v1.business_requests import router as business_requests_router
 from app.api.v1.security import router as security_router
 from app.api.v1.vapt import router as vapt_router
 from app.api.v1.compliance import router as compliance_router
@@ -11,6 +14,8 @@ from app.api.v1.cloud import router as cloud_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.services import router as services_router
 from app.api.v1.source_control import router as source_control_router
+from app.api.v1.github_authorization import router as github_authorization_router
+from app.api.v1.onboarding import router as onboarding_router
 from app.api.v1.analysis import router as analysis_router
 from app.api.v1.infrastructure import router as infrastructure_router
 from app.api.v1.releases import router as releases_router
@@ -29,6 +34,9 @@ api_v1_router.include_router(auth_router)
 api_v1_router.include_router(apps_router)
 api_v1_router.include_router(dashboard_router)
 api_v1_router.include_router(architecture_router)
+api_v1_router.include_router(architecture_workspace_router)
+api_v1_router.include_router(workspace_records_router)
+api_v1_router.include_router(business_requests_router)
 api_v1_router.include_router(security_router)
 api_v1_router.include_router(vapt_router)
 api_v1_router.include_router(compliance_router)
@@ -37,6 +45,8 @@ api_v1_router.include_router(cloud_router)
 api_v1_router.include_router(audit_router)
 api_v1_router.include_router(services_router)
 api_v1_router.include_router(source_control_router)
+api_v1_router.include_router(github_authorization_router)
+api_v1_router.include_router(onboarding_router)
 api_v1_router.include_router(analysis_router)
 api_v1_router.include_router(infrastructure_router, prefix="/infrastructure", tags=["Infrastructure"])
 api_v1_router.include_router(releases_router)
@@ -48,7 +58,3 @@ api_v1_router.include_router(platform_admin_router)
 api_v1_router.include_router(enterprise_router)
 api_v1_router.include_router(assurance_router)
 api_v1_router.include_router(public_assurance_router)
-
-
-
-

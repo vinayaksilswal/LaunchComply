@@ -17,9 +17,9 @@ class ApplicationCreate(BaseModel):
     description: Optional[str] = None
     repo_url: Optional[str] = None
     repo_branch: str = "main"
-    framework_frontend: str = "React"
-    framework_backend: str = "FastAPI"
-    database_engine: str = "PostgreSQL"
+    framework_frontend: str = "Not analyzed"
+    framework_backend: str = "Not analyzed"
+    database_engine: str = "Not analyzed"
 
 class ApplicationResponse(BaseModel):
     id: str

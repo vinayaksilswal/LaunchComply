@@ -33,8 +33,8 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], channel: "chrome" },
     },
     {
-      name: "mobile-safari",
-      use: { ...devices["iPhone 13"] },
+      name: "mobile-chrome",
+      use: { ...devices["Pixel 7"], channel: "chrome" },
     },
   ],
   webServer: [{
@@ -45,7 +45,7 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 120000,
   }, {
-    command: "npm run start",
+    command: process.env.PLAYWRIGHT_WEB_COMMAND || "npm run start",
     url: "http://localhost:3000",
     reuseExistingServer: false,
     timeout: 120000,

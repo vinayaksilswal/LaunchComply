@@ -47,18 +47,22 @@ def test_staging_rejects_unsafe_hosted_configuration(override):
 
 
 @pytest.mark.asyncio
-async def test_readiness_probes_database_and_hides_failure(monkeypatch):
+@pytest.mark.parametrize("path", ["/health/ready", "/api/v1/health/ready"])
+async def test_readiness_probes_database_and_hides_failure(monkeypatch, path):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        assert (await client.get("/health/ready")).json()["database"] == "CONNECTED"
+        ready = await client.get(path)
+        assert ready.json()["database"] == "CONNECTED"
+        assert ready.headers["cache-control"] == "no-store"
 
         def broken_connection():
             raise RuntimeError("secret database connection details")
 
         from types import SimpleNamespace
         monkeypatch.setattr("app.main.engine", SimpleNamespace(connect=broken_connection))
-        response = await client.get("/health/ready")
+        response = await client.get(path)
         assert response.status_code == 503
         assert response.json() == {"status": "NOT_READY", "database": "UNAVAILABLE"}
+        assert response.headers["cache-control"] == "no-store"
         assert (await client.get("/health/live")).status_code == 200
 
 

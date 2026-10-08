@@ -17,6 +17,7 @@ from app.models.source_control import (
 )
 from app.services.source_control.github import github_provider
 from app.core.audit import log_audit_event
+from app.services.source_control.github_app import configured as github_configured
 
 router = APIRouter(prefix="/source-control", tags=["Source Control & GitHub App"])
 
@@ -32,7 +33,7 @@ class CallbackPayload(BaseModel):
 @router.get("/providers")
 async def list_providers():
     return [
-        {"name": "GitHub App", "code": "GITHUB", "status": "SIMULATED" if settings.DEMO_MODE and settings.ENVIRONMENT not in ("staging", "production") else "NOT_CONFIGURED", "description": "Fixture adapter; real GitHub App token exchange and repository fetching require implementation."},
+        {"name": "GitHub App", "code": "GITHUB", "status": "CONFIGURED" if github_configured() else "SIMULATED" if settings.DEMO_MODE and settings.ENVIRONMENT not in ("staging", "production") else "NOT_CONFIGURED", "description": "GitHub App authorization and permitted repository metadata; connection is verified during authorization."},
         {"name": "GitLab", "code": "GITLAB", "status": "COMING_SOON", "description": "Self-managed and GitLab.com integration."},
         {"name": "Bitbucket", "code": "BITBUCKET", "status": "COMING_SOON", "description": "Atlassian Bitbucket Cloud and Data Center."}
     ]
@@ -172,7 +173,11 @@ async def list_repositories(
 ):
     result = await db.execute(
         select(Repository).where(
-            Repository.organization_id == membership.organization_id
+            Repository.organization_id == membership.organization_id,
+            Repository.selected == True,
+            SourceControlConnection.status == ConnectionStatus.ACTIVE,
+            SourceControlConnection.organization_id == membership.organization_id,
+            Repository.source_control_connection_id == SourceControlConnection.id,
         ).order_by(Repository.name.asc())
     )
     return result.scalars().all()

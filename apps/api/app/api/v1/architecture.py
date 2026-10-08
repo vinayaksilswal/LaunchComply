@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from app.core.config import settings
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.core.database import get_db
@@ -21,6 +22,8 @@ async def get_architecture(
     )
     arch = result.scalars().first()
     if not arch:
+        if not settings.DEMO_MODE or settings.ENVIRONMENT.lower() in {"production", "staging"}:
+            return {"status": "NOT_ANALYZED", "nodes": [], "edges": []}
         # Default fallback topology specification
         return {
             "name": "AWS Production High-Availability Topology",
@@ -60,6 +63,8 @@ async def export_architecture_package(
     membership: OrganizationMembership = Depends(get_current_membership),
     db: AsyncSession = Depends(get_db)
 ):
+    if not settings.DEMO_MODE or settings.ENVIRONMENT.lower() in {"production", "staging"}:
+        raise HTTPException(503, "Use the architecture workspace to export your actual draft. An infrastructure package has not been generated.")
     await log_audit_event(
         db=db,
         organization_id=membership.organization_id,

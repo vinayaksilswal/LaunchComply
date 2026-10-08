@@ -18,6 +18,8 @@ import {
   ArrowRight,
 } from "lucide-react";
 
+import { MODULES, modulePath } from "@/lib/workspaces";
+
 interface SearchItem {
   id: string;
   title: string;
@@ -28,43 +30,15 @@ interface SearchItem {
 }
 
 const DEFAULT_COMMANDS: SearchItem[] = [
-  // BUILD
-  { id: "apps", title: "Applications Portfolio", category: "BUILD", href: "/dashboard/applications", icon: Layers },
-  { id: "arch", title: "Architecture Topology & Plan", category: "BUILD", href: "/dashboard/architecture", icon: Layout },
-  { id: "releases", title: "Deployments & Releases", category: "BUILD", href: "/dashboard/deployments", icon: FileCode },
-
-  // OPERATE
-  { id: "ops", title: "Operations Health & Runbooks", category: "OPERATE", href: "/dashboard/operations", icon: Activity },
-  { id: "logs", title: "CloudWatch Real-Time Logs", category: "OPERATE", href: "/dashboard/logs", icon: FileCode },
-  { id: "incidents", title: "Incidents & Postmortems", category: "OPERATE", href: "/dashboard/incidents", icon: Activity },
-  { id: "backups", title: "Automated Backups & Drills", category: "OPERATE", href: "/dashboard/backups", icon: Layers },
-
-  // SECURE
-  { id: "sec", title: "Security Findings & Posture", category: "SECURE", href: "/dashboard/security", icon: Shield },
-  { id: "threats", title: "Continuous Threat Models", category: "SECURE", href: "/dashboard/security/threat-models", icon: Shield },
-  { id: "vapt", title: "Authorized Pentesting (VAPT)", category: "SECURE", href: "/dashboard/vapt", icon: Shield },
-  { id: "dr", title: "Disaster Recovery Drills", category: "SECURE", href: "/dashboard/dr", icon: Activity },
-
-  // COMPLY
-  { id: "comply", title: "Compliance Hub", category: "COMPLY", href: "/dashboard/compliance", icon: FileCheck2 },
-  { id: "iso", title: "ISO 27001 Workspace", category: "COMPLY", href: "/dashboard/compliance/iso27001", icon: FileCheck2 },
-  { id: "soc2", title: "SOC 2 Type II Workspace", category: "COMPLY", href: "/dashboard/compliance/soc2", icon: FileCheck2 },
-  { id: "dpdp", title: "DPDP / Privacy Management", category: "COMPLY", href: "/dashboard/compliance/privacy", icon: FileCheck2 },
-  { id: "policies", title: "Policy Governance Library", category: "COMPLY", href: "/dashboard/compliance/policies", icon: FileCheck2 },
-  { id: "risks", title: "Enterprise Risk Register", category: "COMPLY", href: "/dashboard/compliance/risks", icon: Shield },
-
-  // ASSURE
-  { id: "assurance", title: "Continuous Assurance Overview", category: "ASSURE", href: "/dashboard/assurance", icon: Shield },
-  { id: "bots", title: "Autonomous Audit Bots", category: "ASSURE", href: "/dashboard/assurance/bots", icon: Activity },
-  { id: "controls", title: "Continuous Controls Monitor", category: "ASSURE", href: "/dashboard/assurance/controls", icon: FileCheck2 },
-  { id: "evidence", title: "Cryptographic Evidence Vault", category: "ASSURE", href: "/dashboard/assurance/evidence", icon: FileCheck2 },
-  { id: "workpapers", title: "Auditor Workpapers", category: "ASSURE", href: "/audit/workpapers", icon: FileCheck2 },
-
-  // ORGANIZATION
-  { id: "team", title: "Team & RBAC Permissions", category: "ORGANIZATION", href: "/dashboard/team", icon: Users },
-  { id: "billing", title: "Subscription & Invoices", category: "ORGANIZATION", href: "/dashboard/billing", icon: CreditCard },
-  { id: "support", title: "Enterprise Support Desk", category: "ORGANIZATION", href: "/dashboard/support", icon: LifeBuoy },
-  { id: "sso", title: "Enterprise SAML / SCIM SSO", category: "ORGANIZATION", href: "/dashboard/settings/security/sso", icon: Shield },
+  { id: "home", title: "Home", category: "BUILD", href: "/dashboard", icon: Layout },
+  { id: "apps", title: "My apps", category: "BUILD", href: "/dashboard/applications", icon: Layers },
+  { id: "arch", title: "App design", category: "BUILD", href: "/dashboard/architecture", icon: Layout },
+  { id: "account", title: "My account", category: "ORGANIZATION", href: "/dashboard/account", icon: Users },
+  ...MODULES.filter(item => !["releases", "environments", "calendar", "controls", "audit-readiness"].includes(item.key)).map(item => ({
+    id: item.key, title: item.title,
+    category: ({ Launch: "BUILD", Operate: "OPERATE", Protect: "SECURE", Govern: "COMPLY", Business: "ORGANIZATION" } as Record<string, SearchItem["category"]>)[item.group],
+    href: modulePath(item.key), icon: item.group === "Protect" ? Shield : item.group === "Govern" ? FileCheck2 : item.group === "Business" ? Users : Activity,
+  })),
 ];
 
 export function CommandPalette() {
@@ -146,7 +120,7 @@ export function CommandPalette() {
               setSelectedIndex(0);
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Type a command or search (e.g. applications, findings, controls)..."
+            placeholder="Find a page, such as apps, security, or reports…"
             className="w-full text-sm text-slate-900 placeholder-slate-400 bg-transparent focus:outline-hidden"
           />
           <button

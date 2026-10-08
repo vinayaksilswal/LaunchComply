@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { API_BASE_URL, setAuthToken, setActiveOrganizationId } from "@/lib/api";
+import { API_BASE_URL, ApiError, authApi, setAuthToken, setActiveOrganizationId } from "@/lib/api";
 import {
   ShieldCheck,
   ArrowRight,
@@ -35,23 +35,12 @@ function SignupForm() {
     setErrorMsg(null);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await authApi.register({
           full_name: fullName,
           email: email,
           password: password,
           organization_name: orgName || `${fullName}'s Organization`
-        })
       });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "Account creation failed. Please check inputs.");
-      }
-
-      const data = await res.json();
       setAuthToken(data.access_token);
       setActiveOrganizationId(data.organization_id);
       localStorage.setItem("launchcomply_user", JSON.stringify(data));
@@ -74,8 +63,10 @@ function SignupForm() {
       }
 
       router.push("/onboarding");
-    } catch (err: any) {
-      setErrorMsg(err.message);
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof ApiError && (err.status >= 500 || err.status === 408 || err.status === 0)
+        ? "We could not confirm account creation. Please try signing in before submitting again."
+        : err instanceof Error ? err.message : "Unable to create your account. Please try again.");
       setIsLoading(false);
     }
   };
@@ -98,7 +89,7 @@ function SignupForm() {
         </div>
 
         {errorMsg && (
-          <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs">
+          <div role="alert" className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs">
             {errorMsg}
           </div>
         )}
@@ -195,7 +186,7 @@ function SignupForm() {
               disabled={isLoading}
               className="w-full mt-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold flex items-center justify-center gap-2 shadow-md shadow-cyan-600/20 transition-all disabled:opacity-50"
             >
-              <span>{isLoading ? "Provisioning..." : "Start 14-Day Free Trial"}</span>
+              <span>{isLoading ? "Connecting and creating your account…" : "Start 14-Day Free Trial"}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
@@ -203,7 +194,7 @@ function SignupForm() {
 
         <div className="text-center text-xs text-slate-500">
           Already have an account?{" "}
-          <Link href="/dashboard" className="text-cyan-700 font-semibold hover:underline">
+          <Link href="/login" className="text-cyan-700 font-semibold hover:underline">
             Sign In
           </Link>
         </div>

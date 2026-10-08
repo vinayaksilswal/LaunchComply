@@ -154,19 +154,27 @@ export async function apiClient<T>(
 
       if (!response.ok) {
         let errorPayload: any = null;
+        const errorText = await response.text();
         try {
-          errorPayload = await response.json();
+          errorPayload = JSON.parse(errorText);
         } catch {
-          errorPayload = { message: await response.text() };
+          // Gateways can return HTML. Do not expose it or read the consumed body again.
+          errorPayload = null;
         }
 
         const code =
           errorPayload?.error?.code ||
           errorPayload?.code ||
           `HTTP_${response.status}`;
-        const message =
+        const detail = errorPayload?.detail;
+        const validationMessage = Array.isArray(detail)
+          ? detail.map((item: { msg?: string }) => item.msg).filter(Boolean).join("; ")
+          : typeof detail === "string" ? detail : undefined;
+        const message = response.status >= 500
+          ? "The service is temporarily unavailable. Please try again shortly."
+          :
           errorPayload?.error?.message ||
-          errorPayload?.detail ||
+          validationMessage ||
           errorPayload?.message ||
           `Request failed with status ${response.status}`;
 
@@ -220,7 +228,12 @@ export async function apiClient<T>(
         continue;
       }
 
-      throw err;
+      if (err instanceof ApiError) throw err;
+      throw new ApiError({
+        code: "NETWORK_ERROR",
+        message: "Unable to reach the service. Please try again shortly.",
+        status: 0,
+      });
     }
   }
 }

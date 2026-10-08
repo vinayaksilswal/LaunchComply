@@ -15,6 +15,16 @@ class ConnectionStatus(str, enum.Enum):
     REVOKED = "REVOKED"
     ERROR = "ERROR"
 
+class SourceControlOAuthState(BaseModel):
+    __tablename__ = "source_control_oauth_states"
+
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    state_hash = Column(String(64), unique=True, nullable=False, index=True)
+    verifier_encrypted = Column(Text, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    consumed_at = Column(DateTime(timezone=True), nullable=True)
+
 class SourceControlConnection(BaseModel):
     __tablename__ = "source_control_connections"
 

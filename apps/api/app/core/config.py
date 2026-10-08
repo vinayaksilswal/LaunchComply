@@ -9,12 +9,12 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "LaunchComply"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
-    
+
     # Environment (development, test, demo, staging, production)
     ENVIRONMENT: Literal["development", "test", "demo", "staging", "production"] = "development"
     DEBUG: bool = Field(default=True)
     MIGRATE_ON_STARTUP: bool = False
-    
+
     # Database (Defaults to local SQLite async DB for effortless zero-setup dev & automated testing; PostgreSQL mandatory in production)
     DATABASE_URL: str = Field(
         default="sqlite+aiosqlite:///./launchcomply.db"
@@ -28,7 +28,7 @@ class Settings(BaseSettings):
             if value.startswith(prefix):
                 return "postgresql+psycopg://" + value[len(prefix):]
         return value
-    
+
     # JWT & Cryptography
     JWT_SECRET: str = Field(
         default="launchcomply_super_secure_jwt_secret_key_change_in_production_32chars"
@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     ENCRYPTION_KEY: str = Field(
         default="launchcomply_default_dev_encryption_key_32chars_min"
     )
-    
+
     # Production Domains
     PLATFORM_DOMAIN: str = "launchcomply.com"
     APP_DOMAIN: str = "app.launchcomply.com"
@@ -58,11 +58,21 @@ class Settings(BaseSettings):
         "https://status.launchcomply.com",
         "https://demo.launchcomply.com",
     ]
-    
+
     # AWS Integration Settings
     LAUNCHCOMPLY_AWS_ACCOUNT_ID: str = "012345678901"
     LAUNCHCOMPLY_EXTERNAL_ID_PREFIX: str = "launchcomply-ext-"
     AWS_SES_REGION: str = "ap-south-1"
+
+    # Optional GitHub App user authorization; secrets stay on the API server.
+    GITHUB_APP_ID: str = ""
+    GITHUB_APP_SLUG: str = ""
+    GITHUB_CLIENT_ID: str = ""
+    GITHUB_CLIENT_SECRET: str = ""
+    GITHUB_CALLBACK_URL: str = ""
+    GITHUB_APP_PRIVATE_KEY: str = ""
+    OPENAI_API_KEY: str = ""
+    ARCHITECTURE_AI_MODEL: str = "gpt-4.1-mini"
 
     # Phase 5 Execution Safety Flags
     ENABLE_REAL_MONITORING: bool = False
@@ -171,7 +181,7 @@ class Settings(BaseSettings):
             if self.ENABLE_REAL_STRIPE:
                 if not self.STRIPE_SECRET_KEY or not self.STRIPE_WEBHOOK_SECRET:
                     blockers.append("ENABLE_REAL_STRIPE is true but STRIPE_SECRET_KEY or STRIPE_WEBHOOK_SECRET is missing.")
-            
+
             if self.ENABLE_REAL_RAZORPAY:
                 if not self.RAZORPAY_KEY_ID or not self.RAZORPAY_KEY_SECRET or not self.RAZORPAY_WEBHOOK_SECRET:
                     blockers.append("ENABLE_REAL_RAZORPAY is true but RAZORPAY credentials or webhook secret are missing.")

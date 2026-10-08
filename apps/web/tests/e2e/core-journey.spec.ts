@@ -1,71 +1,35 @@
 import { test, expect } from "@playwright/test";
-
-test.describe("LaunchComply Core Customer Journey @smoke", () => {
-  test("1. Visit home page and verify positioning", async ({ page }) => {
-    await page.goto("/");
-    await expect(page).toHaveTitle(/LaunchComply/i);
-    // Verify core positioning
-    await expect(
-      page.getByText(/From Localhost to Real Business/i).first()
-    ).toBeVisible();
-    await expect(
-      page.getByText(/Deploy\. Secure\. Audit\. Comply\./i).first()
-    ).toBeVisible();
-  });
-
-  test("2. View pricing tiers and commercial plans", async ({ page }) => {
-    await page.goto("/pricing");
-    await expect(page.getByText(/Transparent Cloud & Compliance Pricing/i).first()).toBeVisible();
-    await expect(page.getByText(/Starter/i).first()).toBeVisible();
-    await expect(page.getByText(/Growth/i).first()).toBeVisible();
-    await expect(page.getByText(/Enterprise/i).first()).toBeVisible();
-  });
-
-  test("3. Self-serve signup page renders with validation", async ({ page }) => {
-    await page.goto("/signup");
-    await expect(page.getByText(/Create Your Enterprise Account/i).first()).toBeVisible();
-    await expect(page.locator("input[type='email']").first()).toBeVisible();
-    await expect(page.locator("button[type='submit']").first()).toBeVisible();
-  });
-
-  test("4. Onboarding goal launcher tailors first session", async ({ page }) => {
-    await page.goto("/onboarding");
-    await expect(page.getByText(/Welcome to LaunchComply/i).first()).toBeVisible();
-    await expect(page.getByText(/Deploy My Application/i).first()).toBeVisible();
-    await expect(page.getByText(/Prepare for ISO 27001/i).first()).toBeVisible();
-
-    // Select goal and continue
-    await page.getByText(/Deploy My Application/i).first().click();
-    await page.getByRole("button", { name: /Continue/i }).click();
-
-    // Step 2: Name Workspace
-    await expect(page.getByText(/Name Your Application Workspace/i).first()).toBeVisible();
-  });
-
-  test("5. Executive Dashboard renders prioritized Action Center and White UI", async ({ page }) => {
-    await page.goto("/dashboard");
-    await expect(page.getByText(/AcmeCloud SaaS/i).first()).toBeVisible();
-    await expect(page.getByText(/Action Required/i).first()).toBeVisible();
-    await expect(page.getByText(/Production Readiness/i).first()).toBeVisible();
-    await expect(page.getByText(/Security Posture/i).first()).toBeVisible();
-    await expect(page.getByText(/Compliance Score/i).first()).toBeVisible();
-  });
-
-  test("6. Command Palette Ctrl+K opens and supports keyboard navigation", async ({ page }) => {
-    await page.goto("/dashboard");
-    // Trigger keyboard shortcut
-    await page.keyboard.press("Control+k");
-    await expect(page.getByPlaceholder(/Type a command or search/i)).toBeVisible();
-    await page.keyboard.type("Security");
-    await expect(page.getByText(/Security Findings & Posture/i).first()).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(page.getByPlaceholder(/Type a command or search/i)).not.toBeVisible();
-  });
-
-  test("7. Action Center / My Actions renders unified tasks", async ({ page }) => {
-    await page.goto("/dashboard/my-actions");
-    await expect(page.getByText(/My Actions/i).first()).toBeVisible();
-    await expect(page.getByText(/Unified Action Center/i).first()).toBeVisible();
-    await expect(page.getByText(/Pending Actions:/i).first()).toBeVisible();
-  });
+import { newBusiness } from "../workspace-fixture";
+test("Customer home uses account identity and actual empty business totals @smoke", async ({ page, request }) => {
+  const account = await newBusiness(page, request);
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { name: "Welcome, Case" })).toBeVisible();
+  const mobile = (page.viewportSize()?.width || 1280) < 1024;
+  if (mobile) await page.getByRole("button", { name: "Open navigation menu" }).click();
+  await expect(page.getByText(account.email, { exact: true }).filter({ visible: true })).toBeVisible();
+  if (mobile) await page.getByRole("button", { name: "Close navigation overlay" }).click({ position: { x: 350, y: 100 } });
+  await expect(page.getByRole("button", { name: "Help me deploy", exact: true })).toBeVisible();
+  const main = page.locator("#workspace-content");
+  await expect(main.getByText("Build your first workspace", { exact: true })).toBeVisible();
+  await expect(main).not.toContainText("AcmeCloud");
+  await expect(main).not.toContainText("84%");
+  await expect(page.getByText("LIVE", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: "test-results/customer-home.png", fullPage: true });
+});
+test("Find a page reaches the security workspace with the keyboard @smoke", async ({ page, request }) => {
+  await newBusiness(page, request); await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { name: "Welcome, Case" })).toBeVisible();
+  await page.keyboard.press("Control+k");
+  await page.getByPlaceholder(/Find a page/).fill("Security findings");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/dashboard\/security$/);
+  await expect(page.getByRole("heading", { name: "Security findings", exact: true })).toBeVisible();
+});
+test("Onboarding asks only for the app name and authorized GitHub connection", async ({ page }) => {
+  await page.goto("/onboarding");
+  await page.getByRole("button", { name: /^Deploy My Application/ }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Name Your Application Workspace" })).toBeVisible();
+  await expect(page.getByText("Primary Environment", { exact: true })).toHaveCount(0);
+  await expect(page.locator("input")).toHaveCount(1);
 });

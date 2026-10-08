@@ -19,7 +19,7 @@ async def get_current_user(
             detail="Authentication credentials required",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     payload = decode_access_token(credentials.credentials)
     if not payload or "sub" not in payload:
         raise HTTPException(
@@ -27,7 +27,7 @@ async def get_current_user(
             detail="Invalid or expired authentication token",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     user_id = payload["sub"]
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalars().first()
@@ -47,13 +47,16 @@ async def get_current_membership(
         OrganizationMembership.user_id == current_user.id,
         OrganizationMembership.is_active == True
     )
-    
+
     if x_organization_id:
         query = query.where(OrganizationMembership.organization_id == x_organization_id)
-        
+
     result = await db.execute(query)
     membership = result.scalars().first()
-    
+
+    if not membership and x_organization_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not an active member of the requested organization")
+
     if not membership:
         # If no specific org requested, fallback to first user organization membership
         result_fallback = await db.execute(
@@ -63,7 +66,7 @@ async def get_current_membership(
             )
         )
         membership = result_fallback.scalars().first()
-        
+
     if not membership:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -213,5 +216,4 @@ async def require_platform_admin(
             detail="Platform administrator privileges required"
         )
     return current_user
-
 

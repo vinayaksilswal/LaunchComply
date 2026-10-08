@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("SELECT 1"))
             from app.core.schema_check import check_hosted_schema
             await conn.run_sync(check_hosted_schema)
-        
+
     yield
     # Shutdown
     await engine.dispose()
@@ -59,6 +59,8 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    if request.url.path in ("/health", "/health/live", "/health/ready", f"{settings.API_V1_STR}/health/ready"):
+        response.headers["Cache-Control"] = "no-store"
     return response
 
 # Root & Health check
@@ -85,6 +87,7 @@ async def liveness():
     return {"status": "ALIVE"}
 
 @app.get("/health/ready")
+@app.get(f"{settings.API_V1_STR}/health/ready", include_in_schema=False)
 async def readiness():
     try:
         async with asyncio.timeout(5):

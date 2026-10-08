@@ -9,6 +9,7 @@ import pytest
     ("/", "ONLINE"),
     ("/health/live", "ALIVE"),
     ("/health/ready", "READY"),
+    ("/api/v1/health/ready", "READY"),
 ])
 def test_deployed_api_health(path, expected_status):
     origin = os.environ.get("LIVE_API_URL")
@@ -19,5 +20,5 @@ def test_deployed_api_health(path, expected_status):
     assert "application/json" in response.headers.get("content-type", "")
     payload = response.json()
     assert payload["status"] == expected_status
-    if path == "/health/ready":
+    if path.endswith("/health/ready"):
         assert payload["database"] == "CONNECTED"

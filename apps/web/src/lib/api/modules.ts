@@ -3,7 +3,8 @@
  * Direct bindings to backend API v1 endpoints.
  */
 
-import { apiClient, RequestOptions } from "./client";
+import { apiClient, API_BASE_URL, RequestOptions } from "./client";
+import { waitForApiReady } from "./readiness.mjs";
 import {
   DashboardData,
   SecurityFinding,
@@ -27,16 +28,20 @@ export interface AuthSession {
 }
 
 export const authApi = {
-  login: (data: { email: string; password: string }) =>
-    apiClient<AuthSession>(
+  login: async (data: { email: string; password: string }) => {
+    await waitForApiReady(API_BASE_URL);
+    return apiClient<AuthSession>(
       "/auth/login",
       { method: "POST", body: JSON.stringify(data) }
-    ),
-  register: (data: { email: string; password: string; full_name: string; organization_name: string }) =>
-    apiClient<AuthSession>(
+    );
+  },
+  register: async (data: { email: string; password: string; full_name: string; organization_name: string }) => {
+    await waitForApiReady(API_BASE_URL);
+    return apiClient<AuthSession>(
       "/auth/register",
       { method: "POST", body: JSON.stringify(data) }
-    ),
+    );
+  },
   verifyEmail: (token: string) =>
     apiClient<{ status: string; message: string }>("/commercial/auth/verify-email", {
       method: "POST",

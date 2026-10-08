@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function NotFound() { return <div className="max-w-lg mx-auto p-10 space-y-5"><h1 className="text-2xl font-semibold text-slate-900">This page is unavailable</h1><p className="text-sm text-slate-500">The link may have changed. You can find your apps and business settings in your workspace.</p><Link href="/dashboard" className="inline-flex rounded-lg bg-slate-900 text-white px-5 py-3 text-sm font-semibold">Go to workspace</Link></div>; }

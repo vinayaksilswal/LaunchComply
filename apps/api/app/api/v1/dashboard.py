@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from app.core.database import get_db
@@ -7,8 +8,37 @@ from app.models.auth import OrganizationMembership, Organization
 from app.models.application import Application, Environment
 from app.models.entities import SecurityFinding, ComplianceAssessment, BackupPolicy
 from app.schemas.dashboard import DashboardOverviewResponse, DashboardFinding, ComplianceScore
+from app.models.source_control import Repository, SourceControlConnection, ConnectionStatus
+from app.models.audit import AuditEvent
+from app.core.config import settings
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+
+@router.get("/cloud-accounts")
+async def recorded_cloud_accounts(request: Request, membership: OrganizationMembership = Depends(get_current_membership), db: AsyncSession = Depends(get_db)):
+    from app.models.entities import CloudAccount
+    if request.headers.get("X-Organization-ID") not in (None, membership.organization_id):
+        raise HTTPException(403, "You are not a member of this organization.")
+    accounts = (await db.execute(select(CloudAccount).where(CloudAccount.organization_id == membership.organization_id))).scalars().all()
+    return {"accounts": [{"id": item.id, "account_id": item.account_id, "region": item.region} for item in accounts], "monitoring_status": "NOT_CONNECTED"}
+
+@router.get("/workspace-summary")
+async def workspace_summary(request: Request, membership: OrganizationMembership = Depends(get_current_membership), db: AsyncSession = Depends(get_db)):
+    org_id = membership.organization_id
+    if request.headers.get("X-Organization-ID") not in (None, org_id):
+        raise HTTPException(403, "You are not a member of this organization.")
+    app_count = (await db.execute(select(func.count()).select_from(Application).where(Application.organization_id == org_id))).scalar_one()
+    connection_count = (await db.execute(select(func.count()).select_from(SourceControlConnection).where(
+        SourceControlConnection.organization_id == org_id, SourceControlConnection.status == ConnectionStatus.ACTIVE))).scalar_one()
+    repository_count = (await db.execute(select(func.count()).select_from(Repository).join(SourceControlConnection).where(
+        Repository.organization_id == org_id, Repository.selected == True, SourceControlConnection.organization_id == org_id,
+        SourceControlConnection.status == ConnectionStatus.ACTIVE))).scalar_one()
+    apps = (await db.execute(select(Application).where(Application.organization_id == org_id).order_by(Application.created_at.desc()).limit(5))).scalars().all()
+    activity = (await db.execute(select(AuditEvent).where(AuditEvent.organization_id == org_id).order_by(AuditEvent.created_at.desc()).limit(6))).scalars().all()
+    return {"application_count": app_count, "repository_count": repository_count, "connection_count": connection_count,
+        "applications": [{"id": item.id, "name": item.name, "repo_url": item.repo_url, "repo_branch": item.repo_branch, "created_at": item.created_at} for item in apps],
+        "activity": [{"id": item.id, "action": item.action, "created_at": item.created_at,
+            "name": (item.details or {}).get("name") or (item.details or {}).get("organization_name")} for item in activity]}
 
 @router.get("/overview", response_model=DashboardOverviewResponse)
 async def get_dashboard_overview(
@@ -16,20 +46,20 @@ async def get_dashboard_overview(
     db: AsyncSession = Depends(get_db)
 ):
     org_id = membership.organization_id
-    
+
     # 1. Get organization details
     org_res = await db.execute(select(Organization).where(Organization.id == org_id))
     org = org_res.scalars().first()
-    
+
     # 2. Get active application
     app_res = await db.execute(select(Application).where(Application.organization_id == org_id))
     app = app_res.scalars().first()
-    
+
     app_name = app.name if app else "LaunchComply Demo App"
     prod_readiness = app.production_readiness_score if app else "84%"
     sec_posture = app.security_posture_score if app else "81%"
     comp_readiness = app.compliance_readiness_score if app else "67%"
-    
+
     # 3. Get findings
     findings_res = await db.execute(
         select(SecurityFinding)
@@ -37,11 +67,11 @@ async def get_dashboard_overview(
         .order_by(SecurityFinding.created_at.desc())
     )
     findings = findings_res.scalars().all()
-    
+
     crit_count = sum(1 for f in findings if f.severity == "CRITICAL")
     high_count = sum(1 for f in findings if f.severity == "HIGH")
     med_count = sum(1 for f in findings if f.severity == "MEDIUM")
-    
+
     # 4. Get compliance assessments
     comp_res = await db.execute(
         select(ComplianceAssessment)
@@ -77,6 +107,18 @@ async def get_dashboard_overview(
         )
         for f in findings[:5]
     ]
+
+    # The legacy overview contract stays available, but hosted responses never
+    # turn absent assessments, billing, DNS, or backup evidence into demo values.
+    if settings.ENVIRONMENT in ("staging", "production") or not settings.DEMO_MODE:
+        return DashboardOverviewResponse(
+            organization_id=org_id, organization_name=org.name,
+            application_name=app.name if app else "No application yet", environment="NOT_CONFIGURED",
+            application_status="NOT_VERIFIED", production_readiness="Not assessed", security_posture="Not assessed",
+            compliance_readiness="Not assessed", backup_status="Not verified", domain="",
+            domain_verified=False, https_active=False, critical_findings=crit_count, high_findings=high_count,
+            medium_findings=med_count, aws_monthly_estimate="Not connected", frameworks=[], infrastructure=[],
+            compliance_scores=[], recent_findings=dashboard_findings)
 
     return DashboardOverviewResponse(
         organization_id=org_id,
@@ -133,8 +175,8 @@ async def get_my_actions(
                 "category": t.category,
                 "framework": "Compliance OS",
                 "priority": t.priority,
-                "due_date": t.due_date.strftime("%Y-%m-%d") if t.due_date else "2026-10-15",
-                "owner": t.owner or "Compliance Lead",
+                "due_date": t.due_date.strftime("%Y-%m-%d") if t.due_date else None,
+                "owner": t.owner,
                 "description": f"Compliance task: {t.title}. Source: {t.source_type}",
                 "action_url": "/dashboard/compliance/actions",
                 "action_label": "Review Task",
@@ -163,8 +205,8 @@ async def get_my_actions(
             "category": "SECURITY_FINDING",
             "framework": "ISO 27001 / SOC 2",
             "priority": f.severity,
-            "due_date": "2026-10-10",
-            "owner": "Security Lead",
+            "due_date": None,
+            "owner": None,
             "description": f.description[:180] + "..." if len(f.description) > 180 else f.description,
             "action_url": "/dashboard/security",
             "action_label": "Remediate Finding",
@@ -191,8 +233,8 @@ async def get_my_actions(
                 "category": "CONTINUOUS_ASSURANCE",
                 "framework": c.framework or "SOC 2",
                 "priority": "CRITICAL" if c.severity == "CRITICAL" else "HIGH",
-                "due_date": "2026-10-08",
-                "owner": "DevOps / Security",
+                "due_date": None,
+                "owner": None,
                 "description": c.causal_explanation or f"Automated audit bots detected non-compliance for {c.title}.",
                 "action_url": "/dashboard/assurance/controls",
                 "action_label": "Inspect Control",
@@ -203,7 +245,7 @@ async def get_my_actions(
         pass
 
     # If empty, provide standardized onboarding actions so first-time users have clear steps
-    if not actions:
+    if not actions and settings.DEMO_MODE and settings.ENVIRONMENT not in ("staging", "production"):
         actions = [
             {
                 "id": "ACT-001",
