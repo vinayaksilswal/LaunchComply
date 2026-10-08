@@ -8,6 +8,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/",
     ...PUBLIC_NAV.map((item) => item.href),
     "/services/cloud-operations",
+    "/architecture/example",
     "/docs",
     "/about",
     "/contact",

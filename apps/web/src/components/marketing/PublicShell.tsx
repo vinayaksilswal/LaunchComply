@@ -234,7 +234,13 @@ export function PublicCTA({
   );
 }
 
-export function FeaturePage({ content }: { content: FeatureContent }) {
+export function FeaturePage({
+  content,
+  children,
+}: {
+  content: FeatureContent;
+  children?: React.ReactNode;
+}) {
   return (
     <PublicShell>
       <section
@@ -325,6 +331,7 @@ export function FeaturePage({ content }: { content: FeatureContent }) {
           </p>
         </aside>
       </section>
+      {children}
       <FAQ items={content.faqs} />
       <PublicCTA destination={content.destination} action={content.action} />
     </PublicShell>

@@ -2,36 +2,113 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Network, Sparkles, Send, ZoomIn, ZoomOut, Maximize2, Download, ScanLine, Save, X, Plus, ArrowRight, Database, Globe, Server, Layers, Loader2, Check, GitBranch, MousePointer2 } from "lucide-react";
+import {
+  Network,
+  Sparkles,
+  Send,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Download,
+  ScanLine,
+  Save,
+  X,
+  Plus,
+  ArrowRight,
+  Database,
+  Globe,
+  Server,
+  Layers,
+  Loader2,
+  Check,
+  GitBranch,
+  MousePointer2,
+} from "lucide-react";
+import {
+  CloudDiagram,
+  arrangeArchitecture,
+  diagramBounds,
+  downloadArchitectureSvg,
+} from "./CloudDiagram";
 import { apiClient } from "@/lib/api";
 import { useAccount } from "@/components/auth/AccountProvider";
 
 type Zone = "EDGE" | "APPLICATION" | "DATA" | "SUPPORT";
-interface Node { id: string; label: string; service: string; zone: Zone; description: string; x: number; y: number; }
-interface Edge { source: string; target: string; label: string; }
-interface Graph { nodes: Node[]; edges: Edge[]; }
-interface Evidence { repository: string; branch: string; commit: string; scope: string; files: { path: string; sha: string; dependencies: string[] }[]; components: { kind: string; label: string; path: string; dependencies: string[] }[]; }
-interface Draft { id: string; version: string; graph: Graph; evidence: Evidence; messages: { role: string; content: string }[]; proposal: { id: string; graph: Graph } | null; created_at: string; }
-interface Workspace { application_id: string; application_name: string; architecture: Draft | null; capabilities: { repository_analysis: boolean; ai_chat: boolean }; }
+interface Node {
+  id: string;
+  label: string;
+  service: string;
+  zone: Zone;
+  description: string;
+  x: number;
+  y: number;
+}
+interface Edge {
+  source: string;
+  target: string;
+  label: string;
+}
+interface Graph {
+  nodes: Node[];
+  edges: Edge[];
+}
+interface Evidence {
+  repository: string;
+  branch: string;
+  commit: string;
+  scope: string;
+  files: { path: string; sha: string; dependencies: string[] }[];
+  components: {
+    kind: string;
+    label: string;
+    path: string;
+    dependencies: string[];
+  }[];
+}
+interface Draft {
+  id: string;
+  version: string;
+  graph: Graph;
+  evidence: Evidence;
+  messages: { role: string; content: string }[];
+  proposal: { id: string; graph: Graph } | null;
+  created_at: string;
+}
+interface Workspace {
+  application_id: string;
+  application_name: string;
+  architecture: Draft | null;
+  capabilities: { repository_analysis: boolean; ai_chat: boolean };
+}
 const zones: { id: Zone; name: string; color: string; icon: typeof Globe }[] = [
   { id: "EDGE", name: "Public entry", color: "#0891b2", icon: Globe },
-  { id: "APPLICATION", name: "Application services", color: "#6366f1", icon: Server },
+  {
+    id: "APPLICATION",
+    name: "Application services",
+    color: "#6366f1",
+    icon: Server,
+  },
   { id: "DATA", name: "Data & persistence", color: "#059669", icon: Database },
   { id: "SUPPORT", name: "Platform services", color: "#d97706", icon: Layers },
 ];
 
 export function ArchitectureCanvas() {
-  const { organization, loading: accountLoading, error: accountError } = useAccount();
+  const {
+    organization,
+    loading: accountLoading,
+    error: accountError,
+  } = useAccount();
   const query = useSearchParams();
   const [apps, setApps] = useState<{ id: string; name: string }[]>([]);
   const [appId, setAppId] = useState("");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [graph, setGraph] = useState<Graph>({ nodes: [], edges: [] });
-  const [view, setView] = useState<"cloud" | "code">("cloud");
+  const [view, setView] = useState<"cloud" | "code" | "inventory">("cloud");
   const [selected, setSelected] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.85);
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reload, setReload] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [dirty, setDirty] = useState(false);
@@ -39,78 +116,1009 @@ export function ArchitectureCanvas() {
   const [newConnection, setNewConnection] = useState("");
   const [chatVisible, setChatVisible] = useState(true);
   const canvas = useRef<HTMLDivElement>(null);
+  const diagram = useRef<SVGSVGElement>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ id: string; x: number; y: number; startX: number; startY: number } | null>(null);
+  const drag = useRef<{
+    id: string;
+    x: number;
+    y: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
   const draft = workspace?.architecture;
   const draftId = draft?.id;
-  const canEdit = ["OWNER", "ADMIN"].includes(organization?.role.toUpperCase() || "");
-  const adopt = (result: Draft) => { setWorkspace(current => current ? { ...current, architecture: result } : current); setGraph(result.graph); setDirty(false); setPreview(false); };
+  const canEdit = ["OWNER", "ADMIN"].includes(
+    organization?.role.toUpperCase() || "",
+  );
+  const adopt = (result: Draft) => {
+    setWorkspace((current) =>
+      current ? { ...current, architecture: result } : current,
+    );
+    setGraph(result.graph);
+    setDirty(false);
+    setPreview(false);
+  };
   useEffect(() => {
     if (!organization || accountLoading) return;
     let active = true;
-    setApps([]); setWorkspace(null); setGraph({ nodes: [], edges: [] }); setError(null); setLoading(true);
-    apiClient<{ id: string; name: string }[]>("/applications/").then(items => { if (active) { setApps(items); setAppId(items.find(item => item.id === query.get("application"))?.id || items[0]?.id || ""); if (!items.length) setLoading(false); } }).catch(failure => { if (active) { setError(failure.message); setLoading(false); } });
-    return () => { active = false; };
-  }, [organization, accountLoading, query]);
+    setApps([]);
+    setWorkspace(null);
+    setGraph({ nodes: [], edges: [] });
+    setError(null);
+    setLoading(true);
+    apiClient<{ id: string; name: string }[]>("/applications/")
+      .then((items) => {
+        if (active) {
+          setApps(items);
+          setAppId(
+            items.find((item) => item.id === query.get("application"))?.id ||
+              items[0]?.id ||
+              "",
+          );
+          if (!items.length) setLoading(false);
+        }
+      })
+      .catch((failure) => {
+        if (active) {
+          setError(failure.message);
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [organization, accountLoading, query, reload]);
   useEffect(() => {
     if (!appId || !organization) return;
     let active = true;
-    setWorkspace(null); setSelected(null); setLoading(true); setError(null); setDirty(false); setPreview(false);
-    apiClient<Workspace>(`/architecture/workspace/${appId}`).then(result => { if (active) { setWorkspace(result); setGraph(result.architecture?.graph || { nodes: [], edges: [] }); } }).catch(failure => { if (active) setError(failure.message); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    setWorkspace(null);
+    setSelected(null);
+    setLoading(true);
+    setError(null);
+    setDirty(false);
+    setPreview(false);
+    apiClient<Workspace>(`/architecture/workspace/${appId}`)
+      .then((result) => {
+        if (active) {
+          setWorkspace(result);
+          setGraph(result.architecture?.graph || { nodes: [], edges: [] });
+        }
+      })
+      .catch((failure) => {
+        if (active) setError(failure.message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, [appId, organization]);
-  useEffect(() => { chatEnd.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }); }, [draft?.messages.length]);
+  useEffect(() => {
+    chatEnd.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [draft?.messages.length]);
 
   const operation = async (name: string, path: string, data?: object) => {
     if (!appId || busy) return;
-    setBusy(name); setError(null);
-    try { adopt(await apiClient<Draft>(`/architecture/workspace/${appId}/${path}`, { method: "POST", body: data ? JSON.stringify(data) : undefined, timeout: 120000 })); if (name === "chat") setPrompt(""); }
-    catch (failure) { setError(failure instanceof Error ? failure.message : "Unable to update architecture."); }
-    finally { setBusy(null); }
+    setBusy(name);
+    setError(null);
+    try {
+      adopt(
+        await apiClient<Draft>(`/architecture/workspace/${appId}/${path}`, {
+          method: "POST",
+          body: data ? JSON.stringify(data) : undefined,
+          timeout: 120000,
+        }),
+      );
+      if (name === "chat") setPrompt("");
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : "Unable to update architecture.",
+      );
+    } finally {
+      setBusy(null);
+    }
   };
-  const send = () => { if (draft && prompt.trim() && !dirty) void operation("chat", "chat", { expected_id: draft.id, message: prompt.trim() }); };
-  const codeGraph: Graph = { nodes: (draft?.evidence.components || []).map((item, index) => ({ id: `code-${index}`, label: item.label, service: item.dependencies.join(", "), zone: item.kind === "frontend" || item.kind === "api" || item.kind === "worker" ? "APPLICATION" : "DATA", description: `Dependency found in ${item.path}. A dependency alone does not prove a runtime connection.`, x: 60 + (index % 3) * 330, y: 60 + Math.floor(index / 3) * 180 })), edges: [] };
-  const shown = view === "code" ? codeGraph : preview && draft?.proposal ? draft.proposal.graph : graph;
-  const node = shown.nodes.find(item => item.id === selected);
-  const width = Math.max(1100, ...shown.nodes.map(item => item.x + 330));
-  const height = Math.max(600, ...shown.nodes.map(item => item.y + 210));
-  const updateNode = (change: Partial<Node>) => { if (!node || !canEdit || busy || view !== "cloud" || preview) return; setGraph(current => ({ ...current, nodes: current.nodes.map(item => item.id === node.id ? { ...item, ...change } : item) })); setDirty(true); };
-  const fit = () => { if (canvas.current) setZoom(Math.max(0.25, Math.min(1, (canvas.current.clientWidth - 32) / width))); };
-  useEffect(() => { if (!draftId || !canvas.current) return; const frame = requestAnimationFrame(() => { if (canvas.current) setZoom(Math.max(0.25, Math.min(1, (canvas.current.clientWidth - 32) / width))); }); return () => cancelAnimationFrame(frame); }, [draftId, view, chatVisible, width]);
+  const send = () => {
+    if (draft && prompt.trim() && !dirty)
+      void operation("chat", "chat", {
+        expected_id: draft.id,
+        message: prompt.trim(),
+      });
+  };
+  const codeGraph: Graph = {
+    nodes: (draft?.evidence.components || []).map((item, index) => ({
+      id: `code-${index}`,
+      label: item.label,
+      service: item.dependencies.join(", "),
+      zone:
+        item.kind === "frontend" ||
+        item.kind === "api" ||
+        item.kind === "worker"
+          ? "APPLICATION"
+          : "DATA",
+      description: `Dependency found in ${item.path}. A dependency alone does not prove a runtime connection.`,
+      x: 60 + (index % 3) * 330,
+      y: 60 + Math.floor(index / 3) * 180,
+    })),
+    edges: [],
+  };
+  const shown =
+    view === "code"
+      ? codeGraph
+      : preview && draft?.proposal
+        ? draft.proposal.graph
+        : graph;
+  const node = shown.nodes.find((item) => item.id === selected);
+  const { width, height } = diagramBounds(shown);
+  const updateNode = (change: Partial<Node>) => {
+    if (!node || !canEdit || busy || view === "code" || preview) return;
+    setGraph((current) => ({
+      ...current,
+      nodes: current.nodes.map((item) =>
+        item.id === node.id ? { ...item, ...change } : item,
+      ),
+    }));
+    setDirty(true);
+  };
+  const fit = () => {
+    if (canvas.current)
+      setZoom(
+        Math.max(0.65, Math.min(1, (canvas.current.clientWidth - 32) / width)),
+      );
+  };
+  useEffect(() => {
+    if (!draftId || !canvas.current) return;
+    const frame = requestAnimationFrame(() => {
+      if (canvas.current)
+        setZoom(
+          Math.max(
+            0.65,
+            Math.min(1, (canvas.current.clientWidth - 32) / width),
+          ),
+        );
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [draftId, view, chatVisible, width]);
   const exportDraft = () => {
     if (!draft) return;
-    const blob = new Blob([JSON.stringify({ status: "DRAFT_NOT_DEPLOYED", application: workspace?.application_name, graph, evidence: draft.evidence }, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob); const anchor = document.createElement("a"); anchor.href = url; anchor.download = "architecture-draft.json"; anchor.click(); URL.revokeObjectURL(url);
+    const blob = new Blob(
+      [
+        JSON.stringify(
+          {
+            status: "DRAFT_NOT_DEPLOYED",
+            application: workspace?.application_name,
+            graph,
+            evidence: draft.evidence,
+          },
+          null,
+          2,
+        ),
+      ],
+      { type: "application/json" },
+    );
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "architecture-draft.json";
+    anchor.click();
+    URL.revokeObjectURL(url);
   };
-  return <div className="bg-white min-h-[calc(100vh-56px)] text-slate-900">
-    <header className="px-6 py-5 border-b border-slate-200 flex flex-wrap gap-4 items-center justify-between"><div className="flex gap-3 items-center"><span className="p-2.5 rounded-xl bg-cyan-50 text-cyan-700"><Network className="w-6 h-6" /></span><div><h1 className="text-xl font-bold tracking-tight">Architecture workspace</h1><p className="text-xs text-slate-500 mt-1">Understand your application. Shape your cloud architecture.</p></div></div><div className="flex flex-wrap items-center gap-2"><select aria-label="Architecture application" disabled={loading || !!busy || dirty} value={appId} onChange={event => setAppId(event.target.value)} className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm max-w-60 bg-white"><option value="" disabled>Select application</option>{apps.map(app => <option key={app.id} value={app.id}>{app.name}</option>)}</select><button disabled={!draft || !!busy} onClick={exportDraft} className="border border-slate-200 rounded-lg p-2.5 disabled:opacity-40" aria-label="Export draft JSON"><Download className="w-4 h-4" /></button><button disabled={!draft || !dirty || !!busy || !canEdit} onClick={() => draft && operation("save", "save", { expected_id: draft.id, graph })} className="inline-flex gap-2 items-center bg-slate-900 text-white rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-40"><Save className="w-4 h-4" />{busy === "save" ? "Saving…" : "Save draft"}</button></div></header>
-    {(error || accountError) && <div role="alert" className="m-4 p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-sm">{error || accountError}</div>}
-    <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-b border-slate-200"><div className="flex gap-1 p-1 bg-slate-100 rounded-lg">{[{ id: "cloud", label: "Cloud proposal" }, { id: "code", label: "Code findings" }].map(tab => <button key={tab.id} aria-pressed={view === tab.id} onClick={() => { setView(tab.id as "cloud" | "code"); setSelected(null); }} className={`px-4 py-2 rounded-md text-xs font-semibold ${view === tab.id ? "bg-white shadow-sm text-slate-900" : "text-slate-500"}`}>{tab.label}</button>)}</div><div className="flex flex-wrap items-center gap-3 text-xs"><span className="text-amber-700 bg-amber-50 rounded-full px-3 py-1.5 border border-amber-100">{dirty ? "Unsaved changes" : preview ? "Previewing AI proposal" : draft ? `${draft.version} · Draft, not deployed` : "No analyzed architecture"}</span><button onClick={() => setChatVisible(value => !value)} className="inline-flex gap-1.5 text-cyan-700 font-semibold"><Sparkles className="w-4 h-4" />{chatVisible ? "Hide assistant" : "Open assistant"}</button></div></div>
-    <div className={`grid ${chatVisible ? "xl:grid-cols-[minmax(0,1fr)_360px]" : "grid-cols-1"}`}>
-      <section className="min-w-0 border-r border-slate-200">
-        <div className="flex flex-wrap justify-between gap-3 items-center px-5 py-3 border-b border-slate-100"><div className="flex flex-wrap gap-4">{zones.map(zone => <span key={zone.id} className="inline-flex gap-1.5 items-center text-[11px] text-slate-500"><span className="w-2 h-2 rounded-full" style={{ background: zone.color }} />{zone.name}</span>)}</div><div className="flex gap-1 items-center"><button aria-label="Zoom out" onClick={() => setZoom(value => Math.max(0.25, value - 0.1))} className="p-1.5 hover:bg-slate-100 rounded"><ZoomOut className="w-4 h-4" /></button><span className="text-xs w-10 text-center">{Math.round(zoom * 100)}%</span><button aria-label="Zoom in" onClick={() => setZoom(value => Math.min(1.6, value + 0.1))} className="p-1.5 hover:bg-slate-100 rounded"><ZoomIn className="w-4 h-4" /></button><button aria-label="Fit diagram" onClick={fit} className="p-1.5 hover:bg-slate-100 rounded"><Maximize2 className="w-4 h-4" /></button></div></div>
-        <div ref={canvas} className="relative overflow-auto min-h-[580px] h-[calc(100vh-260px)] bg-white" style={{ backgroundImage: "radial-gradient(#dbe3ec 1px, transparent 1px)", backgroundSize: "20px 20px" }}>
-          {loading || accountLoading ? <div role="status" className="flex justify-center items-center h-full gap-2 text-sm text-slate-500"><Loader2 className="w-5 h-5 animate-spin" />Loading architecture…</div> : !draft ? <div className="flex flex-col items-center justify-center min-h-[580px] p-8 text-center"><span className="rounded-2xl border border-cyan-100 bg-cyan-50 p-5 mb-5"><Network className="w-12 h-12 text-cyan-600" /></span><h2 className="text-xl font-bold">Start with your repository</h2><p className="text-sm text-slate-500 max-w-md mt-3 leading-6">Analyze dependency manifests at a specific commit, then review a cloud proposal based on those findings.</p>{apps.length ? <button disabled={!!busy || !workspace?.capabilities.repository_analysis || !canEdit} onClick={() => operation("analyze", "analyze")} className="mt-6 inline-flex gap-2 items-center rounded-lg bg-cyan-700 text-white px-5 py-3 font-semibold text-sm disabled:opacity-40"><ScanLine className="w-4 h-4" />{busy === "analyze" ? "Analyzing repository…" : "Analyze repository"}</button> : <Link href="/onboarding" className="mt-6 inline-flex items-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-lg text-sm font-semibold">Create an application<ArrowRight className="w-4 h-4" /></Link>}{apps.length > 0 && !workspace?.capabilities.repository_analysis && <p className="mt-3 text-xs text-slate-500">Repository analysis needs administrator configuration.</p>}</div> : shown.nodes.length === 0 ? <div className="p-12 text-center text-slate-500 text-sm">No supported application dependencies were found in the inspected manifests. Review the code findings or add a proposed service.</div> : <div style={{ width: width * zoom, height: height * zoom }}><svg role="img" aria-label={`${view === "code" ? "Detected dependency components" : "Proposed cloud architecture"} diagram`} width={width * zoom} height={height * zoom} viewBox={`0 0 ${width} ${height}`} className="select-none touch-none" onPointerMove={event => { if (!drag.current || busy) return; const item = drag.current; setGraph(current => ({ ...current, nodes: current.nodes.map(n => n.id === item.id ? { ...n, x: Math.round(Math.max(0, Math.min(6000, item.x + (event.clientX - item.startX) / zoom))), y: Math.round(Math.max(0, Math.min(6000, item.y + (event.clientY - item.startY) / zoom))) } : n) })); setDirty(true); }} onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
-            <defs><marker id="architecture-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" /></marker><filter id="architecture-shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="3" stdDeviation="5" floodColor="#0f172a" floodOpacity="0.06" /></filter></defs>
-            {view === "cloud" && zones.filter(zone => shown.nodes.some(n => n.zone === zone.id)).map(zone => { const items = shown.nodes.filter(n => n.zone === zone.id); const x = Math.min(...items.map(n => n.x)) - 18; const y = Math.min(...items.map(n => n.y)) - 40; const w = Math.max(...items.map(n => n.x + 280)) - x + 18; const h = Math.max(...items.map(n => n.y + 136)) - y + 20; return <g key={zone.id}><rect x={x} y={Math.max(0, y)} width={w} height={h} rx="18" fill={zone.color} fillOpacity="0.025" stroke={zone.color} strokeOpacity="0.15" strokeDasharray="6 5" /><text x={x + 14} y={Math.max(0, y) + 22} fontSize="11" fontWeight="600" fill={zone.color}>{zone.name.toUpperCase()}</text></g>; })}
-            {shown.edges.map((edge, index) => { const from = shown.nodes.find(n => n.id === edge.source); const to = shown.nodes.find(n => n.id === edge.target); if (!from || !to) return null; const x1 = from.x + 280, y1 = from.y + 68, x2 = to.x, y2 = to.y + 68; const middle = (x1 + x2) / 2; return <g key={`${edge.source}-${edge.target}-${index}`}><path d={`M${x1},${y1} C${middle},${y1} ${middle},${y2} ${x2},${y2}`} fill="none" stroke="#94a3b8" strokeWidth="1.5" markerEnd="url(#architecture-arrow)" /><text x={middle} y={(y1 + y2) / 2 - 8} textAnchor="middle" fontSize="9" fill="#64748b" stroke="white" strokeWidth="4" paintOrder="stroke">{edge.label}</text></g>; })}
-            {shown.nodes.map(item => { const zone = zones.find(z => z.id === item.zone)!; const Icon = zone.icon; return <g key={item.id} role="button" tabIndex={0} aria-label={`Inspect ${item.label}`} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(item.id); } }} onPointerDown={event => { setSelected(item.id); if (view === "cloud" && !preview && canEdit && !busy) { event.currentTarget.setPointerCapture(event.pointerId); drag.current = { id: item.id, x: item.x, y: item.y, startX: event.clientX, startY: event.clientY }; } }} style={{ cursor: view === "cloud" && canEdit && !preview ? "grab" : "pointer" }}><rect x={item.x} y={item.y} width="280" height="136" rx="12" fill="white" stroke={selected === item.id ? zone.color : "#dbe3ec"} strokeWidth={selected === item.id ? 2 : 1} filter="url(#architecture-shadow)" /><rect x={item.x + 16} y={item.y + 17} width="34" height="34" rx="9" fill={zone.color} fillOpacity="0.09" /><foreignObject x={item.x + 24} y={item.y + 25} width="18" height="18"><Icon size={18} color={zone.color} /></foreignObject><text x={item.x + 62} y={item.y + 33} fontSize="12" fontWeight="600" fill="#0f172a">{item.label.length > 28 ? `${item.label.slice(0, 27)}…` : item.label}</text><text x={item.x + 62} y={item.y + 49} fontSize="10" fill="#64748b">{item.service.length > 32 ? `${item.service.slice(0, 31)}…` : item.service}</text><line x1={item.x + 16} y1={item.y + 75} x2={item.x + 264} y2={item.y + 75} stroke="#f1f5f9" /><text x={item.x + 16} y={item.y + 99} fontSize="10" fill={zone.color}>{view === "code" ? "DEPENDENCY FINDING" : "PROPOSED COMPONENT"}</text><text x={item.x + 16} y={item.y + 118} fontSize="10" fill="#64748b">{view === "code" ? "Inspect for source evidence" : "Review configuration before deployment"}</text></g>; })}
-          </svg></div>}
+  return (
+    <div className="bg-white min-h-[calc(100vh-56px)] text-slate-900">
+      <header className="px-6 py-5 border-b border-slate-200 flex flex-wrap gap-4 items-center justify-between">
+        <div className="flex gap-3 items-center">
+          <span className="p-2.5 rounded-xl bg-cyan-50 text-cyan-700">
+            <Network className="w-6 h-6" />
+          </span>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight">
+              Architecture workspace
+            </h1>
+            <p className="text-xs text-slate-500 mt-1">
+              Understand your application. Shape your cloud architecture.
+            </p>
+          </div>
         </div>
-        <div className="px-5 py-3 border-t flex flex-wrap justify-between items-center gap-3 text-xs text-slate-500"><span className="inline-flex gap-2 items-center"><MousePointer2 className="w-3.5 h-3.5" />Select a component to inspect{view === "cloud" && canEdit ? " · Drag to arrange" : ""}</span>{draft && view === "cloud" && <button disabled={!!busy || preview || !canEdit || graph.nodes.length >= 80} onClick={() => { const id = `node-${crypto.randomUUID().slice(0, 8)}`; setGraph(current => ({ ...current, nodes: [...current.nodes, { id, label: "New service", service: "Choose a cloud service", zone: "SUPPORT", description: "Manually proposed component. Requirements need review.", x: 70, y: Math.min(6000, height - 40) }] })); setSelected(id); setDirty(true); }} className="flex items-center gap-1.5 text-cyan-700 font-semibold disabled:opacity-40"><Plus className="w-4 h-4" />Add component</button>}</div>
-      </section>
-      {chatVisible && <aside className="flex flex-col min-h-[650px] xl:h-[calc(100vh-183px)] bg-white">
-        <div className="px-5 py-4 border-b flex items-center justify-between"><div className="flex items-center gap-2.5"><span className="p-2 rounded-lg bg-indigo-50 text-indigo-600"><Sparkles className="w-4 h-4" /></span><div><h2 className="font-semibold text-sm">Architecture assistant</h2><p className="text-[11px] text-slate-500 mt-0.5">Discuss tradeoffs. Review proposed changes.</p></div></div></div>
-        <div className="overflow-y-auto flex-1 p-5 space-y-4">
-          {node && <section className="rounded-xl border border-slate-200 p-4 space-y-3"><div className="flex justify-between items-center"><h3 className="font-semibold text-sm">Component details</h3><button aria-label="Close component details" onClick={() => setSelected(null)}><X className="w-4 h-4 text-slate-400" /></button></div>{view === "cloud" && !preview && canEdit ? <><label className="block text-xs text-slate-500">Component name<input maxLength={100} value={node.label} disabled={!!busy} onChange={event => updateNode({ label: event.target.value })} className="mt-1 w-full p-2 rounded border text-slate-900" /></label><label className="block text-xs text-slate-500">Cloud service<input maxLength={100} value={node.service} disabled={!!busy} onChange={event => updateNode({ service: event.target.value })} className="mt-1 w-full p-2 rounded border text-slate-900" /></label><label className="block text-xs text-slate-500">Architecture layer<select value={node.zone} disabled={!!busy} onChange={event => updateNode({ zone: event.target.value as Zone })} className="mt-1 w-full p-2 rounded border text-slate-900 bg-white">{zones.map(z => <option key={z.id} value={z.id}>{z.name}</option>)}</select></label><label className="block text-xs text-slate-500">Connect to<select value={newConnection} onChange={event => setNewConnection(event.target.value)} className="mt-1 w-full p-2 rounded border bg-white text-slate-900"><option value="">Select component</option>{graph.nodes.filter(n => n.id !== node.id).map(n => <option key={n.id} value={n.id}>{n.label}</option>)}</select></label><button disabled={!newConnection || !!busy || graph.edges.length >= 160} onClick={() => { setGraph(current => ({ ...current, edges: [...current.edges, { source: node.id, target: newConnection, label: "Proposed connection" }] })); setDirty(true); setNewConnection(""); }} className="text-xs font-semibold text-cyan-700 disabled:opacity-40">Add connection</button><div className="space-y-2">{graph.edges.map((edge, index) => (edge.source === node.id || edge.target === node.id) && <div key={index} className="flex justify-between text-xs text-slate-500 gap-2"><span>{graph.nodes.find(n => n.id === edge.source)?.label} → {graph.nodes.find(n => n.id === edge.target)?.label}</span><button disabled={!!busy} aria-label={`Remove connection ${index + 1}`} onClick={() => { setGraph(current => ({ ...current, edges: current.edges.filter((_, i) => i !== index) })); setDirty(true); }}><X className="w-3 h-3" /></button></div>)}</div><button disabled={!!busy} onClick={() => { setGraph(current => ({ nodes: current.nodes.filter(n => n.id !== node.id), edges: current.edges.filter(e => e.source !== node.id && e.target !== node.id) })); setSelected(null); setDirty(true); }} className="text-xs text-rose-700">Remove component</button></> : <h4 className="text-sm font-semibold">{node.label}</h4>}<p className="text-xs leading-5 text-slate-500">{node.description}</p></section>}
-          {draft && <details className="border border-slate-200 rounded-xl p-3 text-xs"><summary className="cursor-pointer font-semibold flex items-center gap-2"><GitBranch className="w-3.5 h-3.5" />Source evidence · {draft.evidence.files.length} manifests</summary><p className="text-slate-500 mt-3 break-all">{draft.evidence.repository} · {draft.evidence.branch} @ {draft.evidence.commit.slice(0, 8)}</p><p className="text-slate-500 leading-5 mt-2">{draft.evidence.scope}</p><ul className="mt-3 space-y-2">{draft.evidence.files.map(file => <li key={file.path} className="break-all text-slate-600">{file.path}<span className="block text-[10px] text-slate-400">{file.dependencies.length} recognized dependency names</span></li>)}</ul></details>}
-          {!draft?.messages.length && <div className="pt-2"><p className="text-sm text-slate-700 leading-6">Use this space to simplify services, explore availability, or refine trust boundaries.</p><div className="space-y-2 mt-4">{["Explain the architecture and its assumptions", "How can we simplify this design?", "Separate public and private services"].map(text => <button key={text} disabled={!draft || !workspace?.capabilities.ai_chat || !canEdit} onClick={() => setPrompt(text)} className="w-full text-left px-3 py-2.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:border-cyan-300 disabled:opacity-40">{text}<ArrowRight className="w-3 h-3 inline ml-2" /></button>)}</div></div>}
-          {draft?.messages.map((message, index) => <div key={index} className={`rounded-xl p-3.5 text-sm leading-6 whitespace-pre-wrap break-words ${message.role === "user" ? "bg-slate-100 ml-5" : "border border-indigo-100 bg-indigo-50/40 mr-2"}`}><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">{message.role === "user" ? "You" : "Assistant"}</p>{message.content}</div>)}
-          {draft?.proposal && <div className="p-4 rounded-xl border border-cyan-200 bg-cyan-50 space-y-3"><p className="text-sm font-semibold text-cyan-900">Proposed diagram changes</p><p className="text-xs text-cyan-800">{draft.proposal.graph.nodes.length} components · {draft.proposal.graph.edges.length} connections. Review the diagram before applying.</p><button disabled={dirty || !!busy} onClick={() => { setPreview(value => !value); setView("cloud"); setSelected(null); }} className="text-xs font-semibold underline text-cyan-800 disabled:opacity-40">{preview ? "Return to saved draft" : "Preview proposal"}</button><button disabled={dirty || !!busy || !canEdit} onClick={() => operation("apply", "apply", { expected_id: draft.id, proposal_id: draft.proposal!.id })} className="w-full bg-cyan-700 text-white rounded-lg px-3 py-2 text-xs font-semibold inline-flex gap-2 items-center justify-center disabled:opacity-40"><Check className="w-3.5 h-3.5" />Apply to draft</button></div>}
-          {busy && <p role="status" className="text-xs text-slate-500 flex gap-2 items-center"><Loader2 className="w-4 h-4 animate-spin" />{busy === "chat" ? "Reviewing your architecture…" : "Updating workspace…"}</p>}<div ref={chatEnd} />
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label="Architecture application"
+            disabled={loading || !!busy || dirty}
+            value={appId}
+            onChange={(event) => setAppId(event.target.value)}
+            className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm max-w-60 bg-white"
+          >
+            <option value="" disabled>
+              Select application
+            </option>
+            {apps.map((app) => (
+              <option key={app.id} value={app.id}>
+                {app.name}
+              </option>
+            ))}
+          </select>
+          <button
+            disabled={!draft || !!busy}
+            onClick={exportDraft}
+            className="border border-slate-200 rounded-lg p-2.5 disabled:opacity-40"
+            aria-label="Export draft JSON"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+          <button
+            disabled={!draft || !dirty || !!busy || !canEdit}
+            onClick={() =>
+              draft &&
+              operation("save", "save", { expected_id: draft.id, graph })
+            }
+            className="inline-flex gap-2 items-center bg-slate-900 text-white rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-40"
+          >
+            <Save className="w-4 h-4" />
+            {busy === "save" ? "Saving…" : "Save draft"}
+          </button>
         </div>
-        <form onSubmit={event => { event.preventDefault(); send(); }} className="border-t p-4 space-y-2"><div className="rounded-xl border border-slate-200 focus-within:border-cyan-400 p-3"><textarea aria-label="Message architecture assistant" maxLength={2000} value={prompt} onChange={event => setPrompt(event.target.value)} disabled={!draft || !workspace?.capabilities.ai_chat || !canEdit || !!busy || dirty} placeholder="Ask about your architecture…" rows={3} className="w-full text-sm resize-none outline-none bg-white disabled:opacity-50" /><div className="flex justify-between items-center"><span className="text-[10px] text-slate-400">Changes stay in your draft</span><button type="submit" aria-label="Send architecture message" disabled={!prompt.trim() || !draft || !workspace?.capabilities.ai_chat || !canEdit || !!busy || dirty} className="bg-cyan-700 p-2 rounded-lg text-white disabled:opacity-30"><Send className="w-4 h-4" /></button></div></div><p className="text-[10px] text-slate-500 leading-4">{dirty ? "Save your changes before asking for another proposal." : !workspace?.capabilities.ai_chat ? "AI chat requires administrator configuration." : "AI receives this draft and dependency findings. Review suggestions before applying."}</p></form>
-      </aside>}
+      </header>
+      {(error || accountError) && (
+        <div
+          role="alert"
+          className="m-4 p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-sm"
+        >
+          {error || accountError}
+          <button
+            disabled={!!busy || dirty}
+            onClick={() => setReload((n) => n + 1)}
+            className="mt-2 block text-xs font-semibold underline disabled:opacity-40"
+          >
+            Retry workspace connection
+          </button>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-b border-slate-200">
+        <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
+          {[
+            { id: "cloud", label: "Cloud deployment design" },
+            { id: "code", label: "Application code findings" },
+            { id: "inventory", label: "Services & sizing" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              aria-pressed={view === tab.id}
+              onClick={() => {
+                setView(tab.id as "cloud" | "code" | "inventory");
+                setSelected(null);
+              }}
+              className={`px-4 py-2 rounded-md text-xs font-semibold ${view === tab.id ? "bg-white shadow-sm text-slate-900" : "text-slate-500"}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <span className="text-amber-700 bg-amber-50 rounded-full px-3 py-1.5 border border-amber-100">
+            {dirty
+              ? "Unsaved changes"
+              : preview
+                ? "Previewing AI proposal"
+                : draft
+                  ? `${draft.version} · Draft, not deployed`
+                  : "No analyzed architecture"}
+          </span>
+          <button
+            onClick={() => setChatVisible((value) => !value)}
+            className="inline-flex gap-1.5 text-cyan-700 font-semibold"
+          >
+            <Sparkles className="w-4 h-4" />
+            {chatVisible ? "Hide assistant" : "Open assistant"}
+          </button>
+        </div>
+      </div>
+      <div
+        className={`grid ${chatVisible ? "xl:grid-cols-[minmax(0,1fr)_360px]" : "grid-cols-1"}`}
+      >
+        <section className="min-w-0 border-r border-slate-200">
+          <div className="flex flex-wrap justify-between gap-3 items-center px-5 py-3 border-b border-slate-100">
+            <div className="flex flex-wrap gap-4">
+              {zones.map((zone) => (
+                <span
+                  key={zone.id}
+                  className="inline-flex gap-1.5 items-center text-[11px] text-slate-500"
+                >
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ background: zone.color }}
+                  />
+                  {zone.name}
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-1 items-center">
+              <button
+                disabled={
+                  !draft || view === "code" || preview || !!busy || !canEdit
+                }
+                onClick={() => {
+                  setGraph(arrangeArchitecture(graph));
+                  setDirty(true);
+                }}
+                className="mr-2 rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
+              >
+                Arrange layers
+              </button>
+              <button
+                disabled={!draft || view === "inventory"}
+                onClick={() => downloadArchitectureSvg(diagram.current)}
+                aria-label="Download diagram SVG"
+                className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-40"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+              <button
+                aria-label="Zoom out"
+                onClick={() => setZoom((value) => Math.max(0.25, value - 0.1))}
+                className="p-1.5 hover:bg-slate-100 rounded"
+              >
+                <ZoomOut className="w-4 h-4" />
+              </button>
+              <span className="text-xs w-10 text-center">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button
+                aria-label="Zoom in"
+                onClick={() => setZoom((value) => Math.min(1.6, value + 0.1))}
+                className="p-1.5 hover:bg-slate-100 rounded"
+              >
+                <ZoomIn className="w-4 h-4" />
+              </button>
+              <button
+                aria-label="Fit diagram"
+                onClick={fit}
+                className="p-1.5 hover:bg-slate-100 rounded"
+              >
+                <Maximize2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <div
+            ref={canvas}
+            className="relative overflow-auto min-h-[580px] h-[calc(100vh-260px)] bg-white"
+            style={{
+              backgroundImage: "radial-gradient(#dbe3ec 1px, transparent 1px)",
+              backgroundSize: "20px 20px",
+            }}
+          >
+            {loading || accountLoading ? (
+              <div
+                role="status"
+                className="flex justify-center items-center h-full gap-2 text-sm text-slate-500"
+              >
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Loading architecture…
+              </div>
+            ) : !draft ? (
+              <div className="flex flex-col items-center justify-center min-h-[580px] p-8 text-center">
+                <span className="rounded-2xl border border-cyan-100 bg-cyan-50 p-5 mb-5">
+                  <Network className="w-12 h-12 text-cyan-600" />
+                </span>
+                <h2 className="text-xl font-bold">
+                  Start with your repository
+                </h2>
+                <p className="text-sm text-slate-500 max-w-md mt-3 leading-6">
+                  Analyze dependency manifests at a specific commit, then review
+                  a cloud proposal based on those findings.
+                </p>
+                {apps.length ? (
+                  <button
+                    disabled={
+                      !!busy ||
+                      !workspace?.capabilities.repository_analysis ||
+                      !canEdit
+                    }
+                    onClick={() => operation("analyze", "analyze")}
+                    className="mt-6 inline-flex gap-2 items-center rounded-lg bg-cyan-700 text-white px-5 py-3 font-semibold text-sm disabled:opacity-40"
+                  >
+                    <ScanLine className="w-4 h-4" />
+                    {busy === "analyze"
+                      ? "Analyzing repository…"
+                      : "Analyze repository"}
+                  </button>
+                ) : (
+                  <Link
+                    href="/onboarding"
+                    className="mt-6 inline-flex items-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-lg text-sm font-semibold"
+                  >
+                    Create an application
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
+                )}
+                {apps.length > 0 &&
+                  !workspace?.capabilities.repository_analysis && (
+                    <p className="mt-3 text-xs text-slate-500">
+                      Repository analysis needs administrator configuration.
+                    </p>
+                  )}
+                <Link
+                  href="/architecture/example"
+                  className="mt-5 text-sm font-semibold text-cyan-700 underline"
+                >
+                  Explore a deployment example
+                </Link>
+              </div>
+            ) : view === "inventory" ? (
+              <div className="p-5">
+                <h2 className="text-lg font-semibold">
+                  Proposed deployment services
+                </h2>
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  Every component in the current draft is listed below. Instance
+                  size, replica count, network rules, and cost remain
+                  unspecified unless documented in its requirements. A
+                  dependency alone cannot establish production capacity.
+                </p>
+                <div className="mt-5 overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 text-slate-500">
+                      <tr>
+                        <th className="p-3">Component</th>
+                        <th className="p-3">Cloud service</th>
+                        <th className="p-3">Layer</th>
+                        <th className="p-3">Requirements / assumptions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shown.nodes.map((item) => (
+                        <tr key={item.id} className="border-b border-slate-100">
+                          <td className="p-3 align-top">
+                            <button
+                              onClick={() => {
+                                setSelected(item.id);
+                                setChatVisible(true);
+                              }}
+                              className="font-semibold text-cyan-700 text-left"
+                            >
+                              {item.label}
+                            </button>
+                          </td>
+                          <td className="p-3 align-top">
+                            {item.service || "Not selected"}
+                          </td>
+                          <td className="p-3 align-top">
+                            {zones.find((z) => z.id === item.zone)?.name}
+                          </td>
+                          <td className="min-w-64 p-3 leading-5 text-slate-500">
+                            {item.description || "Requirements need review"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Link
+                  href="/dashboard/deployments"
+                  className="mt-5 inline-flex items-center gap-2 text-xs font-semibold text-cyan-700"
+                >
+                  Review deployment requirements
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            ) : shown.nodes.length === 0 ? (
+              <div className="p-12 text-center text-slate-500 text-sm">
+                No supported application dependencies were found in the
+                inspected manifests. Review the code findings or add a proposed
+                service.
+              </div>
+            ) : (
+              <div style={{ width: width * zoom, height: height * zoom }}>
+                <CloudDiagram
+                  ref={diagram}
+                  graph={shown}
+                  zoom={zoom}
+                  selected={selected}
+                  code={view === "code"}
+                  onSelect={(id) => {
+                    setSelected(id);
+                    setChatVisible(true);
+                    setNewConnection("");
+                  }}
+                  onNodePointerDown={
+                    view === "cloud" && !preview && canEdit && !busy
+                      ? (event, item) => {
+                          event.currentTarget.setPointerCapture(
+                            event.pointerId,
+                          );
+                          drag.current = {
+                            id: item.id,
+                            x: item.x,
+                            y: item.y,
+                            startX: event.clientX,
+                            startY: event.clientY,
+                          };
+                        }
+                      : undefined
+                  }
+                  onPointerMove={(event) => {
+                    if (!drag.current || busy) return;
+                    const item = drag.current;
+                    const dx = (event.clientX - item.startX) / zoom,
+                      dy = (event.clientY - item.startY) / zoom;
+                    if (Math.abs(dx) + Math.abs(dy) < 4) return;
+                    setGraph((current) => ({
+                      ...current,
+                      nodes: current.nodes.map((n) =>
+                        n.id === item.id
+                          ? {
+                              ...n,
+                              x: Math.round(
+                                Math.max(30, Math.min(6000, item.x + dx)),
+                              ),
+                              y: Math.round(
+                                Math.max(60, Math.min(6000, item.y + dy)),
+                              ),
+                            }
+                          : n,
+                      ),
+                    }));
+                    setDirty(true);
+                  }}
+                  onPointerUp={() => {
+                    drag.current = null;
+                  }}
+                />
+              </div>
+            )}
+          </div>
+          <p className="px-5 py-3 border-t border-slate-100 text-[11px] leading-5 text-slate-500">
+            Arrows show proposed flow. Layer placement does not verify VPC
+            isolation, availability zones, IAM permissions, or deployed
+            resources.
+          </p>
+          <div className="px-5 py-3 border-t flex flex-wrap justify-between items-center gap-3 text-xs text-slate-500">
+            <span className="inline-flex gap-2 items-center">
+              <MousePointer2 className="w-3.5 h-3.5" />
+              Select a component to inspect
+              {view === "cloud" && canEdit ? " · Drag to arrange" : ""}
+            </span>
+            {draft && view === "cloud" && (
+              <button
+                disabled={
+                  !!busy || preview || !canEdit || graph.nodes.length >= 80
+                }
+                onClick={() => {
+                  const id = `node-${crypto.randomUUID().slice(0, 8)}`;
+                  setGraph((current) => ({
+                    ...current,
+                    nodes: [
+                      ...current.nodes,
+                      {
+                        id,
+                        label: "New service",
+                        service: "Choose a cloud service",
+                        zone: "SUPPORT",
+                        description:
+                          "Manually proposed component. Requirements need review.",
+                        x: 70,
+                        y: Math.min(6000, height - 40),
+                      },
+                    ],
+                  }));
+                  setSelected(id);
+                  setDirty(true);
+                }}
+                className="flex items-center gap-1.5 text-cyan-700 font-semibold disabled:opacity-40"
+              >
+                <Plus className="w-4 h-4" />
+                Add component
+              </button>
+            )}
+          </div>
+        </section>
+        {chatVisible && (
+          <aside className="flex flex-col min-h-[650px] xl:h-[calc(100vh-183px)] bg-white">
+            <div className="px-5 py-4 border-b flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+                  <Sparkles className="w-4 h-4" />
+                </span>
+                <div>
+                  <h2 className="font-semibold text-sm">
+                    Architecture assistant
+                  </h2>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Discuss tradeoffs. Review proposed changes.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="overflow-y-auto flex-1 p-5 space-y-4">
+              {node && (
+                <section className="rounded-xl border border-slate-200 p-4 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-semibold text-sm">Component details</h3>
+                    <button
+                      aria-label="Close component details"
+                      onClick={() => setSelected(null)}
+                    >
+                      <X className="w-4 h-4 text-slate-400" />
+                    </button>
+                  </div>
+                  {view !== "code" && !preview && canEdit ? (
+                    <>
+                      <label className="block text-xs text-slate-500">
+                        Component name
+                        <input
+                          maxLength={100}
+                          value={node.label}
+                          disabled={!!busy}
+                          onChange={(event) =>
+                            updateNode({ label: event.target.value })
+                          }
+                          className="mt-1 w-full p-2 rounded border text-slate-900"
+                        />
+                      </label>
+                      <label className="block text-xs text-slate-500">
+                        Cloud service
+                        <input
+                          maxLength={100}
+                          value={node.service}
+                          disabled={!!busy}
+                          onChange={(event) =>
+                            updateNode({ service: event.target.value })
+                          }
+                          className="mt-1 w-full p-2 rounded border text-slate-900"
+                        />
+                      </label>
+                      <label className="block text-xs text-slate-500">
+                        Requirements & sizing
+                        <textarea
+                          maxLength={500}
+                          value={node.description}
+                          disabled={!!busy}
+                          onChange={(event) =>
+                            updateNode({ description: event.target.value })
+                          }
+                          rows={4}
+                          className="mt-1 w-full p-2 rounded border text-slate-900"
+                        />
+                      </label>
+                      <label className="block text-xs text-slate-500">
+                        Architecture layer
+                        <select
+                          value={node.zone}
+                          disabled={!!busy}
+                          onChange={(event) =>
+                            updateNode({ zone: event.target.value as Zone })
+                          }
+                          className="mt-1 w-full p-2 rounded border text-slate-900 bg-white"
+                        >
+                          {zones.map((z) => (
+                            <option key={z.id} value={z.id}>
+                              {z.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="block text-xs text-slate-500">
+                        Connect to
+                        <select
+                          value={newConnection}
+                          onChange={(event) =>
+                            setNewConnection(event.target.value)
+                          }
+                          className="mt-1 w-full p-2 rounded border bg-white text-slate-900"
+                        >
+                          <option value="">Select component</option>
+                          {graph.nodes
+                            .filter((n) => n.id !== node.id)
+                            .map((n) => (
+                              <option key={n.id} value={n.id}>
+                                {n.label}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <button
+                        disabled={
+                          !newConnection ||
+                          !!busy ||
+                          graph.edges.length >= 160 ||
+                          graph.edges.some(
+                            (e) =>
+                              e.source === node.id &&
+                              e.target === newConnection,
+                          )
+                        }
+                        onClick={() => {
+                          setGraph((current) => ({
+                            ...current,
+                            edges: [
+                              ...current.edges,
+                              {
+                                source: node.id,
+                                target: newConnection,
+                                label: "Proposed connection",
+                              },
+                            ],
+                          }));
+                          setDirty(true);
+                          setNewConnection("");
+                        }}
+                        className="text-xs font-semibold text-cyan-700 disabled:opacity-40"
+                      >
+                        Add connection
+                      </button>
+                      <div className="space-y-2">
+                        {graph.edges.map(
+                          (edge, index) =>
+                            (edge.source === node.id ||
+                              edge.target === node.id) && (
+                              <div
+                                key={index}
+                                className="flex justify-between text-xs text-slate-500 gap-2"
+                              >
+                                <span>
+                                  {
+                                    graph.nodes.find(
+                                      (n) => n.id === edge.source,
+                                    )?.label
+                                  }{" "}
+                                  →{" "}
+                                  {
+                                    graph.nodes.find(
+                                      (n) => n.id === edge.target,
+                                    )?.label
+                                  }
+                                </span>
+                                <button
+                                  disabled={!!busy}
+                                  aria-label={`Remove connection ${index + 1}`}
+                                  onClick={() => {
+                                    setGraph((current) => ({
+                                      ...current,
+                                      edges: current.edges.filter(
+                                        (_, i) => i !== index,
+                                      ),
+                                    }));
+                                    setDirty(true);
+                                  }}
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ),
+                        )}
+                      </div>
+                      <button
+                        disabled={!!busy}
+                        onClick={() => {
+                          setGraph((current) => ({
+                            nodes: current.nodes.filter(
+                              (n) => n.id !== node.id,
+                            ),
+                            edges: current.edges.filter(
+                              (e) =>
+                                e.source !== node.id && e.target !== node.id,
+                            ),
+                          }));
+                          setSelected(null);
+                          setDirty(true);
+                        }}
+                        className="text-xs text-rose-700"
+                      >
+                        Remove component
+                      </button>
+                    </>
+                  ) : (
+                    <h4 className="text-sm font-semibold">{node.label}</h4>
+                  )}
+                  <p className="text-xs leading-5 text-slate-500">
+                    {node.description}
+                  </p>
+                </section>
+              )}
+              {draft && (
+                <details className="border border-slate-200 rounded-xl p-3 text-xs">
+                  <summary className="cursor-pointer font-semibold flex items-center gap-2">
+                    <GitBranch className="w-3.5 h-3.5" />
+                    Source evidence · {draft.evidence.files.length} manifests
+                  </summary>
+                  <p className="text-slate-500 mt-3 break-all">
+                    {draft.evidence.repository} · {draft.evidence.branch} @{" "}
+                    {draft.evidence.commit.slice(0, 8)}
+                  </p>
+                  <p className="text-slate-500 leading-5 mt-2">
+                    {draft.evidence.scope}
+                  </p>
+                  <ul className="mt-3 space-y-2">
+                    {draft.evidence.files.map((file) => (
+                      <li key={file.path} className="break-all text-slate-600">
+                        {file.path}
+                        <span className="block text-[10px] text-slate-400">
+                          {file.dependencies.length} recognized dependency names
+                        </span>
+                        <span className="block mt-1 text-slate-500">
+                          {file.dependencies.join(", ") ||
+                            "No supported dependency names detected"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {!draft?.messages.length && (
+                <div className="pt-2">
+                  <p className="text-sm text-slate-700 leading-6">
+                    Use this space to simplify services, explore availability,
+                    or refine trust boundaries.
+                  </p>
+                  <div className="space-y-2 mt-4">
+                    {[
+                      "Explain the architecture and its assumptions",
+                      "How can we simplify this design?",
+                      "Separate public and private services",
+                      "List the services and deployment sizing decisions we still need to confirm",
+                    ].map((text) => (
+                      <button
+                        key={text}
+                        disabled={
+                          !draft || !workspace?.capabilities.ai_chat || !canEdit
+                        }
+                        onClick={() => setPrompt(text)}
+                        className="w-full text-left px-3 py-2.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:border-cyan-300 disabled:opacity-40"
+                      >
+                        {text}
+                        <ArrowRight className="w-3 h-3 inline ml-2" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {draft?.messages.map((message, index) => (
+                <div
+                  key={index}
+                  className={`rounded-xl p-3.5 text-sm leading-6 whitespace-pre-wrap break-words ${message.role === "user" ? "bg-slate-100 ml-5" : "border border-indigo-100 bg-indigo-50/40 mr-2"}`}
+                >
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
+                    {message.role === "user" ? "You" : "Assistant"}
+                  </p>
+                  {message.content}
+                </div>
+              ))}
+              {draft?.proposal && (
+                <div className="p-4 rounded-xl border border-cyan-200 bg-cyan-50 space-y-3">
+                  <p className="text-sm font-semibold text-cyan-900">
+                    Proposed diagram changes
+                  </p>
+                  <p className="text-xs text-cyan-800">
+                    {
+                      draft.proposal.graph.nodes.filter(
+                        (n) => !graph.nodes.some((old) => old.id === n.id),
+                      ).length
+                    }{" "}
+                    added ·{" "}
+                    {
+                      graph.nodes.filter(
+                        (n) =>
+                          !draft.proposal!.graph.nodes.some(
+                            (next) => next.id === n.id,
+                          ),
+                      ).length
+                    }{" "}
+                    removed ·{" "}
+                    {
+                      draft.proposal.graph.nodes.filter((n) =>
+                        graph.nodes.some(
+                          (old) =>
+                            old.id === n.id &&
+                            (old.label !== n.label ||
+                              old.service !== n.service ||
+                              old.zone !== n.zone ||
+                              old.description !== n.description),
+                        ),
+                      ).length
+                    }{" "}
+                    modified.
+                  </p>
+                  <p className="text-xs text-cyan-800">
+                    {draft.proposal.graph.nodes.length} components ·{" "}
+                    {draft.proposal.graph.edges.length} connections. Review the
+                    diagram before applying.
+                  </p>
+                  <button
+                    disabled={dirty || !!busy}
+                    onClick={() => {
+                      setPreview((value) => !value);
+                      setView("cloud");
+                      setSelected(null);
+                    }}
+                    className="text-xs font-semibold underline text-cyan-800 disabled:opacity-40"
+                  >
+                    {preview ? "Return to saved draft" : "Preview proposal"}
+                  </button>
+                  <button
+                    disabled={dirty || !!busy || !canEdit}
+                    onClick={() =>
+                      operation("apply", "apply", {
+                        expected_id: draft.id,
+                        proposal_id: draft.proposal!.id,
+                      })
+                    }
+                    className="w-full bg-cyan-700 text-white rounded-lg px-3 py-2 text-xs font-semibold inline-flex gap-2 items-center justify-center disabled:opacity-40"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    Apply to draft
+                  </button>
+                </div>
+              )}
+              {busy && (
+                <p
+                  role="status"
+                  className="text-xs text-slate-500 flex gap-2 items-center"
+                >
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {busy === "chat"
+                    ? "Reviewing your architecture…"
+                    : "Updating workspace…"}
+                </p>
+              )}
+              <div ref={chatEnd} />
+            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                send();
+              }}
+              className="border-t p-4 space-y-2"
+            >
+              <div className="rounded-xl border border-slate-200 focus-within:border-cyan-400 p-3">
+                <textarea
+                  aria-label="Message architecture assistant"
+                  maxLength={2000}
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  disabled={
+                    !draft ||
+                    !workspace?.capabilities.ai_chat ||
+                    !canEdit ||
+                    !!busy ||
+                    dirty
+                  }
+                  placeholder="Ask about your architecture…"
+                  rows={3}
+                  className="w-full text-sm resize-none outline-none bg-white disabled:opacity-50"
+                />
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] text-slate-400">
+                    Changes stay in your draft
+                  </span>
+                  <button
+                    type="submit"
+                    aria-label="Send architecture message"
+                    disabled={
+                      !prompt.trim() ||
+                      !draft ||
+                      !workspace?.capabilities.ai_chat ||
+                      !canEdit ||
+                      !!busy ||
+                      dirty
+                    }
+                    className="bg-cyan-700 p-2 rounded-lg text-white disabled:opacity-30"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-500 leading-4">
+                {dirty
+                  ? "Save your changes before asking for another proposal."
+                  : !workspace?.capabilities.ai_chat
+                    ? "AI chat requires administrator configuration."
+                    : "AI receives this draft and dependency findings. Review suggestions before applying."}
+              </p>
+            </form>
+          </aside>
+        )}
+      </div>
     </div>
-  </div>;
+  );
 }
