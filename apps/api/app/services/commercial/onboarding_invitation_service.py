@@ -78,6 +78,9 @@ class OnboardingInvitationService:
         if not invite:
             raise ValueError("Invitation not found or already used.")
 
+        if invite.email.strip().casefold() != user.email.strip().casefold():
+            raise ValueError("Sign in with the email address this invitation was sent to.")
+
         if invite.expires_at < datetime.utcnow():
             invite.status = InvitationStatus.EXPIRED
             await db.commit()

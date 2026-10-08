@@ -321,6 +321,18 @@ async def test_team_invitations_lifecycle():
         )
         raw_token = invite_data["invite_token"]
 
+        # Possession of a link must not let another account join the business.
+        wrong_user = User(
+            email="different.recipient@launchcomply.io",
+            hashed_password=get_password_hash("Password123!"),
+            full_name="Different Recipient",
+            is_active=True,
+        )
+        db.add(wrong_user)
+        await db.commit()
+        with pytest.raises(ValueError, match="email address"):
+            await onboarding_invitation_service.accept_invitation(db, raw_token, wrong_user)
+
         # Accept invite
         accept_res = await onboarding_invitation_service.accept_invitation(db, raw_token, user)
         assert accept_res["status"] == "ACCEPTED"

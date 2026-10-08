@@ -76,3 +76,16 @@ Live readiness tests use GET requests only against the deployed API and frontend
 Before selling an automated deployment, monitoring, or compliance guarantee, verify actual GitHub authorization and manifest analysis, configure and verify the AI provider, replace simulated AWS/scanner/provisioning adapters, validate restores against isolated cloud resources, and establish always-on hosting, alerts, rate limits, secret rotation, and a documented recovery process. Security assessments require an agreed scope and explicit customer authorization; compliance preparation does not constitute certification.
 
 Local browser coverage targets desktop and mobile Chrome. Safari could not be run on this Windows host because application control blocked required WebKit libraries. Run Safari acceptance on a supported runner before promising browser compatibility.
+
+
+## Public website and customer experience release
+
+The public navigation now has dedicated Architecture, Deployment, Security, VAPT, Compliance, Services, and Pricing pages. Getting started includes six guides, with separate About, Contact, Cloud operations, and live platform status pages. Illustrations are labelled as illustrations. Unverified uptime, scan quotas, certified-staff claims, readiness scores, subscription prices, free trials, and automatic provisioning claims have been removed from the public site.
+
+Service calls to action preserve their destination through sign-up and sign-in. Return paths are limited to customer workspace and onboarding routes. Onboarding requires an authenticated account. Forms remain disabled until their client handlers are ready; failed sign-up submissions are not automatically replayed. Existing users can accept a team invitation through sign-in, and the backend checks that the signed-in email matches its recipient before granting membership. A failed invitation does not consume the token.
+
+The customer home shows recent actual service requests and published reports. Navigation, account identity, white panels, visible keyboard focus, mobile menus, and missing-page recovery share a consistent design. Native dialogs keep background content inert, contain keyboard focus, restore the trigger on dismissal, and protect busy submissions from accidental dismissal.
+
+Validation on the production build: 24 configuration checks; 50 desktop/mobile Chrome browser scenarios, including public link crawling, guides and 404s, sign-up, selected-service sign-in, team invitations, authorization boundaries, actual local request delivery, report viewing, download content/checksum, and keyboard focus. A navigation race in the test was corrected to wait for the sign-in page before entering credentials; both browser versions of that scenario passed on rerun. The full backend suite passed 206 tests with 4 live-only checks skipped in the isolated run. No customer accounts, service requests, assessments, or cloud resources were created in production during these tests.
+
+These tests validate the application workflow, not an external provider integration or a formal security/compliance certification. The remaining production acceptance gates above still apply.

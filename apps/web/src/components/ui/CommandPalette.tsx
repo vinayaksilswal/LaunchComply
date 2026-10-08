@@ -18,26 +18,83 @@ import {
   ArrowRight,
 } from "lucide-react";
 
+import { Dialog } from "@/components/ui/Dialog";
 import { MODULES, modulePath } from "@/lib/workspaces";
 
 interface SearchItem {
   id: string;
   title: string;
-  category: "BUILD" | "OPERATE" | "SECURE" | "COMPLY" | "ASSURE" | "ORGANIZATION";
+  category:
+    | "BUILD"
+    | "OPERATE"
+    | "SECURE"
+    | "COMPLY"
+    | "ASSURE"
+    | "ORGANIZATION";
   href: string;
   icon: any;
   shortcut?: string;
 }
 
 const DEFAULT_COMMANDS: SearchItem[] = [
-  { id: "home", title: "Home", category: "BUILD", href: "/dashboard", icon: Layout },
-  { id: "apps", title: "My apps", category: "BUILD", href: "/dashboard/applications", icon: Layers },
-  { id: "arch", title: "App design", category: "BUILD", href: "/dashboard/architecture", icon: Layout },
-  { id: "account", title: "My account", category: "ORGANIZATION", href: "/dashboard/account", icon: Users },
-  ...MODULES.filter(item => !["releases", "environments", "calendar", "controls", "audit-readiness"].includes(item.key)).map(item => ({
-    id: item.key, title: item.title,
-    category: ({ Launch: "BUILD", Operate: "OPERATE", Protect: "SECURE", Govern: "COMPLY", Business: "ORGANIZATION" } as Record<string, SearchItem["category"]>)[item.group],
-    href: modulePath(item.key), icon: item.group === "Protect" ? Shield : item.group === "Govern" ? FileCheck2 : item.group === "Business" ? Users : Activity,
+  {
+    id: "home",
+    title: "Home",
+    category: "BUILD",
+    href: "/dashboard",
+    icon: Layout,
+  },
+  {
+    id: "apps",
+    title: "My apps",
+    category: "BUILD",
+    href: "/dashboard/applications",
+    icon: Layers,
+  },
+  {
+    id: "arch",
+    title: "App design",
+    category: "BUILD",
+    href: "/dashboard/architecture",
+    icon: Layout,
+  },
+  {
+    id: "account",
+    title: "My account",
+    category: "ORGANIZATION",
+    href: "/dashboard/account",
+    icon: Users,
+  },
+  ...MODULES.filter(
+    (item) =>
+      ![
+        "releases",
+        "environments",
+        "calendar",
+        "controls",
+        "audit-readiness",
+      ].includes(item.key),
+  ).map((item) => ({
+    id: item.key,
+    title: item.title,
+    category: (
+      {
+        Launch: "BUILD",
+        Operate: "OPERATE",
+        Protect: "SECURE",
+        Govern: "COMPLY",
+        Business: "ORGANIZATION",
+      } as Record<string, SearchItem["category"]>
+    )[item.group],
+    href: modulePath(item.key),
+    icon:
+      item.group === "Protect"
+        ? Shield
+        : item.group === "Govern"
+          ? FileCheck2
+          : item.group === "Business"
+            ? Users
+            : Activity,
   })),
 ];
 
@@ -72,9 +129,10 @@ export function CommandPalette() {
     }
   }, [isOpen]);
 
-  const filteredItems = DEFAULT_COMMANDS.filter((cmd) =>
-    cmd.title.toLowerCase().includes(query.toLowerCase()) ||
-    cmd.category.toLowerCase().includes(query.toLowerCase())
+  const filteredItems = DEFAULT_COMMANDS.filter(
+    (cmd) =>
+      cmd.title.toLowerCase().includes(query.toLowerCase()) ||
+      cmd.category.toLowerCase().includes(query.toLowerCase()),
   );
 
   const handleSelect = (href: string) => {
@@ -88,7 +146,10 @@ export function CommandPalette() {
       setSelectedIndex((prev) => (prev + 1) % (filteredItems.length || 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setSelectedIndex((prev) => (prev - 1 + filteredItems.length) % (filteredItems.length || 1));
+      setSelectedIndex(
+        (prev) =>
+          (prev - 1 + filteredItems.length) % (filteredItems.length || 1),
+      );
     } else if (e.key === "Enter" && filteredItems[selectedIndex]) {
       e.preventDefault();
       handleSelect(filteredItems[selectedIndex].href);
@@ -98,19 +159,16 @@ export function CommandPalette() {
   if (!isOpen) return null;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Command search palette"
-      className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in duration-150"
-      onClick={() => setIsOpen(false)}
-    >
+    <Dialog label="Command search palette" onDismiss={() => setIsOpen(false)}>
       <div
         className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-xl w-full overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center px-4 py-3.5 border-b border-slate-100 gap-3">
-          <Search className="w-5 h-5 text-slate-400 shrink-0" aria-hidden="true" />
+          <Search
+            className="w-5 h-5 text-slate-400 shrink-0"
+            aria-hidden="true"
+          />
           <input
             ref={inputRef}
             type="text"
@@ -120,6 +178,15 @@ export function CommandPalette() {
               setSelectedIndex(0);
             }}
             onKeyDown={handleKeyDown}
+            aria-label="Find a page"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="command-results"
+            aria-activedescendant={
+              filteredItems[selectedIndex]
+                ? `command-${filteredItems[selectedIndex].id}`
+                : undefined
+            }
             placeholder="Find a page, such as apps, security, or reports…"
             className="w-full text-sm text-slate-900 placeholder-slate-400 bg-transparent focus:outline-hidden"
           />
@@ -132,7 +199,12 @@ export function CommandPalette() {
           </button>
         </div>
 
-        <div className="max-h-80 overflow-y-auto p-2 divide-y divide-slate-50" role="listbox">
+        <div
+          className="max-h-80 overflow-y-auto p-2 divide-y divide-slate-50"
+          role="listbox"
+          id="command-results"
+          aria-label="Available pages"
+        >
           {filteredItems.length === 0 ? (
             <div className="p-8 text-center text-sm text-slate-500">
               No matching commands or navigation routes found.
@@ -144,12 +216,15 @@ export function CommandPalette() {
               return (
                 <div
                   key={item.id}
+                  id={`command-${item.id}`}
                   role="option"
                   aria-selected={isSelected}
                   onClick={() => handleSelect(item.href)}
                   onMouseEnter={() => setSelectedIndex(idx)}
                   className={`flex items-center justify-between px-3.5 py-2.5 rounded-lg cursor-pointer transition-colors text-sm ${
-                    isSelected ? "bg-slate-100 text-slate-900" : "text-slate-700 hover:bg-slate-50"
+                    isSelected
+                      ? "bg-slate-100 text-slate-900"
+                      : "text-slate-700 hover:bg-slate-50"
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -172,12 +247,31 @@ export function CommandPalette() {
 
         <div className="px-4 py-2 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
           <div className="flex items-center gap-3">
-            <span>Use <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[10px]">↑</kbd> <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[10px]">↓</kbd> to navigate</span>
-            <span><kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[10px]">Enter</kbd> to select</span>
+            <span>
+              Use{" "}
+              <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[10px]">
+                ↑
+              </kbd>{" "}
+              <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[10px]">
+                ↓
+              </kbd>{" "}
+              to navigate
+            </span>
+            <span>
+              <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[10px]">
+                Enter
+              </kbd>{" "}
+              to select
+            </span>
           </div>
-          <span><kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[10px]">ESC</kbd> to close</span>
+          <span>
+            <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded font-mono text-[10px]">
+              ESC
+            </kbd>{" "}
+            to close
+          </span>
         </div>
       </div>
-    </div>
+    </Dialog>
   );
 }

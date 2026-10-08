@@ -1,68 +1,127 @@
 "use client";
 
 import Link from "next/link";
-import { ShieldCheck, ArrowRight, Sparkles } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { ShieldCheck, ArrowRight, Menu, X } from "lucide-react";
+import { PUBLIC_NAV } from "@/lib/public-site";
+import { Dialog } from "@/components/ui/Dialog";
 
 export function Navbar() {
+  const pathname = usePathname();
+  const [open, setOpen] = useState(false);
+  const link = (entry: { label: string; href: string }) => {
+    const active =
+      pathname === entry.href || pathname.startsWith(`${entry.href}/`);
+    return (
+      <Link
+        key={entry.href}
+        href={entry.href}
+        onClick={() => setOpen(false)}
+        aria-current={active ? "page" : undefined}
+        className={`rounded-lg px-2.5 py-2 text-sm font-medium transition ${active ? "bg-cyan-50 text-cyan-800" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"}`}
+      >
+        {entry.label}
+      </Link>
+    );
+  };
   return (
-    <header className="sticky top-0 z-50 w-full bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Brand */}
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-md shadow-cyan-500/20 group-hover:scale-105 transition-transform">
-            <ShieldCheck className="w-5 h-5 text-white stroke-[2.5]" />
-          </div>
-          <div className="flex flex-col">
-            <span className="font-bold text-lg tracking-tight text-slate-950 flex items-center gap-1.5 leading-none">
-              LaunchComply
-              <span className="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded-md bg-cyan-50 text-cyan-700 border border-cyan-200">
-                SaaS
-              </span>
+    <>
+      <a href="#public-content" className="skip-link">
+        Skip to content
+      </a>
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-lg">
+        <div className="mx-auto flex h-[72px] max-w-[1440px] items-center justify-between gap-4 px-5 sm:px-8">
+          <Link
+            href="/"
+            aria-label="LaunchComply home"
+            className="flex shrink-0 items-center gap-2.5 text-lg font-bold tracking-tight text-slate-950"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950 text-white">
+              <ShieldCheck className="h-5 w-5" />
             </span>
-            <span className="text-[10px] text-slate-500 tracking-wider mt-0.5">Deploy. Secure. Comply.</span>
+            LaunchComply
+          </Link>
+          <nav
+            aria-label="Platform navigation"
+            className="hidden items-center gap-0.5 xl:flex"
+          >
+            {PUBLIC_NAV.map(link)}
+          </nav>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/login"
+              className="hidden rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-950 sm:inline-flex"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/signup"
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-3.5 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 sm:text-sm"
+            >
+              Get started
+              <ArrowRight className="hidden h-3.5 w-3.5 sm:block" />
+            </Link>
+            <button
+              type="button"
+              aria-label="Open website menu"
+              aria-haspopup="dialog"
+              aria-expanded={open}
+              onClick={() => setOpen(true)}
+              className="rounded-lg p-2 text-slate-600 xl:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
           </div>
-        </Link>
-
-        {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-1 lg:gap-2 text-sm font-medium text-slate-600">
-          <Link href="#architecture" className="px-3 py-1.5 rounded-lg hover:text-slate-950 hover:bg-slate-50 transition-colors">
-            AWS Architecture
-          </Link>
-          <Link href="#security" className="px-3 py-1.5 rounded-lg hover:text-slate-950 hover:bg-slate-50 transition-colors">
-            Security Center
-          </Link>
-          <Link href="#vapt" className="px-3 py-1.5 rounded-lg hover:text-slate-950 hover:bg-slate-50 transition-colors">
-            VAPT
-          </Link>
-          <Link href="#compliance" className="px-3 py-1.5 rounded-lg hover:text-slate-950 hover:bg-slate-50 transition-colors">
-            Compliance Hub
-          </Link>
-          <Link href="#services" className="px-3 py-1.5 rounded-lg hover:text-slate-950 hover:bg-slate-50 transition-colors">
-            Services
-          </Link>
-          <Link href="#pricing" className="px-3 py-1.5 rounded-lg hover:text-slate-950 hover:bg-slate-50 transition-colors">
-            Pricing
-          </Link>
-        </nav>
-
-        {/* Right Actions */}
-        <div className="flex items-center gap-3">
-          <Link
-            href="/login"
-            className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-cyan-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors flex items-center gap-1.5"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-cyan-600" />
-            Sign in
-          </Link>
-          <Link
-            href="/signup"
-            className="px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 rounded-lg shadow-sm shadow-cyan-600/20 transition-all flex items-center gap-1.5"
-          >
-            Deploy My Application
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
         </div>
-      </div>
-    </header>
+      </header>
+      {open && (
+        <Dialog
+          label="Website navigation"
+          onDismiss={() => setOpen(false)}
+          className="m-0 ml-auto h-dvh max-h-none w-[min(24rem,calc(100%-1rem))] max-w-none rounded-none border-y-0 border-r-0"
+        >
+          <div className="flex h-full flex-col p-6">
+            <header className="flex items-center justify-between border-b border-slate-100 pb-5">
+              <h2 className="text-lg font-semibold">Explore LaunchComply</h2>
+              <button
+                type="button"
+                aria-label="Close website menu"
+                onClick={() => setOpen(false)}
+                className="rounded-lg p-2 text-slate-500"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+            <nav
+              aria-label="Mobile platform navigation"
+              className="mt-5 grid gap-2"
+            >
+              {PUBLIC_NAV.map(link)}
+              {[
+                { label: "Getting started", href: "/docs" },
+                { label: "Contact & support", href: "/contact" },
+              ].map(link)}
+            </nav>
+            <div className="mt-auto grid gap-3 border-t border-slate-100 pt-6">
+              <Link
+                href="/signup"
+                onClick={() => setOpen(false)}
+                className="rounded-xl bg-slate-950 p-3 text-center text-sm font-semibold text-white"
+              >
+                Create workspace
+              </Link>
+              <Link
+                href="/login"
+                onClick={() => setOpen(false)}
+                className="rounded-xl border border-slate-200 p-3 text-center text-sm font-semibold text-slate-700"
+              >
+                Sign in
+              </Link>
+            </div>
+          </div>
+        </Dialog>
+      )}
+    </>
   );
 }

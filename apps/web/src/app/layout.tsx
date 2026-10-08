@@ -4,7 +4,11 @@ import { AccountProvider } from "@/components/auth/AccountProvider";
 
 export const metadata: Metadata = {
   title: "LaunchComply — From Localhost to Real Business",
-  description: "Deploy, secure, audit and prepare your application for enterprise customers — from one unified platform.",
+  description:
+    "Understand your app, plan its cloud design, request deployment and assessment help, and track actual delivered reports in your business workspace.",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL || "https://launch-comply-tau.vercel.app",
+  ),
 };
 
 export default function RootLayout({
