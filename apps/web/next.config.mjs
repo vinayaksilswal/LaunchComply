@@ -32,7 +32,19 @@ const nextConfig = {
   // trailing slash makes FastAPI redirect the browser away from this origin.
   skipTrailingSlashRedirect: true,
   async rewrites() {
+    // Wildcard rewrites can discard a collection's final slash even when the
+    // incoming URL retains it. Resolve these FastAPI collection roots explicitly
+    // so authenticated browser requests never follow an upstream-origin redirect.
+    const collections = ["applications", "architecture", "audit-events", "deployments"];
     return [
+      ...["/api/backend", "/api/v1"].flatMap((prefix) =>
+        collections.flatMap((collection) =>
+          ["", "/"].map((suffix) => ({
+            source: `${prefix}/${collection}${suffix}`,
+            destination: `${backendOrigin.origin}/api/v1/${collection}/`,
+          })),
+        ),
+      ),
       {
         source: "/api/backend/:path*",
         destination: `${backendOrigin.origin}/api/v1/:path*`,
