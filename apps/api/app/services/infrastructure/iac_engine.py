@@ -606,6 +606,10 @@ output "s3_vault_bucket" {{
         Executes provisioning safely.
         When enable_real_aws is False, simulates deterministic discovery and returns verified cloud resource representations.
         """
+        from app.core.config import settings
+        from fastapi import HTTPException
+        if not (settings.DEMO_MODE and settings.ENVIRONMENT in {"development", "test", "demo"}):
+            raise HTTPException(503, "This provisioning adapter is a simulation. Use the reviewed deployment service workflow.")
         name_prefix = spec.get("name_prefix", "launchcomply-prod")
         region = spec.get("region", "ap-south-1")
         env = spec.get("environment", "production")

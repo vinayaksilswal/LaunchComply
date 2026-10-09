@@ -13,6 +13,7 @@ from app.models.auth import Organization, User
 from app.models.entities import ServiceRequest
 from app.models.audit import AuditEvent
 from app.models.service_delivery import ServiceDeliveryReport
+from app.models.service_payments import ServiceQuote, ServiceCheckout
 
 router = APIRouter(tags=["Business Requests"])
 Code = Literal["DEPLOYMENT_HELP", "SECURITY_ASSESSMENT", "COMPLIANCE_HELP", "AWS_CONNECTION", "BACKUP_REVIEW", "COST_REVIEW", "SUPPORT", "VAPT_ASSESSMENT", "ISO27001_HELP", "SOC2_HELP", "PRIVACY_HELP"]
@@ -26,8 +27,14 @@ async def customer_requests(service_code: Code | None = None, membership=Depends
     ids = [item.id for item in items]
     reports = (await db.execute(select(ServiceDeliveryReport).where(ServiceDeliveryReport.organization_id == membership.organization_id,
         ServiceDeliveryReport.request_id.in_(ids)).order_by(ServiceDeliveryReport.created_at.desc()))).scalars().all() if ids else []
+    quotes = (await db.execute(select(ServiceQuote, ServiceCheckout).outerjoin(ServiceCheckout, ServiceCheckout.quote_id == ServiceQuote.id)
+        .where(ServiceQuote.organization_id == membership.organization_id, ServiceQuote.request_id.in_(ids)))).all() if ids else []
+    quote_map = {quote.request_id: {"id": quote.id, "title": quote.title, "amount_minor": quote.amount_minor,
+        "currency": quote.currency, "status": quote.status, "is_real_payment_verified": bool(checkout and checkout.is_real_payment_verified)}
+        for quote, checkout in quotes}
     return {"requests": [{"id": item.id, "title": item.title, "service_code": item.service_code, "status": item.status,
         "notes": item.customer_notes, "created_at": item.created_at, "estimated_delivery": item.estimated_delivery,
+        "quote": quote_map.get(item.id),
         "reports": [{"id": report.id, "title": report.title, "created_at": report.created_at, "sha256": report.content_sha256}
             for report in reports if report.request_id == item.id]} for item in items]}
 
@@ -96,6 +103,12 @@ async def update(request_id: str, payload: UpdateRequest, admin=Depends(require_
     item = (await db.execute(select(ServiceRequest).where(ServiceRequest.id == request_id).with_for_update())).scalar_one_or_none()
     if not item: raise HTTPException(404, "Request not found.")
     if item.status != payload.expected_status: raise HTTPException(409, "Another operator updated this request. Refresh before changing it.")
+    if payload.status in {"IN_PROGRESS", "DELIVERED"}:
+        quote = (await db.execute(select(ServiceQuote).where(ServiceQuote.request_id == item.id))).scalar_one_or_none()
+        if quote:
+            checkout = (await db.execute(select(ServiceCheckout).where(ServiceCheckout.quote_id == quote.id))).scalar_one_or_none()
+            if not checkout or not checkout.is_real_payment_verified:
+                raise HTTPException(409, "This quoted service requires a verified real payment before work or delivery can begin.")
     if payload.status in {"DELIVERED", "CLOSED"} and item.service_code in {"SECURITY_ASSESSMENT", "COMPLIANCE_HELP", "VAPT_ASSESSMENT", "ISO27001_HELP", "SOC2_HELP", "PRIVACY_HELP"}:
         count = (await db.execute(select(func.count()).select_from(ServiceDeliveryReport).where(ServiceDeliveryReport.request_id == item.id))).scalar_one()
         if not count: raise HTTPException(409, "Publish the assessment report before marking this service delivered.")

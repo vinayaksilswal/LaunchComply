@@ -34,6 +34,10 @@ class ProvisioningWorker:
         run_id: str,
         enable_real_aws: bool = False
     ) -> ProvisioningRun:
+        from app.core.config import settings
+        from fastapi import HTTPException
+        if not (settings.DEMO_MODE and settings.ENVIRONMENT in {"development", "test", "demo"}):
+            raise HTTPException(503, "Automatic provisioning is unavailable. Use the reviewed deployment service workflow.")
         result = await db.execute(select(ProvisioningRun).where(ProvisioningRun.id == run_id))
         run = result.scalars().first()
         if not run:

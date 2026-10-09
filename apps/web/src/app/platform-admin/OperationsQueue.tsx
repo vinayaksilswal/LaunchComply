@@ -5,6 +5,7 @@ import { RefreshCw, ArrowRight, X, Building2 } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { apiClient } from "@/lib/api";
 import { ReportPublisher } from "./ReportPublisher";
+import { QuotePublisher } from "./QuotePublisher";
 interface RequestItem {
   id: string;
   organization_name: string;
@@ -273,6 +274,7 @@ export function OperationsQueue() {
                 Updates are saved to the customer request with an audit event.
                 No deployment or assessment runs automatically.
               </p>
+              <QuotePublisher key={selected.id} requestId={selected.id} disabled={busy} onBusyChange={setBusy} />
               <ReportPublisher
                 requestId={selected.id}
                 disabled={busy}

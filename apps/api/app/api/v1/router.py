@@ -6,11 +6,13 @@ from app.api.v1.architecture import router as architecture_router
 from app.api.v1.architecture_workspace import router as architecture_workspace_router
 from app.api.v1.workspace_records import router as workspace_records_router
 from app.api.v1.business_requests import router as business_requests_router
+from app.api.v1.service_payments import router as service_payments_router
 from app.api.v1.security import router as security_router
 from app.api.v1.vapt import router as vapt_router
 from app.api.v1.compliance import router as compliance_router
 from app.api.v1.deployments import router as deployments_router
 from app.api.v1.cloud import router as cloud_router
+from app.api.v1.aws_account_connection import router as aws_account_connection_router
 from app.api.v1.audit import router as audit_router
 from app.api.v1.services import router as services_router
 from app.api.v1.source_control import router as source_control_router
@@ -37,11 +39,13 @@ api_v1_router.include_router(architecture_router)
 api_v1_router.include_router(architecture_workspace_router)
 api_v1_router.include_router(workspace_records_router)
 api_v1_router.include_router(business_requests_router)
+api_v1_router.include_router(service_payments_router)
 api_v1_router.include_router(security_router)
 api_v1_router.include_router(vapt_router)
 api_v1_router.include_router(compliance_router)
 api_v1_router.include_router(deployments_router)
 api_v1_router.include_router(cloud_router)
+api_v1_router.include_router(aws_account_connection_router)
 api_v1_router.include_router(audit_router)
 api_v1_router.include_router(services_router)
 api_v1_router.include_router(source_control_router)

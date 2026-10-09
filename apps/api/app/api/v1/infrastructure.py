@@ -427,6 +427,9 @@ async def apply_plan(
     db: AsyncSession = Depends(get_db),
     membership: OrganizationMembership = Depends(get_current_membership)
 ):
+    from app.core.config import settings
+    if not (settings.DEMO_MODE and settings.ENVIRONMENT in {"development", "test", "demo"}):
+        raise HTTPException(503, "Automatic provisioning is unavailable. Request a reviewed deployment service.")
     if membership.role not in [MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.DEVOPS]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

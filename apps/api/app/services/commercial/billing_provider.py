@@ -6,10 +6,16 @@ from typing import Dict, Any, Optional
 from abc import ABC, abstractmethod
 
 from app.core.config import settings
+from fastapi import HTTPException
 
 
 class BillingProvider(ABC):
     """Abstract payment and subscription provider gateway."""
+
+    @staticmethod
+    def require_demo_runtime():
+        if not settings.DEMO_MODE or settings.ENVIRONMENT not in {"development", "test", "demo"}:
+            raise HTTPException(503, "Legacy subscription checkout is unavailable. Use an operations-approved service quote.")
 
     @abstractmethod
     async def create_customer(self, organization_id: str, legal_name: str, email: str) -> Dict[str, Any]:
@@ -40,6 +46,7 @@ class StripeBillingProvider(BillingProvider):
     """Stripe Billing gateway adapter with production safety gating."""
 
     async def create_customer(self, organization_id: str, legal_name: str, email: str) -> Dict[str, Any]:
+        self.require_demo_runtime()
         if settings.ENABLE_REAL_STRIPE:
             # Production path calling stripe API
             pass
@@ -57,6 +64,7 @@ class StripeBillingProvider(BillingProvider):
         cancel_url: str,
         metadata: Dict[str, Any]
     ) -> Dict[str, Any]:
+        self.require_demo_runtime()
         session_id = f"cs_test_{hashlib.sha256(f'{customer_id}:{time.time()}'.encode()).hexdigest()[:24]}"
         return {
             "session_id": session_id,
@@ -104,6 +112,7 @@ class RazorpayBillingProvider(BillingProvider):
     """Razorpay Billing gateway adapter for Indian payments with safety gating."""
 
     async def create_customer(self, organization_id: str, legal_name: str, email: str) -> Dict[str, Any]:
+        self.require_demo_runtime()
         customer_id = f"cust_rzp_{hashlib.sha256(organization_id.encode()).hexdigest()[:14]}"
         return {"customer_id": customer_id, "provider": "RAZORPAY"}
 
@@ -117,6 +126,7 @@ class RazorpayBillingProvider(BillingProvider):
         cancel_url: str,
         metadata: Dict[str, Any]
     ) -> Dict[str, Any]:
+        self.require_demo_runtime()
         order_id = f"order_{hashlib.sha256(f'{customer_id}:{time.time()}'.encode()).hexdigest()[:16]}"
         return {
             "order_id": order_id,

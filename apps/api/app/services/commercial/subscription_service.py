@@ -31,6 +31,7 @@ class SubscriptionService:
         plan_tier: str = "GROWTH"
     ) -> Subscription:
         """Retrieves active subscription or establishes a 14-day free trial."""
+        stripe_provider.require_demo_runtime()
         res = await db.execute(select(Subscription).where(Subscription.organization_id == organization_id))
         sub = res.scalars().first()
         if sub:
@@ -65,6 +66,7 @@ class SubscriptionService:
         provider_type: BillingProviderType = BillingProviderType.STRIPE
     ) -> Dict[str, Any]:
         """Creates tokenized checkout session with billing provider."""
+        stripe_provider.require_demo_runtime()
         # Find organization profile
         org_res = await db.execute(select(Organization).where(Organization.id == organization_id))
         org = org_res.scalars().first()
@@ -117,6 +119,7 @@ class SubscriptionService:
         Cryptographically verifies and handles billing webhooks.
         Activates subscriptions only upon verified provider event.
         """
+        stripe_provider.require_demo_runtime()
         provider = stripe_provider if provider_type == BillingProviderType.STRIPE else razorpay_provider
         is_valid = provider.verify_webhook_signature(raw_payload, signature_header, webhook_secret)
         if not is_valid:

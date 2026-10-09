@@ -44,6 +44,18 @@ async def latest(db, app):
 def output(arch):
     return {"id": arch.id, "version": arch.version, "created_at": arch.created_at, **arch.spec_json} if arch else None
 
+def design_is_approved(arch):
+    if not arch:
+        return False
+    spec = arch.spec_json or {}
+    approval = spec.get("design_approval") or {}
+    graph = spec.get("graph")
+    return bool(isinstance(approval, dict) and isinstance(graph, dict) and graph.get("nodes")
+        and not spec.get("proposal") and approval.get("architecture_id") == arch.id
+        and approval.get("version") == arch.version
+        and approval.get("graph_fingerprint") == knowledge.fingerprint(graph)
+        and approval.get("repository_commit") == (spec.get("evidence") or {}).get("commit"))
+
 async def audit(db, membership, app, action):
     user = await db.get(User, membership.user_id)
     db.add(AuditEvent(organization_id=membership.organization_id, actor_id=membership.user_id,

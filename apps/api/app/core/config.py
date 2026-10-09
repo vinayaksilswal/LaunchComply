@@ -74,6 +74,17 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     ARCHITECTURE_AI_MODEL: str = "gpt-4.1-mini"
     ENABLE_AWS_KNOWLEDGE: bool = False
+    ENABLE_SERVICE_PAYMENTS: bool = False
+    BILLING_RETURN_ORIGIN: str = ""
+    ENABLE_AWS_ACCOUNT_CONNECTION: bool = False
+    AWS_PLATFORM_ROLE_ARN: str = ""
+
+    @field_validator("BILLING_RETURN_ORIGIN")
+    @classmethod
+    def validate_billing_return_origin(cls, value: str) -> str:
+        if value and not cls._is_https_origin(value):
+            raise ValueError("BILLING_RETURN_ORIGIN must be an exact HTTPS origin.")
+        return value
 
     # Phase 5 Execution Safety Flags
     ENABLE_REAL_MONITORING: bool = False

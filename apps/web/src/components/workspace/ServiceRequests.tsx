@@ -11,6 +11,7 @@ interface RequestItem {
   status: string;
   created_at: string;
   estimated_delivery: string;
+  quote?: { id: string; title: string; amount_minor: number; currency: string; status: string; is_real_payment_verified: boolean } | null;
   reports: { id: string; title: string; created_at: string }[];
 }
 interface Report {
@@ -152,6 +153,9 @@ export function ServiceRequests({
                 Report available after the operations team publishes it.
               </p>
             )}
+            {item.quote && <Link href={`/dashboard/billing#quote-${item.quote.id}`} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-cyan-700">
+              {item.quote.is_real_payment_verified ? "Payment verified · View quote" : "Review service quote"} · {new Intl.NumberFormat(undefined, { style: "currency", currency: item.quote.currency }).format(item.quote.amount_minor / 100)}
+            </Link>}
           </div>
         ))
       )}

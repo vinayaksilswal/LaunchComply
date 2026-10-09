@@ -18,6 +18,8 @@ import { useAccount } from "@/components/auth/AccountProvider";
 import { MODULES, modulePath } from "@/lib/workspaces";
 import { RequestHelp } from "./RequestHelp";
 import { ServiceRequests } from "./ServiceRequests";
+import { ServiceQuotes } from "./ServiceQuotes";
+import { AwsAccountConnection } from "./AwsAccountConnection";
 interface RecordItem {
   id: string;
   title: string;
@@ -158,7 +160,7 @@ export function RecordWorkspace({ module }: { module: string }) {
         label: (
           {
             deployments: "Help me deploy",
-            operations: "Connect AWS monitoring",
+            operations: "Request monitoring setup",
             incidents: "Get incident help",
             backups: "Review my backups",
             cost: "Connect cost reporting",
@@ -232,7 +234,8 @@ export function RecordWorkspace({ module }: { module: string }) {
           </button>
         </div>
       )}
-      {module === "operations" && <CloudAccounts />}
+      {["operations", "deployments"].includes(module) && <AwsAccountConnection />}
+      {module === "billing" && <ServiceQuotes />}
       {module === "deployments" && (
         <section aria-label="Deployment preparation" className="rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-base font-semibold">From your code to your AWS account</h2>
@@ -249,7 +252,7 @@ export function RecordWorkspace({ module }: { module: string }) {
               </li>
             ))}
           </ol>
-          <p className="mt-4 text-xs leading-5 text-slate-500">Automatic AWS connection and deployment are not available yet. Use “Help me deploy” to request assistance; progress and published reports appear below. A diagram approval does not provision cloud resources.</p>
+          <p className="mt-4 text-xs leading-5 text-slate-500">Verify your AWS role above, then use “Help me deploy” to request a reviewed service. Operations confirms scope and issues a quote in Billing. Automatic provisioning is not available; approving a diagram or paying does not provision resources.</p>
           <Link href="/dashboard/architecture" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-cyan-700">Review your app design <ArrowRight className="h-4 w-4" /></Link>
         </section>
       )}
@@ -467,62 +470,5 @@ export function RecordWorkspace({ module }: { module: string }) {
         </Dialog>
       )}
     </div>
-  );
-}
-function CloudAccounts() {
-  const { organization } = useAccount();
-  const [data, setData] = useState<{
-    accounts: { id: string; account_id: string; region: string }[];
-  } | null>(null);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    if (!organization) return;
-    let active = true;
-    setData(null);
-    setError("");
-    apiClient<typeof data>("/dashboard/cloud-accounts")
-      .then((result) => {
-        if (active) setData(result);
-      })
-      .catch((failure) => {
-        if (active) setError(failure.message);
-      });
-    return () => {
-      active = false;
-    };
-  }, [organization]);
-  return (
-    <section className="rounded-xl border border-slate-200 p-5 bg-white">
-      <div className="flex flex-wrap gap-2 items-center justify-between">
-        <h2 className="text-sm font-semibold">AWS account connection</h2>
-        <span className="text-xs bg-amber-50 border border-amber-100 text-amber-800 px-2.5 py-1 rounded-full">
-          Live monitoring not connected
-        </span>
-      </div>
-      {error ? (
-        <p role="alert" className="mt-3 text-sm text-rose-700">
-          {error}
-        </p>
-      ) : data ? (
-        data.accounts.length ? (
-          data.accounts.map((account) => (
-            <p key={account.id} className="text-sm text-slate-600 mt-3">
-              Recorded account: {account.account_id} · {account.region}. AWS
-              access has not been verified by this screen.
-            </p>
-          ))
-        ) : (
-          <p className="mt-3 text-sm text-slate-500">
-            Your business has no AWS account connection recorded.
-          </p>
-        )
-      ) : (
-        <p className="mt-3 text-xs text-slate-500">Loading account records…</p>
-      )}
-      <p className="text-xs text-slate-500 mt-3">
-        CPU usage, latency, running tasks, costs, and cloud logs stay
-        unavailable until a real AWS monitoring connection is enabled.
-      </p>
-    </section>
   );
 }

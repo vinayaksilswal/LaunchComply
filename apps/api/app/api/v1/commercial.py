@@ -188,7 +188,7 @@ async def stripe_webhook(
 ):
     """Handles verified Stripe billing webhooks."""
     payload = await request.body()
-    webhook_secret = "whsec_test_secret_for_launchcomply"
+    webhook_secret = settings.STRIPE_WEBHOOK_SECRET
     try:
         return await subscription_service.process_webhook(
             db=db,
@@ -209,7 +209,7 @@ async def razorpay_webhook(
 ):
     """Handles verified Razorpay billing webhooks."""
     payload = await request.body()
-    webhook_secret = "rzp_whsec_secret_launchcomply"
+    webhook_secret = settings.RAZORPAY_WEBHOOK_SECRET
     try:
         return await subscription_service.process_webhook(
             db=db,
