@@ -17,20 +17,20 @@ const isIngress = (node: ArchitectureNode) => networkPlacement(node) === "PUBLIC
 const isDatabase = (node: ArchitectureNode) => /\brds\b/i.test(node.service);
 
 /** Network boundaries are proposals; ambiguous hosting is left outside for review. */
-export function productionLayout(graph: ArchitectureGraph, requirements: DeploymentRequirements) {
-  const regions = requirements.availability === "MULTI_REGION" ? [requirements.region, requirements.secondary_region!] : [requirements.region];
+export function productionLayout(graph: ArchitectureGraph, requirements?: DeploymentRequirements) {
+  const regions = requirements?.availability === "MULTI_REGION" ? [requirements.region, requirements.secondary_region!] : [requirements?.region || "Region to choose"];
   const compute = graph.nodes.filter(node => networkPlacement(node) === "PRIVATE_COMPUTE");
   const data = graph.nodes.filter(node => networkPlacement(node) === "PRIVATE_DATA");
   const ingress = graph.nodes.filter(isIngress);
   const needsTwoAzIngress = ingress.some(node => /application load balancer|\balb\b/i.test(node.service));
-  const azCount = requirements.availability === "SINGLE_AZ" && !needsTwoAzIngress ? 1 : 2;
-  const replicas = requirements.availability !== "SINGLE_AZ";
+  const azCount = requirements?.availability === "SINGLE_AZ" && !needsTwoAzIngress ? 1 : 2;
+  const replicas = !!requirements && requirements.availability !== "SINGLE_AZ";
   const shared = graph.nodes.filter(node => ["OUTSIDE_VPC", "REVIEW"].includes(networkPlacement(node)));
   const hasVpc = !!(compute.length || data.length || ingress.length);
   const columns = Math.max(compute.length, data.length, ingress.length) > 3 ? 2 : 1;
   const azWidth = columns * 200 + 48;
   const regionWidth = azCount * (azWidth + 16) + 48;
-  const publicHeight = Math.max(1, Math.ceil(ingress.length / columns)) * 116 + 76;
+  const publicHeight = ingress.length ? Math.ceil(ingress.length / columns) * 116 + 76 : 90;
   const computeHeight = compute.length ? Math.ceil(compute.length / columns) * 116 + 42 : 0;
   const dataHeight = data.length ? Math.ceil(data.length / columns) * 116 + 42 : 0;
   const regionHeight = 118 + publicHeight + computeHeight + dataHeight;
@@ -46,7 +46,7 @@ export function productionLayout(graph: ArchitectureGraph, requirements: Deploym
   if (shared.length) boundaries.push({ label: "Managed services / placement to review", x: sharedX, y: top, width: 448, height: Math.ceil(shared.length / 2) * 116 + 64, kind: "region" });
   if (hasVpc) regions.forEach((region, r) => {
     const x = 40 + r * (regionWidth + 24);
-    boundaries.push({ label: `${r ? "Recovery region" : "Primary region"}: ${region} - proposed`, x, y: top, width: regionWidth, height: regionHeight, kind: "region" });
+    boundaries.push({ label: `${r ? "Recovery region" : "Primary region"}: ${region} - ${requirements ? "proposed" : "unconfirmed"}`, x, y: top, width: regionWidth, height: regionHeight, kind: "region" });
     boundaries.push({ label: "VPC - CIDR and route tables need review", x: x + 12, y: top + 36, width: regionWidth - 24, height: regionHeight - 48, kind: "vpc" });
     for (let az = 0; az < azCount; az++) {
       const ax = x + 24 + az * (azWidth + 16);
@@ -58,7 +58,7 @@ export function productionLayout(graph: ArchitectureGraph, requirements: Deploym
       const cy = py + publicHeight;
       if (computeHeight) boundaries.push({ label: "Private application subnet", x: ax + 8, y: cy, width: azWidth - 16, height: computeHeight - 8, kind: "subnet" });
       if (!az || replicas) compute.forEach((node, i) => instances.push({ key: `${node.id}-${r}-${az}`, node, x: ax + 24 + (i % columns) * 200, y: cy + 34 + Math.floor(i / columns) * 116, region: r, az,
-        role: r ? "Recovery capacity - needs sizing" : `${replicas ? "Replica" : "Instance"} ${az + 1} - proposed` }));
+        role: !requirements ? "Reference placement - targets unconfirmed" : r ? "Recovery capacity - needs sizing" : `${replicas ? "Replica" : "Instance"} ${az + 1} - proposed` }));
       const dy = cy + computeHeight;
       if (dataHeight) boundaries.push({ label: "Isolated data subnet - review routes", x: ax + 8, y: dy, width: azWidth - 16, height: dataHeight - 8, kind: "subnet" });
       data.forEach((node, i) => {
@@ -107,7 +107,7 @@ function appearance(service: string) {
 function truncate(value: string, length = 29) { return value.length > length ? value.slice(0, length - 1) + "…" : value; }
 
 export const ProductionDiagram = forwardRef<SVGSVGElement, {
-  graph: ArchitectureGraph; requirements: DeploymentRequirements; zoom: number; selected?: string | null; onSelect: (id: string) => void;
+  graph: ArchitectureGraph; requirements?: DeploymentRequirements; zoom: number; selected?: string | null; onSelect: (id: string) => void;
 }>(function ProductionDiagram({ graph, requirements, zoom, selected, onSelect }, ref) {
   const id = useId().replace(/:/g, "");
   const { width, height, boundaries, instances, links } = productionLayout(graph, requirements);
@@ -119,7 +119,7 @@ export const ProductionDiagram = forwardRef<SVGSVGElement, {
     <rect x="12" y="12" width={width - 24} height={height - 24} fill="white" stroke="#64748b" rx="3" />
     <rect x="12" y="12" width="42" height="38" fill="#263342" /><Cloud x={23} y={20} width={22} height={22} color="white" />
     <text x="68" y="36" fill="#334155" fontSize="14" fontWeight="700">AWS Cloud · deployment proposal</text>
-    <text x="68" y="59" fill="#64748b" fontSize="11">{requirements.peak_requests_per_minute.toLocaleString()} peak requests/min · {requirements.concurrent_users.toLocaleString()} concurrent users · capacity validation pending</text>
+    <text x="68" y="59" fill="#64748b" fontSize="11">{requirements ? `${requirements.peak_requests_per_minute.toLocaleString()} peak requests/min · ${requirements.concurrent_users.toLocaleString()} concurrent users · capacity validation pending` : "Reference network boundaries only - traffic, region and availability are not confirmed"}</text>
     <Users x={width / 2 - 20} y={76} width={40} height={40} color="#334155" />
     <text x={width / 2} y={132} textAnchor="middle" fill="#475569" fontSize="12">Application users</text>
     {boundaries.map((boundary, index) => {

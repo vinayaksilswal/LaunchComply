@@ -138,7 +138,7 @@ export function ArchitectureCanvas() {
   const [chatVisible, setChatVisible] = useState(true);
   const [reviewApproval, setReviewApproval] = useState(false);
   const [requirementsVisible, setRequirementsVisible] = useState(false);
-  const [networkView, setNetworkView] = useState(true);
+  const [networkView, setNetworkView] = useState(false);
   const canvas = useRef<HTMLDivElement>(null);
   const autoFit = useRef(true);
   const fitContext = useRef("");
@@ -321,7 +321,7 @@ export function ArchitectureCanvas() {
     codeGraph.edges = sourceDesign.graph.edges;
   }
   const fullDesign = preview && draft?.proposal ? draft.proposal.graph : graph;
-  const production = view === "cloud" && networkView && draft?.requirements && fullDesign.nodes.length > 0;
+  const production = view === "cloud" && networkView && fullDesign.nodes.length > 0;
   const neighborhood = new Set(fullDesign.edges.filter(edge => edge.source === cloudFocus || edge.target === cloudFocus).flatMap(edge => [edge.source, edge.target]));
   if (cloudFocus) neighborhood.add(cloudFocus);
   const focusedDesign = cloudFocus && !production ? { nodes: fullDesign.nodes.filter(node => neighborhood.has(node.id)), edges: fullDesign.edges.filter(edge => neighborhood.has(edge.source) && neighborhood.has(edge.target)) } : fullDesign;
@@ -330,7 +330,7 @@ export function ArchitectureCanvas() {
       ? codeGraph
       : !production && (arrangedView || cloudFocus) ? arrangeArchitecture(focusedDesign) : fullDesign;
   const node = shown.nodes.find((item) => item.id === selected);
-  const { width, height } = production ? productionLayout(shown, draft!.requirements!) : diagramBounds(shown, view !== "code");
+  const { width, height } = production ? productionLayout(shown, draft?.requirements) : diagramBounds(shown, view !== "code");
   const updateNode = (change: Partial<Node>) => {
     if (!node || !canEdit || busy || view === "code" || preview) return;
     setGraph((current) => ({
@@ -541,13 +541,13 @@ export function ArchitectureCanvas() {
                 if (!id) { fit(); return; }
                 autoFit.current = false;
                 setChatVisible(true);
-                const instance = production ? productionLayout(shown, draft!.requirements!).instances.find(item => item.node.id === id) : shown.nodes.find(item => item.id === id);
+                const instance = production ? productionLayout(shown, draft?.requirements).instances.find(item => item.node.id === id) : shown.nodes.find(item => item.id === id);
                 if (instance && canvas.current) {
                   const container = canvas.current; setZoom(0.95);
                   requestAnimationFrame(() => container.scrollTo({ left: Math.max(0, instance.x * 0.95 - container.clientWidth / 2 + 90), top: Math.max(0, instance.y * 0.95 - container.clientHeight / 2 + 60), behavior: "smooth" }));
                 }
               }} className="mr-2 max-w-48 border rounded-lg p-1.5 text-xs bg-white"><option value="">Find a component</option>{shown.nodes.map(item => <option key={item.id} value={item.id}>{view === "code" ? draft?.evidence.modules?.find(module => module.id === item.id)?.path || item.label : `${item.label} · ${item.service}`}</option>)}</select>}
-              {view === "cloud" && draft?.requirements && <button onClick={() => setNetworkView(value => !value)} className="mr-2 rounded-lg border px-2 py-1.5 text-xs font-semibold">{networkView ? "Edit logical design" : "Network diagram"}</button>}
+              {view === "cloud" && draft && <button aria-pressed={networkView} onClick={() => setNetworkView(value => !value)} className="mr-2 rounded-lg border px-2 py-1.5 text-xs font-semibold">{networkView ? "Logical design" : draft.requirements ? "Network diagram" : "Preview network boundaries"}</button>}
               {view === "cloud" && <>
                 <button aria-label="Undo architecture change" title="Undo · Ctrl+Z / Cmd+Z" disabled={!canUndo || !!busy || preview || !canEdit} onClick={() => restoreHistory("undo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Undo2 className="w-4 h-4" /></button>
                 <button aria-label="Redo architecture change" title="Redo · Ctrl+Shift+Z / Ctrl+Y" disabled={!canRedo || !!busy || preview || !canEdit} onClick={() => restoreHistory("redo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Redo2 className="w-4 h-4" /></button>
@@ -763,7 +763,7 @@ export function ArchitectureCanvas() {
               </div>
             ) : (
               <div className="mx-auto" style={{ width: width * zoom, height: height * zoom }}>
-                {production ? <ProductionDiagram ref={diagram} graph={shown} requirements={draft!.requirements!} zoom={zoom} selected={selected} onSelect={id => { setSelected(id); setChatVisible(true); }} /> : <CloudDiagram
+                {production ? <ProductionDiagram ref={diagram} graph={shown} requirements={draft?.requirements} zoom={zoom} selected={selected} onSelect={id => { setSelected(id); setChatVisible(true); }} /> : <CloudDiagram
                   ref={diagram}
                   graph={shown}
                   zoom={zoom}

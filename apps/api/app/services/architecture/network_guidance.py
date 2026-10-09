@@ -14,6 +14,7 @@ NETWORK_GUIDANCE = {
         "Public routes use an internet gateway; private outbound access needs an explicit NAT or supported VPC endpoint strategy. Avoid direct internet routes for isolated data subnets.",
         "Consider zonal NAT resilience and endpoint coverage, with cost tradeoffs. Do not assume a NAT is needed for all workloads.",
         "Static S3/CloudFront sites, DynamoDB and managed service APIs do not run in customer subnets. Lambda VPC attachment is optional and must be justified.",
+        "Route 53 DNS and CloudFront are global services, not regional VPC workloads. Select regions for regional origins and data; do not say every global service needs a target region.",
         "A VPC is regional and a subnet belongs to one AZ. Multi-region recovery needs separate VPCs, replication, routing and failover decisions; do not promise automatic recovery.",
         "CIDRs must not overlap existing customer networks. DNS, TLS certificates, secrets injection, least privilege IAM, logging, backups, scaling and load tests remain explicit design decisions.",
         "An ambiguous static-hosting/container or CloudFront/ALB candidate must be resolved before choosing network placement. Dependency presence alone does not prove runtime usage.",
