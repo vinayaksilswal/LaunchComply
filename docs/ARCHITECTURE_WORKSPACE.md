@@ -46,4 +46,12 @@ The internal service queue links to System operations. Its launch gates observe 
 
 AI calls release database locks before provider I/O. The response is saved only after checking the current design version, source state, request identity and active editing membership again. Saving a different version invalidates the request identity. Approval waits for active AI requests. Provider failures record bounded categories, model IDs, timing and response status; prompts, raw provider responses, source contents and credentials are not included in routing diagnostics. The customer receives a reference matching the admin event.
 
+## Deployment preparation
+
+The deployment page evaluates the selected business asset against its latest saved architecture. It reports saved source findings, traffic targets, version-specific design approval, and matching-region AWS STS verification recorded within the previous 24 hours. STS verification proves role access only; it does not prove provisioning permissions. Unknown requirements remain action items. The infrastructure and cost review remains incomplete until an actual plan review workflow is implemented.
+
+Deployment review requests retain the selected asset and exact architecture ID. The server checks that the version is still current, then adds its source snapshot, planning targets and approval state to the operations request. A changed source or design requires a refresh before submission. This request does not approve or execute infrastructure.
+
+The legacy deployment trigger returns an unavailable response without creating a deployment row. Simulated deployment rows are excluded from customer deployment lists. Legacy release build, migration, deployment, promotion, rollback, domain and secret mutations are disabled when `DEMO_MODE=False`, including the old GET verification route that created simulated observations. Read paths remain available. A production provisioning worker, reviewed infrastructure plan, build isolation, secret handling, verification and recovery workflow are still required before automatic delivery can be offered.
+
 Source sampling favors entry files, routes, services and data definitions over maintenance scripts. File-area labels describe source organization, not verified runtime roles. Code diagrams group inspected files by repository and area; connection lines are resolved static imports only. Full paths in the component finder distinguish repeated filenames. The sample remains bounded and explicitly reports coverage.

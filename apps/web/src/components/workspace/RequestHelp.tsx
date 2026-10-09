@@ -5,10 +5,11 @@ import { ArrowRight, X, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api";
 import { useAccount } from "@/components/auth/AccountProvider";
-export function RequestHelp({ code, label, applicationId, architectureId }: { code: string; label: string; applicationId?: string; architectureId?: string }) {
+export function RequestHelp({ code, label, applicationId, architectureId, architectureVersion }: { code: string; label: string; applicationId?: string; architectureId?: string; architectureVersion?: string }) {
   const { organization } = useAccount();
   const [open, setOpen] = useState(false);
-  const [apps, setApps] = useState<{ id: string; name: string }[]>([]);
+  const [apps, setApps] = useState<{ id: string; name: string; repo_url?: string }[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(true);
   const [appId, setAppId] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -22,16 +23,18 @@ export function RequestHelp({ code, label, applicationId, architectureId }: { co
     if (!open || submitted) return;
     let active = true;
     setError("");
-    apiClient<{ id: string; name: string }[]>("/applications/")
+    setAssetsLoading(true);
+    apiClient<{ id: string; name: string; repo_url?: string }[]>("/applications/")
       .then((items) => {
         if (active) {
           setApps(items);
-          setAppId(applicationId && items.some(item => item.id === applicationId) ? applicationId : items[0]?.id || "");
+          setAppId(applicationId ? items.some(item => item.id === applicationId) ? applicationId : "" : items[0]?.id || "");
+          if (applicationId && !items.some(item => item.id === applicationId)) setError("This business asset is no longer available. Close this form and refresh preparation.");
         }
       })
       .catch((failure) => {
         if (active) setError(failure.message);
-      });
+      }).finally(() => { if (active) setAssetsLoading(false); });
     return () => {
       active = false;
     };
@@ -94,6 +97,7 @@ export function RequestHelp({ code, label, applicationId, architectureId }: { co
                 className="mt-5 space-y-4"
                 onSubmit={async (event) => {
                   event.preventDefault();
+                  if (assetsLoading || (applicationId && appId !== applicationId)) return;
                   setBusy(true);
                   setError("");
                   try {
@@ -126,11 +130,13 @@ export function RequestHelp({ code, label, applicationId, architectureId }: { co
                   Send a request to the operations team. They will review what
                   your business needs and track the work with you.
                 </p>
+                {architectureVersion && <p className="rounded-lg bg-cyan-50 p-3 text-xs leading-5 text-cyan-800">Saved design {architectureVersion}, its source snapshot and recorded planning targets will be attached for review.</p>}
+                {assetsLoading && <p role="status" className="text-xs text-slate-500">Loading your business assets…</p>}
                 <label className="block text-sm font-medium">
                   Business asset
                   <select
                     value={appId}
-                    disabled={busy || !!applicationId}
+                    disabled={busy || assetsLoading || !!applicationId}
                     onChange={(event) => {
                       setAppId(event.target.value);
                       setRequestId(crypto.randomUUID());
@@ -140,7 +146,7 @@ export function RequestHelp({ code, label, applicationId, architectureId }: { co
                     <option value="">Business-wide request</option>
                     {apps.map((app) => (
                       <option key={app.id} value={app.id}>
-                        {app.name}
+                        {app.name}{app.repo_url ? ` · ${app.repo_url.replace(/\/$/, "").split("/").at(-1)}` : ""}
                       </option>
                     ))}
                   </select>
@@ -167,7 +173,7 @@ export function RequestHelp({ code, label, applicationId, architectureId }: { co
                   </p>
                 )}
                 <button
-                  disabled={busy}
+                  disabled={busy || assetsLoading || (!!applicationId && appId !== applicationId)}
                   type="submit"
                   className="w-full rounded-lg bg-slate-900 text-white px-4 py-3 text-sm font-semibold disabled:opacity-40"
                 >

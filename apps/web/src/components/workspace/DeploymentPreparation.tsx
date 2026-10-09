@@ -63,7 +63,7 @@ export function DeploymentPreparation() {
       {data && <>
         <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
           <span>{data.version ? `Saved design ${data.version}` : "No saved design"}</span>
-          {data.source_commit && <span>Source {data.source_commit.slice(0, 8)}</span>}
+          {data.source_commit && <span>Source snapshot {data.source_commit.slice(0, 8)}</span>}
           <span>Checked {new Date(data.evaluated_at).toLocaleString()}</span>
         </div>
         <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -76,7 +76,7 @@ export function DeploymentPreparation() {
         {!!data.accounts.length && <p className="text-xs text-slate-500">Verified account records: {data.accounts.map(account => `${account.account_id} · ${account.region}`).join(", ")}</p>}
         <div className="flex flex-wrap gap-3 items-center">
           {next && next.id !== "plan" && <Link href={next.href} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 text-white px-4 py-2.5 text-sm font-semibold">{next.title} <ArrowRight className="w-4 h-4" /></Link>}
-          <RequestHelp key={`${assetId}:${data.architecture_id}`} code="DEPLOYMENT_HELP" label="Request deployment review" applicationId={assetId} architectureId={data.architecture_id || undefined} />
+          <RequestHelp key={`${assetId}:${data.architecture_id}`} code="DEPLOYMENT_HELP" label="Request deployment review" applicationId={assetId} architectureId={data.architecture_id || undefined} architectureVersion={data.version || undefined} />
         </div>
       </>}
       <p className="text-xs leading-5 text-slate-500">Automatic provisioning is not available. Design approval and payment do not create AWS resources. The operations team reviews the deployment plan and scope with you.</p>

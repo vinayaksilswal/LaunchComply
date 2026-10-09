@@ -55,7 +55,7 @@ class CreateRequest(BaseModel):
 
 @router.post("/business-requests")
 async def create(payload: CreateRequest, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
-    app = await application(db, payload.application_id, membership) if payload.application_id else None
+    app = await application(db, payload.application_id, membership, lock=bool(payload.architecture_id)) if payload.application_id else None
     notes = (f"Application: {app.name} ({app.id})\n" if app else "") + payload.notes
     if payload.architecture_id:
         if not app or payload.service_code != "DEPLOYMENT_HELP":
