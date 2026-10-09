@@ -141,6 +141,7 @@ export function ArchitectureCanvas() {
   const [networkView, setNetworkView] = useState(true);
   const canvas = useRef<HTMLDivElement>(null);
   const autoFit = useRef(true);
+  const fitContext = useRef("");
   const diagram = useRef<SVGSVGElement>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
   const componentDetails = useRef<HTMLElement>(null);
@@ -349,24 +350,28 @@ export function ArchitectureCanvas() {
       canvas.current.scrollTo({ top: 0, left: 0 });
     }
   };
+  const layoutKey = `${draftId}:${view}:${codeMode}:${codeFocus}:${cloudFocus}:${arrangedView}:${networkView}:${preview}`;
   useEffect(() => {
     if (!draftId || !canvas.current) return;
-    autoFit.current = true;
+    if (fitContext.current !== layoutKey) {
+      fitContext.current = layoutKey;
+      autoFit.current = true;
+    }
     const frame = requestAnimationFrame(() => {
-      if (canvas.current)
+      if (canvas.current && autoFit.current)
         setZoom(
-          Math.max(
-            0.08,
+            Math.max(
+            view === "cloud" ? 0.6 : 0.08,
             Math.min(1, (canvas.current.clientWidth - 32) / width, (canvas.current.clientHeight - 24) / height),
           ),
         );
     });
     const observer = new ResizeObserver(() => {
-      if (canvas.current && autoFit.current) setZoom(Math.max(0.08, Math.min(1, (canvas.current.clientWidth - 32) / width, (canvas.current.clientHeight - 24) / height)));
+      if (canvas.current && autoFit.current) setZoom(Math.max(view === "cloud" ? 0.6 : 0.08, Math.min(1, (canvas.current.clientWidth - 32) / width, (canvas.current.clientHeight - 24) / height)));
     });
     observer.observe(canvas.current);
     return () => { cancelAnimationFrame(frame); observer.disconnect(); };
-  }, [draftId, view, width, height]);
+  }, [draftId, layoutKey, view, width, height]);
   const exportDraft = () => {
     if (!draft) return;
     const blob = new Blob(
@@ -541,12 +546,12 @@ export function ArchitectureCanvas() {
                   const container = canvas.current; setZoom(0.95);
                   requestAnimationFrame(() => container.scrollTo({ left: Math.max(0, instance.x * 0.95 - container.clientWidth / 2 + 90), top: Math.max(0, instance.y * 0.95 - container.clientHeight / 2 + 60), behavior: "smooth" }));
                 }
-              }} className="mr-2 max-w-48 border rounded-lg p-1.5 text-xs bg-white"><option value="">Find a component</option>{shown.nodes.map(item => <option key={item.id} value={item.id}>{view === "code" ? draft?.evidence.modules?.find(module => module.id === item.id)?.path || item.label : item.label}</option>)}</select>}
+              }} className="mr-2 max-w-48 border rounded-lg p-1.5 text-xs bg-white"><option value="">Find a component</option>{shown.nodes.map(item => <option key={item.id} value={item.id}>{view === "code" ? draft?.evidence.modules?.find(module => module.id === item.id)?.path || item.label : `${item.label} · ${item.service}`}</option>)}</select>}
               {view === "cloud" && draft?.requirements && <button onClick={() => setNetworkView(value => !value)} className="mr-2 rounded-lg border px-2 py-1.5 text-xs font-semibold">{networkView ? "Edit logical design" : "Network diagram"}</button>}
               {view === "cloud" && <>
                 <button aria-label="Undo architecture change" title="Undo · Ctrl+Z / Cmd+Z" disabled={!canUndo || !!busy || preview || !canEdit} onClick={() => restoreHistory("undo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Undo2 className="w-4 h-4" /></button>
                 <button aria-label="Redo architecture change" title="Redo · Ctrl+Shift+Z / Ctrl+Y" disabled={!canRedo || !!busy || preview || !canEdit} onClick={() => restoreHistory("redo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Redo2 className="w-4 h-4" /></button>
-                {!production && <button aria-pressed={arrangedView} onClick={() => { setArrangedView(value => !value); setCloudFocus(null); }} className="rounded-lg border px-2 py-1.5 text-xs">{arrangedView ? "Saved layout" : "Arranged view"}</button>}
+                {!production && <button aria-pressed={arrangedView} onClick={() => { setArrangedView(value => !value); setCloudFocus(null); }} className="rounded-lg border px-2 py-1.5 text-xs">{arrangedView ? "Arranged view" : "Saved layout"}</button>}
                 {!production && (cloudFocus ? <button onClick={() => setCloudFocus(null)} className="rounded-lg border px-2 py-1.5 text-xs">Show full design</button> : <button disabled={!selected} onClick={() => setCloudFocus(selected)} className="rounded-lg border px-2 py-1.5 text-xs disabled:opacity-40">Focus connections</button>)}
               </>}
               <button
@@ -827,7 +832,7 @@ export function ArchitectureCanvas() {
             <span className="inline-flex gap-2 items-center">
               <MousePointer2 className="w-3.5 h-3.5" />
               Select a component to inspect
-              {view === "cloud" && canEdit ? " · Drag to arrange" : ""}
+              {view === "cloud" && canEdit ? production ? " · Network placement is proposed" : arrangedView || cloudFocus ? " · Use Arrange layers to edit placement" : " · Drag to arrange" : ""}
             </span>
             {draft && view === "cloud" && (
               <button

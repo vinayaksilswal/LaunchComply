@@ -367,7 +367,7 @@ export const CloudDiagram = forwardRef<
             key={node.id}
             role="button"
             tabIndex={0}
-            aria-label={`Inspect ${node.label}`}
+            aria-label={`Inspect ${node.label}${code ? "" : ` (${node.service})`}`}
             onClick={() => onSelect(node.id)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
