@@ -134,6 +134,7 @@ export function ArchitectureCanvas() {
   const [requirementsVisible, setRequirementsVisible] = useState(false);
   const [networkView, setNetworkView] = useState(true);
   const canvas = useRef<HTMLDivElement>(null);
+  const autoFit = useRef(true);
   const diagram = useRef<SVGSVGElement>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
   const componentDetails = useRef<HTMLElement>(null);
@@ -299,6 +300,7 @@ export function ArchitectureCanvas() {
     setDirty(true);
   };
   const fit = () => {
+    autoFit.current = true;
     if (canvas.current) {
       setZoom(
         Math.max(0.08, Math.min(1, (canvas.current.clientWidth - 32) / width, (canvas.current.clientHeight - 32) / height)),
@@ -308,6 +310,7 @@ export function ArchitectureCanvas() {
   };
   useEffect(() => {
     if (!draftId || !canvas.current) return;
+    autoFit.current = true;
     const frame = requestAnimationFrame(() => {
       if (canvas.current)
         setZoom(
@@ -318,11 +321,11 @@ export function ArchitectureCanvas() {
         );
     });
     const observer = new ResizeObserver(() => {
-      if (canvas.current) setZoom(Math.max(0.08, Math.min(1, (canvas.current.clientWidth - 32) / width, (canvas.current.clientHeight - 24) / height)));
+      if (canvas.current && autoFit.current) setZoom(Math.max(0.08, Math.min(1, (canvas.current.clientWidth - 32) / width, (canvas.current.clientHeight - 24) / height)));
     });
     observer.observe(canvas.current);
     return () => { cancelAnimationFrame(frame); observer.disconnect(); };
-  }, [draftId, view, chatVisible, width, height]);
+  }, [draftId, view, width, height]);
   const exportDraft = () => {
     if (!draft) return;
     const blob = new Blob(
@@ -490,6 +493,7 @@ export function ArchitectureCanvas() {
               {!!shown.nodes.length && view !== "inventory" && <select aria-label="Find architecture component" value={selected || ""} onChange={event => {
                 const id = event.target.value; setSelected(id || null);
                 if (!id) { fit(); return; }
+                autoFit.current = false;
                 setChatVisible(true);
                 const instance = production ? productionLayout(shown, draft!.requirements!).instances.find(item => item.node.id === id) : shown.nodes.find(item => item.id === id);
                 if (instance && canvas.current) {
@@ -521,7 +525,7 @@ export function ArchitectureCanvas() {
               <button
                 aria-label="Zoom out"
                 disabled={!shown.nodes.length || view === "inventory"}
-                onClick={() => setZoom((value) => Math.max(0.08, value - 0.1))}
+                onClick={() => { autoFit.current = false; setZoom((value) => Math.max(0.08, value - 0.1)); }}
                 className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-40"
               >
                 <ZoomOut className="w-4 h-4" />
@@ -532,7 +536,7 @@ export function ArchitectureCanvas() {
               <button
                 aria-label="Zoom in"
                 disabled={!shown.nodes.length || view === "inventory"}
-                onClick={() => setZoom((value) => Math.min(1.6, value + 0.1))}
+                onClick={() => { autoFit.current = false; setZoom((value) => Math.min(1.6, value + 0.1)); }}
                 className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-40"
               >
                 <ZoomIn className="w-4 h-4" />

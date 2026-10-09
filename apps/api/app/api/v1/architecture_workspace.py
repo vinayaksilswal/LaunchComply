@@ -214,6 +214,12 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
         answer = await service.refine(spec["graph"], spec["evidence"], payload.message, spec["messages"], references, spec.get("requirements"))
     except HTTPException as error:
         failure = error
+    except TimeoutError:
+        failure = HTTPException(504, {"code": "ARCHITECTURE_AI_TIMEOUT", "message": "The architecture review timed out. Your saved design is unchanged."})
+    except Exception:
+        # Clear the running receipt and record a fixed error without exposing source
+        # context or arbitrary exception text from agent/provider libraries.
+        failure = HTTPException(503, {"code": "ARCHITECTURE_AI_UNAVAILABLE", "message": "The architecture review could not complete. Your saved design is unchanged."})
     app = await application(db, application_id, membership, lock=True)
     fresh_member = await db.get(OrganizationMembership, membership.id, populate_existing=True)
     fresh_user = await db.get(User, membership.user_id, populate_existing=True)
