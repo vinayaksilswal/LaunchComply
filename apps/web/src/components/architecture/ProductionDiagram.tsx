@@ -2,6 +2,7 @@
 import { forwardRef, useId } from "react";
 import { Cloud, Globe, Container, Database, HardDrive, ShieldCheck, KeyRound, ScrollText, Network, Users, Server, Waypoints } from "lucide-react";
 import type { ArchitectureGraph, ArchitectureNode } from "./CloudDiagram";
+import { networkPlacement } from "./networkPlacement";
 
 export interface DeploymentRequirements {
   peak_requests_per_minute: number;
@@ -12,51 +13,58 @@ export interface DeploymentRequirements {
 }
 interface Instance { key: string; node: ArchitectureNode; x: number; y: number; region: number; az: number; role: string; }
 interface Boundary { label: string; x: number; y: number; width: number; height: number; kind: "region" | "vpc" | "az" | "subnet"; }
-const isRegional = (node: ArchitectureNode) => node.zone === "APPLICATION" || node.zone === "DATA";
-const isStorage = (node: ArchitectureNode) => /\bs3\b|object storage/i.test(node.service);
-const isIngress = (node: ArchitectureNode) => /load balancer|\balb\b/i.test(node.service);
+const isIngress = (node: ArchitectureNode) => networkPlacement(node) === "PUBLIC_INGRESS";
 const isDatabase = (node: ArchitectureNode) => /\brds\b/i.test(node.service);
 
-/** Visualize desired placement only. Replica symbols are proposals, never observed resources. */
+/** Network boundaries are proposals; ambiguous hosting is left outside for review. */
 export function productionLayout(graph: ArchitectureGraph, requirements: DeploymentRequirements) {
   const regions = requirements.availability === "MULTI_REGION" ? [requirements.region, requirements.secondary_region!] : [requirements.region];
-  const azCount = requirements.availability === "SINGLE_AZ" ? 1 : 2;
-  const compute = graph.nodes.filter(node => node.zone === "APPLICATION");
-  const data = graph.nodes.filter(node => node.zone === "DATA" && !isStorage(node));
+  const compute = graph.nodes.filter(node => networkPlacement(node) === "PRIVATE_COMPUTE");
+  const data = graph.nodes.filter(node => networkPlacement(node) === "PRIVATE_DATA");
   const ingress = graph.nodes.filter(isIngress);
-  const shared = graph.nodes.filter(node => (!isRegional(node) || isStorage(node)) && !isIngress(node));
-  const regionWidth = azCount === 1 ? 420 : 820;
-  const rows = Math.max(1, compute.length) + Math.max(1, data.length);
-  const publicHeight = ingress.length ? 130 * ingress.length : 0;
-  const regionHeight = 240 + publicHeight + rows * 116;
-  const sharedRows = Math.max(1, Math.ceil(shared.length / 5));
-  const top = 160 + sharedRows * 124;
-  const width = Math.max(1100, regions.length * (regionWidth + 40) + 40);
-  const height = top + regionHeight + 84;
+  const needsTwoAzIngress = ingress.some(node => /application load balancer|\balb\b/i.test(node.service));
+  const azCount = requirements.availability === "SINGLE_AZ" && !needsTwoAzIngress ? 1 : 2;
+  const replicas = requirements.availability !== "SINGLE_AZ";
+  const shared = graph.nodes.filter(node => ["OUTSIDE_VPC", "REVIEW"].includes(networkPlacement(node)));
+  const hasVpc = !!(compute.length || data.length || ingress.length);
+  const columns = Math.max(compute.length, data.length, ingress.length) > 3 ? 2 : 1;
+  const azWidth = columns * 200 + 48;
+  const regionWidth = azCount * (azWidth + 16) + 48;
+  const publicHeight = Math.max(1, Math.ceil(ingress.length / columns)) * 116 + 76;
+  const computeHeight = compute.length ? Math.ceil(compute.length / columns) * 116 + 42 : 0;
+  const dataHeight = data.length ? Math.ceil(data.length / columns) * 116 + 42 : 0;
+  const regionHeight = 118 + publicHeight + computeHeight + dataHeight;
+  const top = 150;
+  const regionalWidth = hasVpc ? regions.length * (regionWidth + 24) : 0;
+  const sharedX = 40 + regionalWidth;
+  const width = Math.max(760, sharedX + (shared.length ? 448 : 0) + 40);
+  const height = Math.max(420, top + (hasVpc ? regionHeight : 0) + 75, top + Math.ceil(shared.length / 2) * 116 + 80);
   const instances: Instance[] = shared.map((node, i) => ({ key: `${node.id}-shared`, node,
-    x: 70 + (i % 5) * 200, y: 145 + Math.floor(i / 5) * 124, region: -1, az: -1, role: "Regional / global service · review scope" }));
+    x: sharedX + 22 + (i % 2) * 204, y: top + 48 + Math.floor(i / 2) * 116, region: -1, az: -1,
+    role: networkPlacement(node) === "REVIEW" ? "Hosting / network placement unresolved" : "Outside VPC - review regional scope" }));
   const boundaries: Boundary[] = [];
-  regions.forEach((region, r) => {
-    const x = 40 + r * (regionWidth + 40);
-    boundaries.push({ label: `${r ? "Recovery region" : "Primary region"} · ${region} · proposed`, x, y: top, width: regionWidth, height: regionHeight, kind: "region" });
-    boundaries.push({ label: "VPC · proposed private network · CIDR not assigned", x: x + 16, y: top + 44, width: regionWidth - 32, height: regionHeight - 64, kind: "vpc" });
-    if (ingress.length) {
-      boundaries.push({ label: "Public ingress subnets · spans planned availability zones", x: x + 32, y: top + 84, width: regionWidth - 64, height: publicHeight - 8, kind: "subnet" });
-      ingress.forEach((node, i) => instances.push({ key: `${node.id}-${r}-ingress`, node, x: x + regionWidth / 2 - 88, y: top + 120 + i * 130, region: r, az: -1, role: "Public ingress · proposed" }));
-    }
+  if (shared.length) boundaries.push({ label: "Managed services / placement to review", x: sharedX, y: top, width: 448, height: Math.ceil(shared.length / 2) * 116 + 64, kind: "region" });
+  if (hasVpc) regions.forEach((region, r) => {
+    const x = 40 + r * (regionWidth + 24);
+    boundaries.push({ label: `${r ? "Recovery region" : "Primary region"}: ${region} - proposed`, x, y: top, width: regionWidth, height: regionHeight, kind: "region" });
+    boundaries.push({ label: "VPC - CIDR and route tables need review", x: x + 12, y: top + 36, width: regionWidth - 24, height: regionHeight - 48, kind: "vpc" });
     for (let az = 0; az < azCount; az++) {
-      const ax = x + 32 + az * 400;
-      boundaries.push({ label: `Availability zone ${az ? "B" : "A"} · planned`, x: ax, y: top + 84 + publicHeight, width: 356, height: regionHeight - publicHeight - 120, kind: "az" });
-      const computeHeight = Math.max(1, compute.length) * 116 + 36;
-      boundaries.push({ label: "Private application subnet · proposed", x: ax + 12, y: top + 116 + publicHeight, width: 332, height: computeHeight, kind: "subnet" });
-      boundaries.push({ label: "Private data subnet · proposed", x: ax + 12, y: top + 128 + publicHeight + computeHeight, width: 332, height: Math.max(1, data.length) * 116 + 36, kind: "subnet" });
-      compute.forEach((node, i) => instances.push({ key: `${node.id}-${r}-${az}`, node, x: ax + 88, y: top + 157 + publicHeight + i * 116, region: r, az,
-        role: r ? "Recovery capacity · needs sizing" : `${azCount === 2 ? "Replica" : "Instance"} ${az + 1} · initial proposal` }));
+      const ax = x + 24 + az * (azWidth + 16);
+      boundaries.push({ label: `Availability zone ${az ? "B" : "A"} - planned`, x: ax, y: top + 74, width: azWidth, height: regionHeight - 94, kind: "az" });
+      const py = top + 110;
+      boundaries.push({ label: "Public subnet - proposed", x: ax + 8, y: py, width: azWidth - 16, height: publicHeight - 8, kind: "subnet" });
+      ingress.forEach((node, i) => instances.push({ key: `${node.id}-${r}-${az}-ingress`, node, x: ax + 24 + (i % columns) * 200, y: py + 35 + Math.floor(i / columns) * 116, region: r, az,
+        role: "Ingress zone endpoint - proposed" }));
+      const cy = py + publicHeight;
+      if (computeHeight) boundaries.push({ label: "Private application subnet", x: ax + 8, y: cy, width: azWidth - 16, height: computeHeight - 8, kind: "subnet" });
+      if (!az || replicas) compute.forEach((node, i) => instances.push({ key: `${node.id}-${r}-${az}`, node, x: ax + 24 + (i % columns) * 200, y: cy + 34 + Math.floor(i / columns) * 116, region: r, az,
+        role: r ? "Recovery capacity - needs sizing" : `${replicas ? "Replica" : "Instance"} ${az + 1} - proposed` }));
+      const dy = cy + computeHeight;
+      if (dataHeight) boundaries.push({ label: "Isolated data subnet - review routes", x: ax + 8, y: dy, width: azWidth - 16, height: dataHeight - 8, kind: "subnet" });
       data.forEach((node, i) => {
-        // Databases have an explicit standby proposal; other persistence signals remain one logical service.
-        if (az && !isDatabase(node)) return;
-        instances.push({ key: `${node.id}-${r}-${az}`, node, x: ax + 88, y: top + 169 + publicHeight + computeHeight + i * 116, region: r, az,
-          role: isDatabase(node) ? `${r ? "Recovery copy" : az ? "Standby" : "Primary"} · proposed` : "Persistence placement · review required" });
+        if (az && (!replicas || !isDatabase(node))) return;
+        instances.push({ key: `${node.id}-${r}-${az}`, node, x: ax + 24 + (i % columns) * 200, y: dy + 34 + Math.floor(i / columns) * 116, region: r, az,
+          role: isDatabase(node) ? `${r ? "Recovery copy" : az ? "Standby" : "Primary"} - proposed` : "Data placement - review required" });
       });
     }
   });
@@ -83,6 +91,8 @@ export function productionLayout(graph: ArchitectureGraph, requirements: Deploym
   });
   return { width, height, boundaries, instances, links };
 }
+const ingressPresent = (graph: ArchitectureGraph) => graph.nodes.some(isIngress);
+
 function appearance(service: string) {
   if (/rds|database|postgres|mysql|redis|mongo/i.test(service)) return { icon: Database, color: "#4338ca" };
   if (/s3|storage/i.test(service)) return { icon: HardDrive, color: "#4d7c0f" };
@@ -119,6 +129,11 @@ export const ProductionDiagram = forwardRef<SVGSVGElement, {
         {boundary.kind === "vpc" && <Network x={boundary.x + 13} y={boundary.y + 13} width={14} height={14} color={color} />}
         <text x={boundary.x + (boundary.kind === "vpc" ? 33 : 14)} y={boundary.y + 24} fill={color} fontWeight="600" fontSize="10.5">{boundary.label}</text></g>;
     })}
+    {boundaries.filter(boundary => boundary.kind === "subnet" && boundary.label.startsWith("Public")).map((boundary, i) => <g key={`route-${i}`}>
+      <text x={boundary.x + 12} y={boundary.y + boundary.height - 23} fill="#64748b" fontSize="10">Public route: 0.0.0.0/0 to internet gateway</text>
+      <text x={boundary.x + 12} y={boundary.y + boundary.height - 9} fill="#64748b" fontSize="10">NAT / endpoint strategy to confirm</text>
+      {!ingressPresent(graph) && <text x={boundary.x + 12} y={boundary.y + 58} fill="#9a6700" fontSize="11">Ingress / NAT decision pending</text>}
+    </g>)}
     {instances.filter(instance => instance.region === -1 && instance.node.zone === "EDGE" && !graph.edges.some(edge => edge.target === instance.node.id)).map(instance => <path key={`users-${instance.key}`} d={`M${width / 2} 134 V140 H${instance.x + 88} V${instance.y}`} fill="none" stroke="#7b8794" strokeWidth="1.3" markerEnd={`url(#${id}-arrow)`} />)}
     {links.map((link, i) => {
       const sx = link.from.x + 88, sy = link.from.y + 28, tx = link.to.x + 88, ty = link.to.y + 28;
@@ -142,9 +157,9 @@ export const ProductionDiagram = forwardRef<SVGSVGElement, {
         <rect x={instance.x + 60} y={instance.y} width="56" height="56" rx="3" fill={color} />
         <Icon x={instance.x + 72} y={instance.y + 12} width={32} height={32} color="white" strokeWidth={1.3} />
         <rect x={instance.x} y={instance.y + 61} width="176" height="42" fill="white" fillOpacity="0.93" />
-        <text x={instance.x + 88} y={instance.y + 73} textAnchor="middle" fontSize="11" fill="#0f172a" fontWeight="600">{truncate(instance.node.label)}</text>
-        <text x={instance.x + 88} y={instance.y + 87} textAnchor="middle" fontSize="9.5" fill="#475569">{truncate(instance.node.service, 34)}</text>
-        <text x={instance.x + 88} y={instance.y + 100} textAnchor="middle" fontSize="8.5" fill="#64748b">{truncate(instance.role, 39)}</text>
+        <text x={instance.x + 88} y={instance.y + 73} textAnchor="middle" fontSize="12" fill="#0f172a" fontWeight="600">{truncate(instance.node.label)}</text>
+        <text x={instance.x + 88} y={instance.y + 87} textAnchor="middle" fontSize="11" fill="#475569">{truncate(instance.node.service, 34)}</text>
+        <text x={instance.x + 88} y={instance.y + 100} textAnchor="middle" fontSize="10" fill="#64748b">{truncate(instance.role, 39)}</text>
       </g>;
     })}
     <text x="40" y={height - 34} fontSize="10.5" fill="#64748b">Planned boundaries · no assigned subnet CIDRs · no cloud resources created · load testing and recovery design required</text>

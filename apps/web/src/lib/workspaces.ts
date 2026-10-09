@@ -31,7 +31,7 @@ export const MODULES: WorkspaceModule[] = [
   { key: "controls", title: "Control monitoring", description: "Review recorded control monitoring status.", empty: "No control monitors have been recorded.", group: "Govern" },
   { key: "evidence", title: "Evidence records", description: "Review evidence observations recorded for your business.", empty: "No evidence observations have been recorded.", group: "Govern" },
   { key: "exceptions", title: "Control exceptions", description: "Review exceptions recorded against business controls.", empty: "No control exceptions have been recorded.", group: "Govern" },
-  { key: "notifications", title: "Notifications", description: "Notifications recorded for your workspace.", empty: "There are no connected notification records to display.", group: "Business" },
+  { key: "notifications", title: "Notifications", description: "Customer updates and published reports from your service applications.", empty: "No service delivery updates have been recorded for your business yet.", group: "Business" },
   { key: "team", title: "Your team", description: "People with active membership in this business.", empty: "No active team members are available.", group: "Business" },
   { key: "billing", title: "Billing", description: "Review invoices recorded for your business.", empty: "No invoices have been recorded. Online payment collection is not enabled in this workspace.", group: "Business" },
   { key: "usage", title: "Usage records", description: "Review recorded product usage events.", empty: "No product usage events have been recorded.", group: "Business" },

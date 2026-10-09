@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db, Base
 from app.api.v1.architecture_workspace import member
 from app.models.auth import OrganizationMembership, User, MembershipRole
+from app.models.audit import AuditEvent
+from app.models.entities import ServiceRequest
 
 router = APIRouter(prefix="/workspace-records", tags=["Workspace Records"])
 
@@ -45,6 +47,23 @@ async def records(module: str, application_id: str | None = None, record_id: str
     if module not in MODELS: raise HTTPException(404, "Workspace not available.")
     if module in {"billing", "usage"} and membership.role not in {MembershipRole.OWNER, MembershipRole.ADMIN, MembershipRole.BILLING}:
         raise HTTPException(403, "Your business owner can grant access to billing records.")
+    if module == "notifications":
+        # Delivery events are scoped to this business and expose only public updates.
+        conditions = [AuditEvent.organization_id == membership.organization_id,
+            ServiceRequest.organization_id == membership.organization_id,
+            AuditEvent.entity_type == "service_request",
+            AuditEvent.action.in_({"BUSINESS_REQUEST_STATUS_UPDATED", "SERVICE_REPORT_PUBLISHED"})]
+        if record_id: conditions.append(AuditEvent.id == record_id)
+        joined = select(AuditEvent, ServiceRequest).join(ServiceRequest, ServiceRequest.id == AuditEvent.entity_id).where(*conditions)
+        total = (await db.execute(select(func.count()).select_from(joined.subquery()))).scalar_one()
+        rows = (await db.execute(joined.order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).offset(offset).limit(50))).all()
+        return {"total": total, "available": True, "offset": offset, "records": [
+            {"id": event.id, "title": request.title,
+                "status": "Report published" if event.action == "SERVICE_REPORT_PUBLISHED" else (event.details or {}).get("status", "Updated"),
+                "created_at": event.created_at,
+                "fields": {"service_request_id": request.id,
+                    "customer_update": (event.details or {}).get("customer_update", "") if event.action == "BUSINESS_REQUEST_STATUS_UPDATED" else "A service report is available on your application."}}
+            for event, request in rows]}
     model = next((mapper.class_ for mapper in Base.registry.mappers if mapper.class_.__name__ == MODELS[module]), None)
     if not model or not hasattr(model, "organization_id"):
         # Unsupported integrations are explicit rather than accidentally querying a global table.

@@ -46,10 +46,10 @@ export const architectureLayers = [
   { id: "SUPPORT", name: "Platform services", color: "#d97706", icon: Layers },
 ] as const;
 
-export function diagramBounds(graph: ArchitectureGraph) {
+export function diagramBounds(graph: ArchitectureGraph, compact = false) {
   return {
-    width: Math.max(760, ...graph.nodes.map((n) => n.x + 320)),
-    height: Math.max(460, ...graph.nodes.map((n) => n.y + 180)),
+    width: Math.max(540, ...graph.nodes.map((n) => n.x + (compact ? 260 : 320))),
+    height: Math.max(320, ...graph.nodes.map((n) => n.y + (compact ? 144 : 180))),
   };
 }
 
@@ -57,26 +57,19 @@ export function diagramBounds(graph: ArchitectureGraph) {
 export function arrangeArchitecture(
   graph: ArchitectureGraph,
 ): ArchitectureGraph {
-  const columns = Math.min(
-    3,
-    Math.max(
-      1,
-      ...architectureLayers.map(
-        (z) => graph.nodes.filter((n) => n.zone === z.id).length,
-      ),
-    ),
-  );
-  let top = 90;
+  let left = 50;
   const positions = new Map<string, { x: number; y: number }>();
   for (const layer of architectureLayers) {
     const nodes = graph.nodes.filter((n) => n.zone === layer.id);
+    if (!nodes.length) continue;
+    const columns = Math.min(3, Math.ceil(nodes.length / 4));
     nodes.forEach((node, i) =>
       positions.set(node.id, {
-        x: 50 + (i % columns) * 330,
-        y: top + Math.floor(i / columns) * 195,
+        x: left + (i % columns) * 250,
+        y: 90 + Math.floor(i / columns) * 140,
       }),
     );
-    if (nodes.length) top += Math.ceil(nodes.length / columns) * 195 + 75;
+    left += columns * 250 + 60;
   }
   return {
     ...graph,
@@ -152,7 +145,9 @@ export const CloudDiagram = forwardRef<
   ref,
 ) {
   const id = useId().replace(/:/g, "");
-  const { width, height } = diagramBounds(graph);
+  const compact = !code;
+  const cardWidth = compact ? 220 : 280, cardHeight = compact ? 104 : 136;
+  const { width, height } = diagramBounds(graph, compact);
   const related = new Set(
     graph.edges
       .filter((e) => e.source === selected || e.target === selected)
@@ -219,8 +214,8 @@ export const CloudDiagram = forwardRef<
             <rect
               x={x}
               y={y}
-              width={Math.max(...nodes.map((n) => n.x + 280)) - x + padding}
-              height={Math.max(...nodes.map((n) => n.y + 136)) - y + padding}
+              width={Math.max(...nodes.map((n) => n.x + cardWidth)) - x + padding}
+              height={Math.max(...nodes.map((n) => n.y + cardHeight)) - y + padding}
               rx="12"
               fill={boundary.color}
               fillOpacity="0.018"
@@ -262,8 +257,8 @@ export const CloudDiagram = forwardRef<
               <rect
                 x={x}
                 y={y}
-                width={Math.max(...nodes.map((n) => n.x + 280)) - x + 20}
-                height={Math.max(...nodes.map((n) => n.y + 136)) - y + 20}
+                width={Math.max(...nodes.map((n) => n.x + cardWidth)) - x + 20}
+                height={Math.max(...nodes.map((n) => n.y + cardHeight)) - y + 20}
                 rx="16"
                 fill={layer.color}
                 fillOpacity="0.025"
@@ -290,10 +285,10 @@ export const CloudDiagram = forwardRef<
         const dx = to.x - from.x,
           dy = to.y - from.y;
         const horizontal = Math.abs(dx) > Math.abs(dy);
-        const x1 = from.x + (horizontal ? (dx >= 0 ? 280 : 0) : 140),
-          y1 = from.y + (horizontal ? 68 : dy >= 0 ? 136 : 0);
-        const x2 = to.x + (horizontal ? (dx >= 0 ? 0 : 280) : 140),
-          y2 = to.y + (horizontal ? 68 : dy >= 0 ? 0 : 136);
+        const x1 = from.x + (horizontal ? (dx >= 0 ? cardWidth : 0) : cardWidth / 2),
+          y1 = from.y + (horizontal ? cardHeight / 2 : dy >= 0 ? cardHeight : 0);
+        const x2 = to.x + (horizontal ? (dx >= 0 ? 0 : cardWidth) : cardWidth / 2),
+          y2 = to.y + (horizontal ? cardHeight / 2 : dy >= 0 ? 0 : cardHeight);
         const mx = (x1 + x2) / 2,
           my = (y1 + y2) / 2;
         let path = horizontal
@@ -305,10 +300,10 @@ export const CloudDiagram = forwardRef<
         // intervening resources. Short traffic links use the nearest ports.
         if (!horizontal && Math.abs(dy) > 300) {
           const corridor =
-            Math.max(from.x + 280, to.x + 280) + 24 + (i % 3) * 12;
-          const start = from.y + 68,
-            end = to.y + 68;
-          path = `M${from.x + 280},${start} H${corridor} V${end} H${to.x + 280}`;
+            Math.max(from.x + cardWidth, to.x + cardWidth) + 24 + (i % 3) * 12;
+          const start = from.y + cardHeight / 2,
+            end = to.y + cardHeight / 2;
+          path = `M${from.x + cardWidth},${start} H${corridor} V${end} H${to.x + cardWidth}`;
           labelX = corridor;
           labelY = (start + end) / 2;
         }
@@ -330,7 +325,7 @@ export const CloudDiagram = forwardRef<
               strokeWidth={active ? 2.5 : 1.6}
               markerEnd={`url(#${id}-arrow)`}
             />
-            <rect
+            {(code || active) && <><rect
               x={labelX - label.length * 2.9 - 7}
               y={labelY - 12}
               width={label.length * 5.8 + 14}
@@ -347,7 +342,7 @@ export const CloudDiagram = forwardRef<
               fill={active ? "#0e7490" : "#64748b"}
             >
               {label}
-            </text>
+            </text></>}
           </g>
         );
       })}
@@ -389,8 +384,8 @@ export const CloudDiagram = forwardRef<
             <rect
               x={node.x}
               y={node.y}
-              width="280"
-              height="136"
+              width={cardWidth}
+              height={cardHeight}
               rx="12"
               fill="white"
               stroke={
@@ -430,18 +425,18 @@ export const CloudDiagram = forwardRef<
             <text
               x={node.x + 60}
               y={node.y + 29}
-              fontSize="12"
+              fontSize={compact ? 13 : 12}
               fontWeight="600"
               fill="#0f172a"
             >
-              {lines(node.label, 28).map((line, i) => (
+              {lines(node.label, compact ? 20 : 28).map((line, i) => (
                 <tspan key={i} x={node.x + 60} dy={i ? 15 : 0}>
                   {line}
                 </tspan>
               ))}
             </text>
-            <text x={node.x + 16} y={node.y + 72} fontSize="11" fill="#475569">
-              {lines(node.service, 38).map((line, i) => (
+            <text x={node.x + 16} y={node.y + (compact ? 64 : 72)} fontSize={compact ? 12 : 11} fill="#475569">
+              {lines(node.service, compact ? 29 : 38, compact ? 1 : 2).map((line, i) => (
                 <tspan key={i} x={node.x + 16} dy={i ? 14 : 0}>
                   {line}
                 </tspan>
@@ -449,14 +444,14 @@ export const CloudDiagram = forwardRef<
             </text>
             <line
               x1={node.x + 16}
-              y1={node.y + 101}
-              x2={node.x + 264}
-              y2={node.y + 101}
+              y1={node.y + (compact ? 77 : 101)}
+              x2={node.x + cardWidth - 16}
+              y2={node.y + (compact ? 77 : 101)}
               stroke="#f1f5f9"
             />
             <text
               x={node.x + 16}
-              y={node.y + 121}
+              y={node.y + (compact ? 94 : 121)}
               fontSize="9"
               fontWeight="600"
               fill={layer.color}
@@ -464,8 +459,8 @@ export const CloudDiagram = forwardRef<
               {code ? "STATIC CODE FINDING" : "PROPOSED SERVICE"}
             </text>
             <text
-              x={node.x + 264}
-              y={node.y + 121}
+              x={node.x + cardWidth - 16}
+              y={node.y + (compact ? 94 : 121)}
               textAnchor="end"
               fontSize="9"
               fill="#64748b"

@@ -23,6 +23,7 @@ class ArchitectState(TypedDict, total=False):
 
 def prepare_context(state: ArchitectState):
     from app.services.architecture.workspace import Graph
+    from app.services.architecture.network_guidance import NETWORK_GUIDANCE
     graph = Graph.model_validate(state["graph"]).model_dump()
     required = ("peak_requests_per_minute", "concurrent_users", "region", "availability")
     missing = [key for key in required if not (state.get("requirements") or {}).get(key)]
@@ -30,7 +31,7 @@ def prepare_context(state: ArchitectState):
         "source_snapshot": state["evidence"].get("commit"),
         "source_coverage": state["evidence"].get("source_coverage"),
         "source_repositories": state["evidence"].get("repositories", []),
-        "approval_required": True}, "workflow": {"framework": "LangGraph / LangChain",
+        "approval_required": True, "network_design_guidance": NETWORK_GUIDANCE}, "workflow": {"framework": "LangGraph / LangChain",
         "stages": ["source_context_prepared"], "missing_requirements": missing}}
 
 async def propose(state: ArchitectState):

@@ -23,6 +23,8 @@ import {
   Check,
   GitBranch,
   MousePointer2,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import {
   CloudDiagram,
@@ -36,6 +38,9 @@ import { useAccount } from "@/components/auth/AccountProvider";
 import { ProductionDiagram, productionLayout, type DeploymentRequirements } from "./ProductionDiagram";
 import { RequirementsForm } from "./RequirementsForm";
 import { AwsReferences, type AwsReferenceReview } from "./AwsReferences";
+
+import { useGraphHistory } from "./useGraphHistory";
+import { NetworkReview } from "./networkPlacement";
 
 type Zone = "EDGE" | "APPLICATION" | "DATA" | "SUPPORT";
 interface Node {
@@ -115,7 +120,9 @@ export function ArchitectureCanvas() {
   const [apps, setApps] = useState<{ id: string; name: string; repositories?: { full_name: string }[] }[]>([]);
   const [appId, setAppId] = useState("");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
-  const [graph, setGraph] = useState<Graph>({ nodes: [], edges: [] });
+  const { graph, setGraph, resetGraph, beginEdit, endEdit, undo, redo, canUndo, canRedo } = useGraphHistory();
+  const [arrangedView, setArrangedView] = useState(true);
+  const [cloudFocus, setCloudFocus] = useState<string | null>(null);
   const [view, setView] = useState<"cloud" | "code" | "inventory">("cloud");
   const [codeMode, setCodeMode] = useState<"overview" | "files">("overview");
   const [codeFocus, setCodeFocus] = useState<string | null>(null);
@@ -126,7 +133,6 @@ export function ArchitectureCanvas() {
   const [reload, setReload] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
-  const [dirty, setDirty] = useState(false);
   const [preview, setPreview] = useState(false);
   const [newConnection, setNewConnection] = useState("");
   const [chatVisible, setChatVisible] = useState(true);
@@ -147,16 +153,45 @@ export function ArchitectureCanvas() {
   } | null>(null);
   const draft = workspace?.architecture;
   const draftId = draft?.id;
+  const dirty = !!draft && JSON.stringify(graph) !== JSON.stringify(draft.graph);
   const canRefresh = ["OWNER", "ADMIN"].includes(
     organization?.role.toUpperCase() || "",
   );
   const canEdit = canRefresh && !draft?.source_changed;
-  const adopt = (result: Draft) => {
+  const restoreHistory = (direction: "undo" | "redo") => {
+    if (busy || preview || !canEdit || view !== "cloud" || (direction === "undo" ? !canUndo : !canRedo)) return;
+    setNetworkView(false);
+    setArrangedView(false);
+    setCloudFocus(null);
+    drag.current = null;
+    if (direction === "undo") undo(); else redo();
+  };
+  useEffect(() => {
+    const keydown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || busy || preview || !canEdit || view !== "cloud") return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog']") || document.querySelector("[role='dialog']")) return;
+      const key = event.key.toLowerCase();
+      if (key !== "z" && key !== "y") return;
+      event.preventDefault();
+      if (key === "y" || event.shiftKey ? !canRedo : !canUndo) return;
+      setNetworkView(false);
+      setArrangedView(false);
+      setCloudFocus(null);
+      drag.current = null;
+      if (key === "y" || event.shiftKey) redo(); else undo();
+    };
+    document.addEventListener("keydown", keydown);
+    return () => document.removeEventListener("keydown", keydown);
+  }, [busy, preview, canEdit, view, undo, redo, canUndo, canRedo]);
+  const adopt = (result: Draft, operationName: string) => {
+    endEdit();
     setWorkspace((current) =>
       current ? { ...current, architecture: result } : current,
     );
-    setGraph(result.graph);
-    setDirty(false);
+    if (["analyze", "requirements"].includes(operationName)) resetGraph(result.graph);
+    else setGraph(result.graph);
+
     setPreview(false);
     setReviewApproval(false);
   };
@@ -166,7 +201,7 @@ export function ArchitectureCanvas() {
     setApps([]);
     setAppId("");
     setWorkspace(null);
-    setGraph({ nodes: [], edges: [] });
+    resetGraph({ nodes: [], edges: [] });
     setError(null);
     setLoading(true);
     apiClient<{ id: string; name: string }[]>("/applications/")
@@ -190,23 +225,26 @@ export function ArchitectureCanvas() {
     return () => {
       active = false;
     };
-  }, [organization, accountLoading, query, reload]);
+  }, [organization, accountLoading, query, reload, resetGraph]);
   useEffect(() => {
     if (!appId || !organization) return;
     let active = true;
     setWorkspace(null);
     setSelected(null);
     setCodeFocus(null);
+    setCloudFocus(null);
+    setArrangedView(true);
+    resetGraph({ nodes: [], edges: [] });
     setReviewApproval(false);
     setLoading(true);
     setError(null);
-    setDirty(false);
+
     setPreview(false);
     apiClient<Workspace>(`/architecture/workspace/${appId}`)
       .then((result) => {
         if (active) {
           setWorkspace(result);
-          setGraph(result.architecture?.graph || { nodes: [], edges: [] });
+          resetGraph(result.architecture?.graph || { nodes: [], edges: [] });
         }
       })
       .catch((failure) => {
@@ -218,7 +256,7 @@ export function ArchitectureCanvas() {
     return () => {
       active = false;
     };
-  }, [appId, organization]);
+  }, [appId, organization, resetGraph]);
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [draft?.messages.length]);
@@ -237,6 +275,7 @@ export function ArchitectureCanvas() {
           body: data ? JSON.stringify(data) : undefined,
           timeout: 120000,
         }),
+        name,
       );
       if (name === "chat") setPrompt("");
       if (name === "requirements") setRequirementsVisible(false);
@@ -280,15 +319,17 @@ export function ArchitectureCanvas() {
     codeGraph.nodes = sourceDesign.graph.nodes;
     codeGraph.edges = sourceDesign.graph.edges;
   }
+  const fullDesign = preview && draft?.proposal ? draft.proposal.graph : graph;
+  const production = view === "cloud" && networkView && draft?.requirements && fullDesign.nodes.length > 0;
+  const neighborhood = new Set(fullDesign.edges.filter(edge => edge.source === cloudFocus || edge.target === cloudFocus).flatMap(edge => [edge.source, edge.target]));
+  if (cloudFocus) neighborhood.add(cloudFocus);
+  const focusedDesign = cloudFocus && !production ? { nodes: fullDesign.nodes.filter(node => neighborhood.has(node.id)), edges: fullDesign.edges.filter(edge => neighborhood.has(edge.source) && neighborhood.has(edge.target)) } : fullDesign;
   const shown =
     view === "code"
       ? codeGraph
-      : preview && draft?.proposal
-        ? draft.proposal.graph
-        : graph;
+      : !production && (arrangedView || cloudFocus) ? arrangeArchitecture(focusedDesign) : fullDesign;
   const node = shown.nodes.find((item) => item.id === selected);
-  const production = view === "cloud" && networkView && draft?.requirements && shown.nodes.length > 0;
-  const { width, height } = production ? productionLayout(shown, draft!.requirements!) : diagramBounds(shown);
+  const { width, height } = production ? productionLayout(shown, draft!.requirements!) : diagramBounds(shown, view !== "code");
   const updateNode = (change: Partial<Node>) => {
     if (!node || !canEdit || busy || view === "code" || preview) return;
     setGraph((current) => ({
@@ -297,7 +338,7 @@ export function ArchitectureCanvas() {
         item.id === node.id ? { ...item, ...change } : item,
       ),
     }));
-    setDirty(true);
+
   };
   const fit = () => {
     autoFit.current = true;
@@ -502,13 +543,22 @@ export function ArchitectureCanvas() {
                 }
               }} className="mr-2 max-w-48 border rounded-lg p-1.5 text-xs bg-white"><option value="">Find a component</option>{shown.nodes.map(item => <option key={item.id} value={item.id}>{view === "code" ? draft?.evidence.modules?.find(module => module.id === item.id)?.path || item.label : item.label}</option>)}</select>}
               {view === "cloud" && draft?.requirements && <button onClick={() => setNetworkView(value => !value)} className="mr-2 rounded-lg border px-2 py-1.5 text-xs font-semibold">{networkView ? "Edit logical design" : "Network diagram"}</button>}
+              {view === "cloud" && <>
+                <button aria-label="Undo architecture change" title="Undo · Ctrl+Z / Cmd+Z" disabled={!canUndo || !!busy || preview || !canEdit} onClick={() => restoreHistory("undo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Undo2 className="w-4 h-4" /></button>
+                <button aria-label="Redo architecture change" title="Redo · Ctrl+Shift+Z / Ctrl+Y" disabled={!canRedo || !!busy || preview || !canEdit} onClick={() => restoreHistory("redo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Redo2 className="w-4 h-4" /></button>
+                {!production && <button aria-pressed={arrangedView} onClick={() => { setArrangedView(value => !value); setCloudFocus(null); }} className="rounded-lg border px-2 py-1.5 text-xs">{arrangedView ? "Saved layout" : "Arranged view"}</button>}
+                {!production && (cloudFocus ? <button onClick={() => setCloudFocus(null)} className="rounded-lg border px-2 py-1.5 text-xs">Show full design</button> : <button disabled={!selected} onClick={() => setCloudFocus(selected)} className="rounded-lg border px-2 py-1.5 text-xs disabled:opacity-40">Focus connections</button>)}
+              </>}
               <button
                 disabled={
                   !draft || view === "code" || preview || !!busy || !canEdit || !!production
                 }
                 onClick={() => {
                   setGraph(arrangeArchitecture(graph));
-                  setDirty(true);
+                  setArrangedView(false);
+                  setCloudFocus(null);
+                  autoFit.current = true;
+
                 }}
                 className="mr-2 rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
               >
@@ -707,7 +757,7 @@ export function ArchitectureCanvas() {
                 service.
               </div>
             ) : (
-              <div style={{ width: width * zoom, height: height * zoom }}>
+              <div className="mx-auto" style={{ width: width * zoom, height: height * zoom }}>
                 {production ? <ProductionDiagram ref={diagram} graph={shown} requirements={draft!.requirements!} zoom={zoom} selected={selected} onSelect={id => { setSelected(id); setChatVisible(true); }} /> : <CloudDiagram
                   ref={diagram}
                   graph={shown}
@@ -721,11 +771,13 @@ export function ArchitectureCanvas() {
                     setNewConnection("");
                   }}
                   onNodePointerDown={
-                    view === "cloud" && !preview && canEdit && !busy
+                    view === "cloud" && !preview && canEdit && !busy && !arrangedView && !cloudFocus
                       ? (event, item) => {
                           event.currentTarget.setPointerCapture(
                             event.pointerId,
                           );
+                          beginEdit();
+                          autoFit.current = false;
                           drag.current = {
                             id: item.id,
                             x: item.x,
@@ -758,10 +810,11 @@ export function ArchitectureCanvas() {
                           : n,
                       ),
                     }));
-                    setDirty(true);
+
                   }}
                   onPointerUp={() => {
                     drag.current = null;
+                    endEdit();
                   }}
                 />}
               </div>
@@ -800,7 +853,7 @@ export function ArchitectureCanvas() {
                     ],
                   }));
                   setSelected(id);
-                  setDirty(true);
+
                 }}
                 className="flex items-center gap-1.5 text-cyan-700 font-semibold disabled:opacity-40"
               >
@@ -830,6 +883,7 @@ export function ArchitectureCanvas() {
             <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-4">
               {draft && (requirementsVisible || !draft.requirements) && <RequirementsForm key={draft.id} value={draft.requirements} disabled={!!busy || dirty || !canEdit || !!draft.proposal} saving={busy === "requirements"} onSave={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} />}
               {draft && !requirementsVisible && draft.requirements && <div className="rounded-xl border p-3 text-xs leading-5 text-slate-600"><strong className="text-slate-900">Deployment targets</strong><br />{draft.requirements.region} · {draft.requirements.availability.replaceAll("_", " ").toLowerCase()}<br />{draft.requirements.peak_requests_per_minute.toLocaleString()} requests/min · {draft.requirements.concurrent_users.toLocaleString()} users</div>}
+              {draft && view === "cloud" && <NetworkReview graph={fullDesign} />}
               {draft && (
                 <AwsReferences review={draft.aws_references}
                   enabled={!!workspace?.capabilities.aws_references} canEdit={canEdit}
@@ -859,6 +913,8 @@ export function ArchitectureCanvas() {
                         <input
                           maxLength={100}
                           value={node.label}
+                          onFocus={beginEdit}
+                          onBlur={endEdit}
                           disabled={!!busy}
                           onChange={(event) =>
                             updateNode({ label: event.target.value })
@@ -871,6 +927,8 @@ export function ArchitectureCanvas() {
                         <input
                           maxLength={100}
                           value={node.service}
+                          onFocus={beginEdit}
+                          onBlur={endEdit}
                           disabled={!!busy}
                           onChange={(event) =>
                             updateNode({ service: event.target.value })
@@ -883,6 +941,8 @@ export function ArchitectureCanvas() {
                         <textarea
                           maxLength={500}
                           value={node.description}
+                          onFocus={beginEdit}
+                          onBlur={endEdit}
                           disabled={!!busy}
                           onChange={(event) =>
                             updateNode({ description: event.target.value })
@@ -950,7 +1010,7 @@ export function ArchitectureCanvas() {
                               },
                             ],
                           }));
-                          setDirty(true);
+
                           setNewConnection("");
                         }}
                         className="text-xs font-semibold text-cyan-700 disabled:opacity-40"
@@ -989,7 +1049,7 @@ export function ArchitectureCanvas() {
                                         (_, i) => i !== index,
                                       ),
                                     }));
-                                    setDirty(true);
+
                                   }}
                                 >
                                   <X className="w-3 h-3" />
@@ -1011,7 +1071,7 @@ export function ArchitectureCanvas() {
                             ),
                           }));
                           setSelected(null);
-                          setDirty(true);
+
                         }}
                         className="text-xs text-rose-700"
                       >

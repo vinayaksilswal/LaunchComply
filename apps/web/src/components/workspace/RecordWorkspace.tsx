@@ -239,6 +239,7 @@ export function RecordWorkspace({ module }: { module: string }) {
       {module === "deployments" && <DeploymentPreparation />}
       {["operations", "deployments"].includes(module) && <AwsAccountConnection />}
       {module === "billing" && <ServiceQuotes />}
+      {module === "notifications" && <Link href="/dashboard/services" className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-700">Open service applications & reports<ArrowRight className="h-4 w-4" /></Link>}
       {module === "security" && <CloudSecurity />}
       {module === "compliance" && (
         <div className="grid sm:grid-cols-3 gap-3">
