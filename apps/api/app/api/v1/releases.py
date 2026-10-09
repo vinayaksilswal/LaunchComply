@@ -3,12 +3,13 @@ Implements Phase 4 Production Application Delivery Engine endpoints.
 """
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.permissions import get_current_membership, require_roles
 from app.core.audit import log_audit_event
 from app.models.auth import OrganizationMembership, MembershipRole
@@ -70,7 +71,18 @@ from app.services.release.domain_service import DomainService
 from app.services.release.policy_engine import ReleasePolicyEngine
 from app.services.release.evidence_service import ReleaseEvidenceService
 
-router = APIRouter(tags=["Releases & Delivery Engine"])
+async def delivery_execution_gate(request: Request, membership: OrganizationMembership = Depends(get_current_membership)):
+    # The legacy engine fabricates build, migration, ECS and traffic outcomes.
+    # Keep its read paths available, but never create those observations in real mode.
+    mutating = request.method not in {"GET", "HEAD", "OPTIONS"} or request.url.path.endswith("/verification")
+    if mutating:
+        if membership.role not in {MembershipRole.OWNER, MembershipRole.ADMIN}:
+            raise HTTPException(403, "A business owner or administrator must manage delivery.")
+        if not settings.DEMO_MODE:
+            raise HTTPException(503, {"code": "DELIVERY_EXECUTION_UNAVAILABLE",
+                "message": "Automated release execution is not available. Request a reviewed deployment service; no build, migration or cloud operation was started."})
+
+router = APIRouter(tags=["Releases & Delivery Engine"], dependencies=[Depends(delivery_execution_gate)])
 
 
 async def _audit(
