@@ -22,6 +22,7 @@ export function DeploymentPreparation() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
+  const [assetsRefresh, setAssetsRefresh] = useState(0);
   useEffect(() => {
     if (!organization) return;
     let active = true;
@@ -34,7 +35,7 @@ export function DeploymentPreparation() {
       if (!items.length) setLoading(false);
     }).catch(failure => { if (active) { setError(failure.message); setLoading(false); } });
     return () => { active = false; };
-  }, [organization, refresh]);
+  }, [organization, assetsRefresh]);
   useEffect(() => {
     if (!assetId) return;
     let active = true;
@@ -43,7 +44,7 @@ export function DeploymentPreparation() {
       if (active) setData(result);
     }).catch(failure => { if (active) setError(failure.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [assetId]);
+  }, [assetId, refresh]);
   const next = data?.checks.find(check => !check.complete);
   return <section aria-label="Deployment preparation" className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
     <header className="p-5 border-b flex flex-wrap gap-4 justify-between items-start">
@@ -53,7 +54,7 @@ export function DeploymentPreparation() {
         {!!assets.length && <select aria-label="Business asset to prepare" value={assetId} onChange={event => setAssetId(event.target.value)} className="rounded-lg border px-3 py-2 text-sm max-w-full bg-white">
           {assets.map(asset => <option key={asset.id} value={asset.id}>{asset.name}{asset.repo_url ? ` · ${asset.repo_url.replace(/\/$/, "").split("/").at(-1)}` : ""}</option>)}
         </select>}
-        <button aria-label="Refresh deployment preparation" onClick={() => setRefresh(value => value + 1)} className="rounded-lg border p-2"><RefreshCw className="w-4 h-4" /></button>
+        <button aria-label="Refresh deployment preparation" disabled={loading} onClick={() => assets.length ? setRefresh(value => value + 1) : setAssetsRefresh(value => value + 1)} className="rounded-lg border p-2 disabled:opacity-40"><RefreshCw className="w-4 h-4" /></button>
       </div>
     </header>
     <div className="p-5 space-y-4">

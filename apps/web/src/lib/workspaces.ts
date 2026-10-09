@@ -1,6 +1,6 @@
 export interface WorkspaceModule { key: string; title: string; description: string; empty: string; group: string; }
 export const MODULES: WorkspaceModule[] = [
-  { key: "deployments", title: "Deployments", description: "Track releases of your app and their recorded status.", empty: "Review your app design first. Cloud deployment needs a verified cloud connection before releases can run.", group: "Launch" },
+  { key: "deployments", title: "Deployments", description: "Prepare your business architecture for deployment and request a review.", empty: "Your recorded deployment history will appear here. Complete the preparation steps and request an infrastructure review to continue.", group: "Launch" },
   { key: "releases", title: "App releases", description: "The release history recorded for this application.", empty: "This app has no recorded releases yet.", group: "Launch" },
   { key: "environments", title: "App environments", description: "The environments saved for this application.", empty: "No environments have been configured for this app.", group: "Launch" },
   { key: "operations", title: "App health", description: "See connected cloud accounts and monitoring observations.", empty: "Live AWS monitoring is not connected. Availability, response times, and service health cannot be verified yet.", group: "Operate" },

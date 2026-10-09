@@ -53,3 +53,10 @@ Connect an authorized repository and configure the GitHub App/AI provider before
 - Opened the deployment review form and verified the selected asset. No deployment review request, payment or cloud operation was submitted. The walkthrough exposed an enabled submit button while the asset list was loading; submission is now disabled until the selected asset is loaded. The saved design version and source snapshot accompany review requests and are checked again on the server.
 - Customer deployment lists exclude simulated records. Legacy trigger and delivery mutations no longer fabricate provisioning, build, migration or traffic outcomes in real-business mode. Automatic provisioning remains unavailable; assisted service requests remain the supported handoff.
 - Production frontend builds and Python compilation completed. No automated test suite was run.
+
+## Live routing and selection verification — 10 October 2026
+
+- Request `4c162029` reached all six configured models after the routing fix. Attempts recorded privacy exclusions for both NVIDIA candidates, rate limits for both Gemma candidates, and model access denials for both Inkling candidates. The configured pool returned no usable proposal; version 3 remained unchanged. This outcome does not establish an invalid API key. Privacy restrictions and free-only pricing were retained.
+- Reopened Routes & screens and selected the inspected backend authentication file. The view retained 95% zoom when its actual handler names and imports appeared. The source review screenshot was captured at the normal browser size.
+- The deployment review dialog initially disabled submission while loading assets, then selected the correct Techinvenso asset and displayed saved version 3. The dialog was closed without submitting a service request.
+- Switching the deployment selector to the separate LaunchComply asset and refreshing reproduced a reset to the first asset. Refresh now reloads preparation for the current selection; a failed initial asset load can still be retried. The deployment heading describes preparation and review rather than implying that automatic releases are available.
