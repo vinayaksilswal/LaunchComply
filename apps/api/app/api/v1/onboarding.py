@@ -17,24 +17,26 @@ from app.models.entities import Architecture
 from app.models.source_archive import ApplicationSourceArchive
 from app.services.architecture import workspace as architecture_service
 from app.services.architecture.source_archive import inspect_archive, MAX_UPLOAD_BYTES
+from app.services.architecture.repository_links import accessible_repositories
 
 router = APIRouter(prefix="/onboarding", tags=["Onboarding"])
 upload_slots = asyncio.Semaphore(2)
 
 class WorkspaceRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
-    repository_id: UUID
+    repository_id: UUID | None = None
+    repository_ids: list[UUID] | None = Field(default=None, min_length=1, max_length=6)
     request_id: UUID
 
-async def existing_workspace(db, identifier, organization_id, name, repository_id):
+async def existing_workspace(db, identifier, organization_id, name, repository_ids):
     app = await db.get(Application, identifier)
     if not app:
         return None
     if app.organization_id != organization_id:
         raise HTTPException(409, "Please start a new workspace request.")
-    link = (await db.execute(select(ApplicationRepository).where(ApplicationRepository.application_id == app.id,
-        ApplicationRepository.organization_id == organization_id, ApplicationRepository.repository_id == repository_id))).scalar_one_or_none()
-    if app.name != name or not link:
+    links = (await db.execute(select(ApplicationRepository.repository_id).where(ApplicationRepository.application_id == app.id,
+        ApplicationRepository.organization_id == organization_id))).scalars().all()
+    if app.name != name or set(links) != set(repository_ids):
         raise HTTPException(409, "This request was already used for a different workspace.")
     return {"id": app.id, "name": app.name, "status": app.status.value}
 
@@ -101,16 +103,15 @@ async def workspace(payload: WorkspaceRequest, membership: OrganizationMembershi
     name = payload.name.strip()
     if not name:
         raise HTTPException(422, "Application name is required.")
-    identifier, repo_id = str(payload.request_id), str(payload.repository_id)
-    previous = await existing_workspace(db, identifier, membership.organization_id, name, repo_id)
+    identifier = str(payload.request_id)
+    if payload.repository_ids is not None and payload.repository_id is not None:
+        raise HTTPException(422, "Provide one repository selection list.")
+    repo_ids = [str(value) for value in (payload.repository_ids or ([payload.repository_id] if payload.repository_id else []))]
+    repos = await accessible_repositories(db, membership.organization_id, repo_ids)
+    previous = await existing_workspace(db, identifier, membership.organization_id, name, repo_ids)
     if previous:
         return previous
-    repo = (await db.execute(select(Repository).join(SourceControlConnection).where(
-        Repository.id == repo_id, Repository.organization_id == membership.organization_id, Repository.selected == True,
-        Repository.archived == False, SourceControlConnection.organization_id == membership.organization_id,
-        SourceControlConnection.status == ConnectionStatus.ACTIVE))).scalar_one_or_none()
-    if not repo:
-        raise HTTPException(404, "Choose an accessible repository from your connected GitHub account.")
+    repo = repos[0]
     user = await db.get(User, membership.user_id)
     app = Application(id=identifier, organization_id=membership.organization_id, name=name,
         slug=re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or identifier,
@@ -120,18 +121,19 @@ async def workspace(payload: WorkspaceRequest, membership: OrganizationMembershi
         status=AppStatus.READY_FOR_ARCHITECTURE, production_readiness_score="UNKNOWN",
         security_posture_score="UNKNOWN", compliance_readiness_score="UNKNOWN")
     db.add(app)
-    db.add(ApplicationRepository(organization_id=membership.organization_id, application_id=app.id,
-        repository_id=repo.id, branch=repo.default_branch, root_path="/", is_primary=True))
+    for index, source in enumerate(repos):
+        db.add(ApplicationRepository(organization_id=membership.organization_id, application_id=app.id,
+            repository_id=source.id, branch=source.default_branch, root_path="/", is_primary=index == 0))
     db.add(AuditEvent(organization_id=membership.organization_id, actor_id=membership.user_id,
         actor_email=user.email, action="APPLICATION_CREATED", entity_type="application", entity_id=app.id,
-        details={"name": app.name, "repository_id": repo.id, "source": "ONBOARDING"}))
+        details={"name": app.name, "repository_ids": repo_ids, "source": "ONBOARDING"}))
     try:
         # Insert the parent first, retaining a single outer transaction for link and audit.
         await db.flush([app])
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        previous = await existing_workspace(db, identifier, membership.organization_id, name, repo_id)
+        previous = await existing_workspace(db, identifier, membership.organization_id, name, repo_ids)
         if previous:
             return previous
         raise HTTPException(409, "The workspace could not be saved. Please try again.") from None

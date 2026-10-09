@@ -3,11 +3,14 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import delete
+from uuid import UUID
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.permissions import get_current_membership, require_roles
 from app.core.config import settings
-from app.models.auth import OrganizationMembership, MembershipRole
+from app.models.auth import OrganizationMembership, MembershipRole, User
 from app.models.application import Application, Environment, AppStatus
 from app.schemas.application import (
     ApplicationCreate,
@@ -20,6 +23,8 @@ from app.core.audit import log_audit_event
 from app.models.source_control import Repository, ApplicationRepository, SourceControlConnection, ConnectionStatus
 from app.models.audit import AuditEvent
 from app.models.source_archive import ApplicationSourceArchive
+from app.models.entities import Architecture
+from app.services.architecture.repository_links import accessible_repositories, linked_repositories, repository_summary
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
 
@@ -32,22 +37,66 @@ async def application_workspace(application_id: str, request: Request,
     application = (await db.execute(select(Application).where(Application.id == application_id, Application.organization_id == org_id))).scalar_one_or_none()
     if not application:
         raise HTTPException(404, "Application not found in your business.")
-    repository = (await db.execute(select(Repository).join(ApplicationRepository, ApplicationRepository.repository_id == Repository.id)
-        .join(SourceControlConnection).where(ApplicationRepository.application_id == application.id,
-            ApplicationRepository.organization_id == org_id, Repository.organization_id == org_id, Repository.selected == True,
-            SourceControlConnection.organization_id == org_id, SourceControlConnection.status == ConnectionStatus.ACTIVE).limit(1))).scalar_one_or_none()
+    repositories = await linked_repositories(db, application.id, org_id)
+    summaries = [repository_summary(repository) for repository in repositories]
     upload = (await db.execute(select(ApplicationSourceArchive.filename, ApplicationSourceArchive.sha256,
         ApplicationSourceArchive.size_bytes, ApplicationSourceArchive.file_count, ApplicationSourceArchive.created_at).where(
         ApplicationSourceArchive.application_id == application.id, ApplicationSourceArchive.organization_id == org_id))).mappings().one_or_none()
     activity = (await db.execute(select(AuditEvent).where(AuditEvent.organization_id == org_id,
         AuditEvent.entity_id == application.id).order_by(AuditEvent.created_at.desc()).limit(10))).scalars().all()
     return {"id": application.id, "name": application.name, "created_at": application.created_at,
-        "repository": {"full_name": repository.full_name, "url": repository.html_url,
-            "branch": repository.default_branch, "visibility": repository.visibility, "last_synced_at": repository.last_synced_at} if repository else None,
+        "repository": summaries[0] if summaries else None,
+        "repositories": summaries,
         "submitted_repository_url": application.repo_url,
         "source_archive": dict(upload) if upload else None,
         "assessments": {"architecture": "NOT_ASSESSED", "deployment": "NOT_VERIFIED", "security": "NOT_ASSESSED", "compliance": "NOT_ASSESSED"},
         "activity": [{"id": item.id, "action": item.action, "created_at": item.created_at} for item in activity]}
+
+class RepositorySelection(BaseModel):
+    repository_ids: list[UUID] = Field(max_length=6)
+    expected_repository_ids: list[UUID] = Field(max_length=6)
+
+@router.put("/{application_id}/repositories")
+async def set_repositories(application_id: str, payload: RepositorySelection, request: Request,
+    membership: OrganizationMembership = Depends(require_roles([MembershipRole.OWNER, MembershipRole.ADMIN])),
+    db: AsyncSession = Depends(get_db)):
+    org_id = membership.organization_id
+    if request.headers.get("X-Organization-ID") not in (None, org_id):
+        raise HTTPException(403, "You are not a member of this business.")
+    app = (await db.execute(select(Application).where(Application.id == application_id,
+        Application.organization_id == org_id).with_for_update())).scalar_one_or_none()
+    if not app: raise HTTPException(404, "Business asset not found.")
+    uploaded = (await db.execute(select(ApplicationSourceArchive.id).where(
+        ApplicationSourceArchive.application_id == app.id, ApplicationSourceArchive.organization_id == org_id))).scalar_one_or_none()
+    if uploaded: raise HTTPException(409, "This asset uses a code upload. Create a GitHub asset to connect repositories.")
+    identifiers = [str(value) for value in payload.repository_ids]
+    repos = await accessible_repositories(db, org_id, identifiers) if identifiers else []
+    previous = await linked_repositories(db, app.id, org_id)
+    if {item.id for item in previous} != {str(value) for value in payload.expected_repository_ids}:
+        raise HTTPException(409, "Repository links changed. Reload this business asset before saving.")
+    if {item.id for item in previous} == set(identifiers): return {"repositories": [repository_summary(item) for item in previous], "changed": False}
+    await db.execute(delete(ApplicationRepository).where(ApplicationRepository.application_id == app.id,
+        ApplicationRepository.organization_id == org_id))
+    for index, repo in enumerate(repos):
+        db.add(ApplicationRepository(organization_id=org_id, application_id=app.id,
+            repository_id=repo.id, branch=repo.default_branch, root_path="/", is_primary=index == 0))
+    app.repo_provider, app.repo_url, app.repo_branch = "github", repos[0].html_url if repos else None, repos[0].default_branch if repos else "main"
+    drafts = (await db.execute(select(Architecture).where(Architecture.application_id == app.id,
+        Architecture.organization_id == org_id))).scalars().all()
+    for draft in drafts:
+        if (draft.spec_json or {}).get("format") != "repository-draft-v1": continue
+        spec = {**draft.spec_json, "source_changed": True, "proposal": None}
+        if spec.get("design_approval"):
+            spec["superseded_design_approval"] = {**spec["design_approval"], "invalidated_reason": "SOURCE_LINKS_CHANGED"}
+        spec.pop("design_approval", None)
+        spec.pop("aws_references", None)
+        draft.spec_json = spec
+    user = await db.get(User, membership.user_id)
+    db.add(AuditEvent(organization_id=org_id, actor_id=membership.user_id, actor_email=user.email,
+        action="BUSINESS_ASSET_REPOSITORIES_UPDATED", entity_type="application", entity_id=app.id,
+        details={"previous_repository_ids": [item.id for item in previous], "repository_ids": identifiers}))
+    await db.commit()
+    return {"changed": True, "repositories": [{"id": repo.id, "full_name": repo.full_name} for repo in repos]}
 
 def slugify(text: str) -> str:
     text = text.lower().strip()
@@ -65,6 +114,13 @@ async def list_applications(
         .order_by(Application.created_at.desc())
     )
     apps = result.scalars().all()
+    source_rows = (await db.execute(select(ApplicationRepository.application_id, Repository.id, Repository.full_name,
+        Repository.default_branch).join(Repository, Repository.id == ApplicationRepository.repository_id).where(
+        ApplicationRepository.organization_id == membership.organization_id,
+        Repository.organization_id == membership.organization_id).order_by(ApplicationRepository.is_primary.desc(), Repository.full_name))).all()
+    sources = {}
+    for row in source_rows:
+        sources.setdefault(row.application_id, []).append({"id": row.id, "full_name": row.full_name, "branch": row.default_branch})
 
     response = []
     for app in apps:
@@ -82,6 +138,7 @@ async def list_applications(
             for e in app.environments
         ]
         response.append(ApplicationResponse(
+            repositories=sources.get(app.id, []),
             id=app.id,
             organization_id=app.organization_id,
             name=app.name,

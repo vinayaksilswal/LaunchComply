@@ -17,6 +17,7 @@ from app.models.source_control import Repository, ApplicationRepository, SourceC
 from app.services.architecture import workspace as service
 from app.services.architecture import knowledge
 from typing import Literal
+from app.services.architecture.repository_links import linked_repositories
 
 router = APIRouter(prefix="/architecture/workspace", tags=["Architecture Workspace"])
 
@@ -53,7 +54,7 @@ def design_is_approved(arch):
     approval = spec.get("design_approval") or {}
     graph = spec.get("graph")
     return bool(isinstance(approval, dict) and isinstance(graph, dict) and graph.get("nodes")
-        and not spec.get("proposal") and approval.get("architecture_id") == arch.id
+        and not spec.get("source_changed") and not spec.get("proposal") and approval.get("architecture_id") == arch.id
         and approval.get("version") == arch.version
         and approval.get("graph_fingerprint") == knowledge.fingerprint(graph)
         and approval.get("repository_commit") == (spec.get("evidence") or {}).get("commit"))
@@ -74,18 +75,13 @@ async def read(application_id: str, membership=Depends(member), db: AsyncSession
 @router.post("/{application_id}/analyze")
 async def analyze(application_id: str, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
-    repo = (await db.execute(select(Repository).options(selectinload(Repository.connection))
-        .join(ApplicationRepository, ApplicationRepository.repository_id == Repository.id)
-        .join(SourceControlConnection, SourceControlConnection.id == Repository.source_control_connection_id)
-        .where(ApplicationRepository.application_id == app.id, ApplicationRepository.organization_id == membership.organization_id,
-            Repository.organization_id == membership.organization_id, Repository.selected == True, Repository.archived == False,
-            SourceControlConnection.organization_id == membership.organization_id, SourceControlConnection.status == ConnectionStatus.ACTIVE).limit(1))).scalar_one_or_none()
+    repos = await linked_repositories(db, app.id, membership.organization_id)
     upload_evidence = (await db.execute(select(ApplicationSourceArchive.evidence_json).where(
         ApplicationSourceArchive.application_id == app.id, ApplicationSourceArchive.organization_id == membership.organization_id))).scalar_one_or_none()
-    if not repo and not upload_evidence: raise HTTPException(409, "Connect GitHub or upload code before analyzing this application.")
+    if not repos and not upload_evidence: raise HTTPException(409, "Connect GitHub or upload code before analyzing this business asset.")
     try:
         async with asyncio.timeout(90):
-            evidence = await service.inspect_repository(repo) if repo else upload_evidence
+            evidence = await service.inspect_repositories(repos) if repos else upload_evidence
     except TimeoutError:
         raise HTTPException(504, "Repository analysis timed out. No draft was saved. Please try again.") from None
     previous = await latest(db, app)
@@ -139,6 +135,8 @@ async def current(db, app, expected_id):
     arch = await latest(db, app)
     if not arch or arch.id != expected_id:
         raise HTTPException(409, "This architecture changed. Reload it before saving your changes.")
+    if arch.spec_json.get("source_changed"):
+        raise HTTPException(409, "Repository links changed. Refresh code findings before editing or approving this architecture.")
     return arch
 
 async def save_version(db, membership, app, arch, graph, action, updates=None):
@@ -202,6 +200,7 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
     spec["proposal"] = {"id": str(uuid.uuid4()), "graph": answer["graph"]}
     spec["last_ai_at"] = now.isoformat()
     if answer.get("ai_model"): spec["last_ai_model"] = answer["ai_model"]
+    if answer.get("agent_workflow"): spec["last_ai_workflow"] = answer["agent_workflow"]
     arch.spec_json = spec
     await audit(db, membership, app, "ARCHITECTURE_AI_PROPOSAL_CREATED")
     await db.commit()

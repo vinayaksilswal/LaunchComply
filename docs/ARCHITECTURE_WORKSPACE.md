@@ -29,3 +29,13 @@ Redeploy Render after changing the environment. A client key must not be committ
 Apply Alembic migration `ad0e4f5a6b7c` before enabling uploads. API startup initializes all ORM mappings and checks the schema. Configure the existing `ENCRYPTION_KEY` before uploads; preserve it to retain access to stored archives.
 
 Design approval is not deployment approval. AWS connection, a costed infrastructure plan, payment and deployment execution are separate controls. This change does not implement an AWS provisioning worker or certify production readiness.
+
+## Multiple source repositories
+
+My business assets supports one to six authorized GitHub repositories at creation. On the Source code tab, owners/admins can add repositories together or remove links, including the final link. Removing a link never deletes GitHub code. Changes invalidate design approval and require a new source refresh. Saves use an expected link set to reject stale concurrent edits, with business-scoped authorization and audit records.
+
+Analysis pins every source commit, namespaces file/module identities by repository, and samples up to 40 source files across repository roots and languages. Separate source workloads retain their identities; cross-repository runtime interactions remain unverified until confirmed. Public ingress and supporting services are shared planning candidates. The component finder brings a selected resource into view for complex diagrams.
+
+## Architecture agent
+
+The assistant runs a LangGraph StateGraph with source-context preparation, an asynchronous LangChain RunnableLambda provider stage, and PydanticOutputParser graph validation. LangChain ChatPromptTemplate constructs provider messages; existing free-only OpenRouter failover remains bounded. Missing requirements and source snapshots are recorded in a small workflow receipt. Shared checkpointers, external tracing, code execution and AWS mutation tools are disabled. Durable conversations, proposals and customer approvals remain in the business-scoped database. Schema validation does not establish deployability or cloud readiness. No new agent credential is required beyond the configured model provider.

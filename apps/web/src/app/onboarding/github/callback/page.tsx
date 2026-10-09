@@ -27,7 +27,11 @@ export default function GitHubCallbackPage() {
       try {
         await waitForApiReady(API_BASE_URL);
         const result = await apiClient<{ status: string; installation_url?: string }>("/source-control/github/complete", { method: "POST", body: JSON.stringify({ code: query.get("code"), state: query.get("state") }) });
-        if (result.status === "CONNECTED") router.replace("/onboarding?github=connected");
+        if (result.status === "CONNECTED") {
+          const asset = sessionStorage.getItem("lc_github_return_asset");
+          sessionStorage.removeItem("lc_github_return_asset");
+          router.replace(asset && /^[a-f0-9-]{36}$/i.test(asset) ? `/dashboard/applications/${asset}?source=connected` : "/onboarding?github=connected");
+        }
         else if (result.status === "INSTALLATION_REQUIRED" && result.installation_url) {
           const url = new URL(result.installation_url);
           if (url.origin !== "https://github.com" || !url.pathname.startsWith("/apps/")) throw new Error("Unable to open GitHub App installation.");

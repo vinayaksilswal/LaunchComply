@@ -59,7 +59,7 @@ export const GUIDES: Record<
       "Separate what the code indicates from the cloud choices you want to make.",
     steps: [
       {
-        title: "Open App design",
+        title: "Open Business architecture",
         text: "Choose an application with an authorized repository. Analyze its dependency manifests when repository analysis is available.",
       },
       {

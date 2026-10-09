@@ -27,16 +27,16 @@ import { useAccount } from "@/components/auth/AccountProvider";
 
 export const MAIN_NAV = [
   { name: "Home", href: "/dashboard", icon: LayoutDashboard },
-  { name: "My apps", href: "/dashboard/applications", icon: Boxes },
-  { name: "App design", href: "/dashboard/architecture", icon: Network },
+  { name: "My business assets", href: "/dashboard/applications", icon: Boxes },
+  { name: "Business architecture", href: "/dashboard/architecture", icon: Network },
   { name: "Deployments", href: "/dashboard/deployments", icon: Rocket },
   { name: "Service requests", href: "/dashboard/services", icon: LifeBuoy },
 ];
 const groups = [
   {
-    name: "Monitor your apps",
+    name: "Monitor your assets",
     items: [
-      { name: "App health", href: "/dashboard/operations", icon: Activity },
+      { name: "Service health", href: "/dashboard/operations", icon: Activity },
       { name: "Activity log", href: "/dashboard/logs", icon: Activity },
       { name: "Incidents", href: "/dashboard/incidents", icon: AlertTriangle },
       { name: "Backups", href: "/dashboard/backups", icon: DatabaseBackup },

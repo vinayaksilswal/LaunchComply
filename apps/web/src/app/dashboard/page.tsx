@@ -62,7 +62,7 @@ export default function DashboardOverviewPage() {
   }, [organization, accountLoading, refresh]);
   const metrics = [
     {
-      label: "Applications",
+      label: "Business assets",
       value: data?.application_count,
       icon: Boxes,
       hint: "Workspaces in your business",

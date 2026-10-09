@@ -1,5 +1,5 @@
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 
 class EnvironmentSchema(BaseModel):
@@ -22,6 +22,7 @@ class ApplicationCreate(BaseModel):
     database_engine: str = "Not analyzed"
 
 class ApplicationResponse(BaseModel):
+    repositories: List[Dict[str, str]] = Field(default_factory=list)
     repo_provider: Optional[str] = None
     id: str
     organization_id: str

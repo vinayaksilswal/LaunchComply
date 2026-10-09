@@ -9,6 +9,30 @@ MAX_SOURCE_FILES = 40
 MAX_SOURCE_BYTES = 100_000
 EXCLUDED = {"node_modules", "vendor", ".venv", "venv", ".git", ".next", "dist", "build", "__pycache__"}
 
+def source_sample(entries, manifest_paths, limit=MAX_SOURCE_FILES):
+    """Round-robin manifest roots and languages; prefer entry points over test scaffolding."""
+    roots = sorted({posixpath.dirname(path) for path in manifest_paths}, key=len, reverse=True)
+    groups = {}
+    for item in entries:
+        path = item["path"]
+        if not eligible(path) or item.get("size", 0) > MAX_SOURCE_BYTES: continue
+        root = next((root for root in roots if not root or path.startswith(root + "/")), "")
+        language = "python" if path.endswith(".py") else "web"
+        groups.setdefault((root, language), []).append(item)
+    def priority(item):
+        path = item["path"]
+        name = posixpath.basename(path)
+        scaffold = any(part in {"tests", "test", "alembic", "migrations", "fixtures"} for part in path.split("/")) or name.startswith("test_") or ".test." in name or ".spec." in name
+        entry = name in {"main.py", "app.py", "server.py", "main.ts", "index.ts", "server.ts", "App.tsx", "page.tsx", "layout.tsx", "api.ts"}
+        return (scaffold, not entry, len(path.split("/")), path)
+    ordered = [sorted(group, key=priority) for _, group in sorted(groups.items())]
+    sample = []
+    while ordered and len(sample) < limit:
+        for group in ordered:
+            if group and len(sample) < limit: sample.append(group.pop(0))
+        ordered = [group for group in ordered if group]
+    return sample
+
 def eligible(path):
     return path.endswith(SOURCE_SUFFIXES) and not any(part in EXCLUDED for part in path.split("/")) and not path.endswith(".d.ts")
 

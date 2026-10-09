@@ -56,6 +56,7 @@ interface Graph {
   edges: Edge[];
 }
 interface Evidence {
+  repositories?: { id: string; full_name: string; branch: string; commit: string }[];
   modules?: { id: string; path: string; language: string; status: string; imports: string[]; entry_points: string[] }[];
   module_edges?: Edge[];
   source_coverage?: { inspected: number; candidates: number; limit: number };
@@ -72,6 +73,8 @@ interface Evidence {
   }[];
 }
 interface Draft {
+  last_ai_workflow?: { framework: string; stages: string[]; missing_requirements: string[]; status: string };
+  source_changed?: boolean;
   requirements?: DeploymentRequirements;
   id: string;
   version: string;
@@ -108,7 +111,7 @@ export function ArchitectureCanvas() {
     error: accountError,
   } = useAccount();
   const query = useSearchParams();
-  const [apps, setApps] = useState<{ id: string; name: string }[]>([]);
+  const [apps, setApps] = useState<{ id: string; name: string; repositories?: { full_name: string }[] }[]>([]);
   const [appId, setAppId] = useState("");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [graph, setGraph] = useState<Graph>({ nodes: [], edges: [] });
@@ -139,9 +142,10 @@ export function ArchitectureCanvas() {
   } | null>(null);
   const draft = workspace?.architecture;
   const draftId = draft?.id;
-  const canEdit = ["OWNER", "ADMIN"].includes(
+  const canRefresh = ["OWNER", "ADMIN"].includes(
     organization?.role.toUpperCase() || "",
   );
+  const canEdit = canRefresh && !draft?.source_changed;
   const adopt = (result: Draft) => {
     setWorkspace((current) =>
       current ? { ...current, architecture: result } : current,
@@ -338,6 +342,7 @@ export function ArchitectureCanvas() {
   };
   return (
     <div className="bg-white h-full min-h-0 overflow-hidden flex flex-col text-slate-900">
+      {draft?.source_changed && <div role="alert" className="shrink-0 px-5 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-900">Repository links changed. This diagram shows previous sources. <button disabled={!!busy || !canRefresh} onClick={() => operation("analyze", "analyze")} className="font-semibold underline">Refresh code findings</button> before making or approving changes.</div>}
       <header className="px-5 py-3 shrink-0 border-b border-slate-200 flex flex-wrap gap-4 items-center justify-between">
         <div className="flex gap-3 items-center">
           <span className="p-2.5 rounded-xl bg-cyan-50 text-cyan-700">
@@ -345,17 +350,17 @@ export function ArchitectureCanvas() {
           </span>
           <div>
             <h1 className="text-xl font-bold tracking-tight">
-              Architecture workspace
+              Business architecture
             </h1>
             <p className="text-xs text-slate-500 mt-1">
-              Understand your application. Shape your cloud architecture.
+              Understand your business assets. Shape your cloud architecture.
             </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {draft && <button disabled={!!busy || dirty || !canEdit} onClick={() => { setRequirementsVisible(value => !value); setChatVisible(true); }} className="rounded-lg border px-3 py-2 text-xs font-semibold">Traffic & availability</button>}
           <select
-            aria-label="Architecture application"
+            aria-label="Business asset for architecture"
             disabled={loading || !!busy || dirty}
             value={appId}
             onChange={(event) => setAppId(event.target.value)}
@@ -366,7 +371,7 @@ export function ArchitectureCanvas() {
             </option>
             {apps.map((app) => (
               <option key={app.id} value={app.id}>
-                {app.name}
+                {app.name}{app.repositories?.length ? ` · ${app.repositories[0].full_name.split("/").pop()}` : ""}
               </option>
             ))}
           </select>
@@ -410,7 +415,7 @@ export function ArchitectureCanvas() {
         <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
           {[
             { id: "cloud", label: "Cloud deployment design" },
-            { id: "code", label: "Application code map" },
+            { id: "code", label: "Source code architecture" },
             { id: "inventory", label: "Services & sizing" },
           ].map((tab) => (
             <button
@@ -427,7 +432,7 @@ export function ArchitectureCanvas() {
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs">
-          {draft && <button disabled={!!busy || dirty || !canEdit} onClick={() => operation("analyze", "analyze")} className="font-semibold text-cyan-700 disabled:opacity-40">{busy === "analyze" ? "Inspecting source…" : "Refresh code findings"}</button>}
+          {draft && <button disabled={!!busy || dirty || !canRefresh} onClick={() => operation("analyze", "analyze")} className="font-semibold text-cyan-700 disabled:opacity-40">{busy === "analyze" ? "Inspecting source…" : "Refresh code findings"}</button>}
           <span className="text-amber-700 bg-amber-50 rounded-full px-3 py-1.5 border border-amber-100">
             {dirty
               ? "Unsaved changes"
@@ -466,6 +471,16 @@ export function ArchitectureCanvas() {
               ))}
             </div>
             <div className="flex flex-wrap gap-1 items-center">
+              {!!shown.nodes.length && view !== "inventory" && <select aria-label="Find architecture component" value={selected || ""} onChange={event => {
+                const id = event.target.value; setSelected(id || null);
+                if (!id) { fit(); return; }
+                setChatVisible(true);
+                const instance = production ? productionLayout(shown, draft!.requirements!).instances.find(item => item.node.id === id) : shown.nodes.find(item => item.id === id);
+                if (instance && canvas.current) {
+                  const container = canvas.current; setZoom(0.95);
+                  requestAnimationFrame(() => container.scrollTo({ left: Math.max(0, instance.x * 0.95 - container.clientWidth / 2 + 90), top: Math.max(0, instance.y * 0.95 - container.clientHeight / 2 + 60), behavior: "smooth" }));
+                }
+              }} className="mr-2 max-w-48 border rounded-lg p-1.5 text-xs bg-white"><option value="">Find a component</option>{shown.nodes.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select>}
               {view === "cloud" && draft?.requirements && <button onClick={() => setNetworkView(value => !value)} className="mr-2 rounded-lg border px-2 py-1.5 text-xs font-semibold">{networkView ? "Edit logical design" : "Network diagram"}</button>}
               <button
                 disabled={
@@ -992,10 +1007,10 @@ export function ArchitectureCanvas() {
                     <GitBranch className="w-3.5 h-3.5" />
                     Source evidence · {draft.evidence.files.length} manifests
                   </summary>
-                  <p className="text-slate-500 mt-3 break-all">
+                  {draft.evidence.repositories?.length ? <ul className="mt-3 space-y-2">{draft.evidence.repositories.map(repo => <li key={repo.id} className="break-all text-slate-500">{repo.full_name} · {repo.branch} @ {repo.commit.slice(0, 8)}</li>)}</ul> : <p className="text-slate-500 mt-3 break-all">
                     {draft.evidence.repository} · {draft.evidence.branch} @{" "}
                     {draft.evidence.commit.slice(0, 8)}
-                  </p>
+                  </p>}
                   <p className="text-slate-500 leading-5 mt-2">
                     {draft.evidence.scope}
                   </p>
@@ -1016,6 +1031,7 @@ export function ArchitectureCanvas() {
                   </ul>
                 </details>
               )}
+              {draft?.last_ai_workflow && <p className="text-xs text-slate-500 border border-slate-200 rounded-lg p-3">Source context reviewed · proposal schema checked · your review required. {draft.last_ai_workflow.missing_requirements.length > 0 && "Traffic and availability details are still needed."}</p>}
               {!draft?.messages.length && (
                 <div className="pt-2">
                   <p className="text-sm text-slate-700 leading-6">

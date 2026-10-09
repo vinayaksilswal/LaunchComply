@@ -131,7 +131,7 @@ export const ProductionDiagram = forwardRef<SVGSVGElement, {
       const active = selected === link.from.node.id || selected === link.to.node.id;
       return <g key={i} opacity={selected && !active ? 0.22 : 1}><title>{link.from.node.label} → {link.to.node.label}: {link.label}</title>
         <path d={horizontal ? `M${startX} ${startY} H${corridor} V${endY} H${endX}` : `M${startX} ${startY} V${(startY + endY) / 2} H${endX} V${endY}`} fill="none" stroke={active ? "#0891b2" : "#7b8794"} strokeWidth={active ? 2 : 1.3} strokeDasharray={link.replication ? "5 4" : undefined} markerEnd={`url(#${id}-arrow)`} />
-        {link.replication && <><rect x={corridor - 95} y={startY - 19} width="190" height="18" fill="white" /><text x={corridor} y={startY - 6} textAnchor="middle" fontSize="10" fill="#64748b">{link.label}</text></>}
+        {(link.replication || (selected && active)) && <><rect x={corridor - 95} y={(startY + endY) / 2 - 19} width="190" height="18" fill="white" /><text x={corridor} y={(startY + endY) / 2 - 6} textAnchor="middle" fontSize="10" fill="#64748b">{truncate(link.label, 38)}</text></>}
       </g>;
     })}
     {instances.map(instance => {
