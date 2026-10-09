@@ -260,11 +260,11 @@ async def refine(graph, evidence, message, history, aws_references=None, require
     try:
         return await run(graph, evidence, message, history, aws_references, requirements)
     except TimeoutError:
-        raise HTTPException(504, "The architecture assistant timed out. Your saved design is unchanged.") from None
+        raise HTTPException(504, {"code": "ARCHITECTURE_AI_TIMEOUT", "message": "The architecture assistant timed out. Your saved design is unchanged."}) from None
 
 async def provider_refine(graph, evidence, message, history, aws_references=None, requirements=None, planning_context=None):
     if not ai_available():
-        raise HTTPException(503, "AI chat is not configured. Your administrator must enable the architecture AI provider.")
+        raise HTTPException(503, {"code": "ARCHITECTURE_AI_NOT_CONFIGURED", "message": "AI chat is not configured."})
     schema = AIAnswer.model_json_schema()
     instructions = (
         "You are an architecture design assistant. Return JSON with message and graph. All cloud nodes are PROPOSALS, never deployed or verified. "
@@ -291,22 +291,22 @@ async def provider_refine(graph, evidence, message, history, aws_references=None
                         "instructions": instructions, "input": context,
                         "text": {"format": {"type": "json_schema", "name": "architecture_proposal", "strict": True, "schema": schema}}})
             if response.status_code != 200:
-                raise HTTPException(502, "AI chat is unavailable. Check the provider key, credits and structured-output model. Your diagram has not changed.")
+                raise HTTPException(502, {"code": "ARCHITECTURE_AI_UNAVAILABLE", "message": "The model provider is unavailable. Your saved design is unchanged."})
             payload = response.json()
             if payload.get("status") != "completed": raise ValueError("Incomplete answer")
             text = "".join(part.get("text", "") for output in payload.get("output", []) for part in output.get("content", []) if part.get("type") == "output_text")
             return AIAnswer.model_validate_json(text).model_dump()
     except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
-        raise HTTPException(502, "AI returned an incomplete proposal. Your diagram has not changed. Please try again.") from None
+        raise HTTPException(502, {"code": "ARCHITECTURE_AI_INVALID_PROPOSAL", "message": "AI returned an incomplete proposal. Your saved design is unchanged."}) from None
 
 
 async def openrouter_proposal(client, instructions, context, schema):
     from app.services.architecture.agent import provider_messages
     models = list(dict.fromkeys(value.strip() for value in (settings.OPENROUTER_ARCHITECTURE_MODELS or settings.OPENROUTER_ARCHITECTURE_MODEL).split(",") if value.strip()))[:6]
     if not models or any(not re.fullmatch(r"[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.:-]+", value) for value in models):
-        raise HTTPException(503, "Configure valid architecture model IDs in the backend environment.")
+        raise HTTPException(503, {"code": "ARCHITECTURE_AI_MODEL_CONFIG", "message": "Configure valid architecture model IDs in the backend environment."})
     if settings.OPENROUTER_FREE_MODELS_ONLY and any(not value.endswith(":free") for value in models):
-        raise HTTPException(503, "Free-only routing requires every configured model to end with :free.")
+        raise HTTPException(503, {"code": "ARCHITECTURE_AI_MODEL_CONFIG", "message": "Free-only routing requires free model IDs."})
     instructions += " Return one JSON object only, without Markdown fences. Match this schema exactly: " + json.dumps(schema)
     provider = {"data_collection": "deny"}
     if settings.OPENROUTER_FREE_MODELS_ONLY: provider["max_price"] = {"prompt": 0, "completion": 0}
@@ -323,7 +323,7 @@ async def openrouter_proposal(client, instructions, context, schema):
                         json={"models": models, "max_tokens": 16000, "stream": False, "provider": provider,
                             "messages": provider_messages(instructions, context)})
                     if response.status_code in (401, 403):
-                        raise HTTPException(503, "OpenRouter authorization failed. Ask your administrator to check the backend API key.")
+                        raise HTTPException(503, {"code": "ARCHITECTURE_AI_AUTH_FAILED", "message": "OpenRouter authorization failed."})
                     if response.status_code == 200:
                         payload = response.json()
                         used = payload.get("model", used)
@@ -340,4 +340,4 @@ async def openrouter_proposal(client, instructions, context, schema):
                 models = [model for model in models if model != used] if used in models else models[1:]
     except TimeoutError:
         pass
-    raise HTTPException(502, "The configured free models are busy or returned invalid proposals. Your saved design is unchanged. Try again shortly.")
+    raise HTTPException(502, {"code": "ARCHITECTURE_AI_UNAVAILABLE", "message": "The configured free models are busy or returned invalid proposals. Your saved design is unchanged."})

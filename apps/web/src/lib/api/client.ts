@@ -3,6 +3,17 @@
  * Robust, typed, and resilient HTTP client for all LaunchComply operations.
  */
 
+// Only known service codes receive specific messages; raw server errors stay private.
+const serviceMessages: Record<string, string> = {
+  GITHUB_APP_NOT_CONFIGURED: "GitHub connection needs to be configured by the platform administrator. Contact workspace support to continue.",
+  ARCHITECTURE_AI_NOT_CONFIGURED: "The architecture assistant is not enabled. Ask your platform administrator to configure it.",
+  ARCHITECTURE_AI_MODEL_CONFIG: "The architecture model configuration needs attention. Ask your platform administrator to check the configured free models.",
+  ARCHITECTURE_AI_AUTH_FAILED: "The AI provider could not authorize this request. Ask your platform administrator to check its backend credentials.",
+  ARCHITECTURE_AI_UNAVAILABLE: "The configured models are unavailable or could not return a valid proposal. Your saved design is unchanged. Try again shortly.",
+  ARCHITECTURE_AI_INVALID_PROPOSAL: "The assistant returned an incomplete proposal. Your saved design is unchanged. Please try again.",
+  ARCHITECTURE_AI_TIMEOUT: "The architecture assistant took too long. Your saved design is unchanged. Please try again.",
+};
+
 export interface ApiErrorDetails {
   code: string;
   message: string;
@@ -172,9 +183,7 @@ export async function apiClient<T>(
           ? detail.map((item: { msg?: string }) => item.msg).filter(Boolean).join("; ")
           : typeof detail === "string" ? detail : undefined;
         const message = response.status >= 500
-          ? code === "GITHUB_APP_NOT_CONFIGURED"
-            ? "GitHub connection needs to be configured by the platform administrator. Contact workspace support to continue."
-            : "The service is temporarily unavailable. Please try again shortly."
+          ? serviceMessages[code] || "The service is temporarily unavailable. Please try again shortly."
           :
           errorPayload?.error?.message ||
           validationMessage ||

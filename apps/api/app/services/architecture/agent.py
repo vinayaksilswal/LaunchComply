@@ -2,7 +2,8 @@
 import asyncio
 import json
 from functools import lru_cache
-from typing import TypedDict, Any
+from typing import Any
+from typing_extensions import TypedDict
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda
 from langchain_core.output_parsers import PydanticOutputParser
