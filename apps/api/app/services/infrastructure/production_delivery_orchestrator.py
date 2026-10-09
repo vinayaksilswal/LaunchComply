@@ -234,6 +234,11 @@ class ProductionDeliveryOrchestrator:
         Executes controlled production infrastructure apply with concurrency locking (§15, §17).
         Enforces CUSTOMER_PRODUCTION mode requirement (§8, §16).
         """
+        from app.core.config import settings
+        from fastapi import HTTPException
+        if not (settings.DEMO_MODE and settings.ENVIRONMENT in {"development", "test", "demo"}):
+            raise HTTPException(503, {"code": "AUTOMATIC_DEPLOYMENT_UNAVAILABLE",
+                "message": "A real provisioning worker is unavailable. No deployment or cloud resource was created."})
         lock_key = f"{organization_id}:{environment}"
         if lock_key in cls._active_locks:
             return {

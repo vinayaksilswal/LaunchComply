@@ -1,7 +1,7 @@
 """Phase 8 Platform Admin Router (Isolated from Tenant Roles)."""
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -19,7 +19,19 @@ from app.services.commercial.launch_readiness_service import launch_readiness_se
 from app.services.commercial.support_service import support_service
 
 
-router = APIRouter(prefix="/platform-admin", tags=["Platform Admin"])
+async def legacy_delivery_boundary(request: Request):
+    from app.core.config import settings
+    marker = "/platform-admin/delivery/"
+    path = request.url.path
+    if marker not in path or (request.method == "GET" and path.endswith(marker + "board")):
+        return
+    if settings.DEMO_MODE and settings.ENVIRONMENT in {"development", "test", "demo"}:
+        return
+    raise HTTPException(503, {"code": "LEGACY_DELIVERY_UNAVAILABLE",
+        "message": "Legacy delivery verification is unavailable in real-business mode. Use the service queue and observed system operations; no cloud or payment outcome was recorded."})
+
+
+router = APIRouter(prefix="/platform-admin", tags=["Platform Admin"], dependencies=[Depends(legacy_delivery_boundary)])
 
 
 @router.get("/overview")
