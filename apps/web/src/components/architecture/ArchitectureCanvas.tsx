@@ -409,16 +409,17 @@ export function ArchitectureCanvas() {
       {(error || accountError) && (
         <div
           role="alert"
-          className="m-4 p-4 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-sm"
+          className="shrink-0 flex flex-wrap items-center gap-2 px-5 py-2 bg-rose-50 border-b border-rose-200 text-rose-800 text-xs"
         >
           {error || accountError}
           <button
             disabled={!!busy || dirty}
             onClick={() => setReload((n) => n + 1)}
-            className="mt-2 block text-xs font-semibold underline disabled:opacity-40"
+            className="text-xs font-semibold underline disabled:opacity-40"
           >
             Retry workspace connection
           </button>
+          {error && !accountError && <button aria-label="Dismiss architecture error" onClick={() => setError(null)} className="ml-auto p-1"><X className="w-4 h-4" /></button>}
         </div>
       )}
       <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-2 shrink-0 border-b border-slate-200">
@@ -511,7 +512,7 @@ export function ArchitectureCanvas() {
               </button>
               <button
                 disabled={!draft || view === "inventory"}
-                onClick={() => downloadArchitectureSvg(diagram.current)}
+                onClick={() => downloadArchitectureSvg(diagram.current, view === "code" ? "source-code-findings.svg" : "cloud-architecture-proposal.svg")}
                 aria-label="Download diagram SVG"
                 className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-40"
               >

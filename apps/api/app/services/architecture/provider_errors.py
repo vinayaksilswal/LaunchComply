@@ -10,7 +10,10 @@ class AIProviderError(HTTPException):
 
 def failure_kind(status, payload):
     error = payload.get("error", {}) if isinstance(payload, dict) else {}
-    message = str(error.get("message", "")).lower() if isinstance(error, dict) else ""
+    message = str(error.get("message", "")).lower() if isinstance(error, dict) else str(error).lower()
+    if isinstance(payload, dict):
+        for field in ("message", "detail"):
+            if isinstance(payload.get(field), str): message += " " + payload[field].lower()
     metadata = error.get("metadata", {}) if isinstance(error, dict) else {}
     raw = metadata.get("raw", "") if isinstance(metadata, dict) else ""
     # Only categorical matches survive; upstream text never leaves this function.
@@ -19,9 +22,10 @@ def failure_kind(status, payload):
             nested = json.loads(raw)
             inner = nested.get("error", nested) if isinstance(nested, dict) else {}
             if isinstance(inner, dict): message += " " + str(inner.get("message", "")).lower()
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, RecursionError):
             pass
     if status in {400, 422}:
+        if "model" in message and any(word in message for word in ("required", "must specify", "missing")): return "REQUIRED_MODEL"
         if "model" in message and any(word in message for word in ("invalid", "unknown", "not found", "does not exist")): return "INVALID_MODEL"
         if any(word in message for word in ("max_tokens", "max_output_tokens", "max_completion_tokens", "output budget")): return "OUTPUT_BUDGET"
         if "models" in message and any(word in message for word in ("limit", "maximum", "at most", "too many")): return "ROUTING_LIMIT"
@@ -38,6 +42,7 @@ def failure_code(kind):
         "RATE_LIMIT": "ARCHITECTURE_AI_RATE_LIMIT", "TIMEOUT": "ARCHITECTURE_AI_TIMEOUT",
         "CONTEXT_LIMIT": "ARCHITECTURE_AI_CONTEXT_LIMIT", "REQUEST_REJECTED": "ARCHITECTURE_AI_REQUEST_REJECTED",
         "INVALID_MODEL": "ARCHITECTURE_AI_MODEL_CONFIG", "OUTPUT_BUDGET": "ARCHITECTURE_AI_REQUEST_REJECTED",
+        "REQUIRED_MODEL": "ARCHITECTURE_AI_REQUEST_REJECTED",
         "ROUTING_LIMIT": "ARCHITECTURE_AI_REQUEST_REJECTED", "ROUTING_PARAMETER": "ARCHITECTURE_AI_REQUEST_REJECTED",
         "INVALID_RESPONSE": "ARCHITECTURE_AI_INVALID_PROPOSAL", "TRUNCATED_RESPONSE": "ARCHITECTURE_AI_INVALID_PROPOSAL"}.get(kind, "ARCHITECTURE_AI_UNAVAILABLE")
 

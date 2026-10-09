@@ -324,7 +324,7 @@ async def openrouter_proposal(client, instructions, context, schema):
                 try:
                     response = await client.post("https://openrouter.ai/api/v1/chat/completions", timeout=28,
                         headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-                        json={"models": models, "max_tokens": 16000, "stream": False, "provider": provider,
+                        json={"model": models[0], "models": models, "max_tokens": 16000, "stream": False, "provider": provider,
                             "messages": provider_messages(instructions, context)})
                     record["http_status"] = response.status_code
                     payload = response_payload(response)

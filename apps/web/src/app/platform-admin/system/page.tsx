@@ -18,6 +18,7 @@ const remedies: Record<string, string> = {
   AUTH_FAILED: "Check backend provider credentials privately in Render.",
   REQUEST_REJECTED: "Review configured model IDs and provider routing parameters.",
   INVALID_MODEL: "An upstream response rejected a model ID. Compare the configured IDs with the provider catalog.",
+  REQUIRED_MODEL: "The upstream service requires an explicit primary model. Check the deployed routing request contract.",
   OUTPUT_BUDGET: "The provider rejected the output token budget. Review the model's completion limit.",
   ROUTING_LIMIT: "The provider rejected the number of fallback models. Reduce the per-request routing list.",
   ROUTING_PARAMETER: "The provider rejected a routing field. Review request parameters while preserving the privacy and free-only policies.",

@@ -102,7 +102,7 @@ function lines(value: string, limit: number, maxLines = 2) {
   return chunks;
 }
 
-export function downloadArchitectureSvg(svg: SVGSVGElement | null) {
+export function downloadArchitectureSvg(svg: SVGSVGElement | null, filename = "cloud-architecture-proposal.svg") {
   if (!svg) return;
   const copy = svg.cloneNode(true) as SVGSVGElement;
   copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
@@ -116,7 +116,7 @@ export function downloadArchitectureSvg(svg: SVGSVGElement | null) {
   );
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = "cloud-architecture-proposal.svg";
+  anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
 }
@@ -177,9 +177,7 @@ export const CloudDiagram = forwardRef<
           : "Cloud architecture proposal — not deployed"}
       </title>
       <desc>
-        Arrow direction shows proposed data flow. Select a component to review
-        its details. Layer placement does not verify network isolation or
-        deployment.
+        {code ? "Arrows show resolved static imports in the inspected source sample. Groups describe file organization, not runtime connections. Select a group or file to review source paths." : "Arrow direction shows proposed data flow. Select a component to review its details. Layer placement does not verify network isolation or deployment."}
       </desc>
       <defs>
         <marker
