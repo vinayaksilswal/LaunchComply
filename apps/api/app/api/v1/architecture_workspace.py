@@ -14,6 +14,7 @@ from app.models.entities import Architecture
 from app.models.audit import AuditEvent
 from app.models.source_control import Repository, ApplicationRepository, SourceControlConnection, ConnectionStatus
 from app.services.architecture import workspace as service
+from app.services.architecture import knowledge
 
 router = APIRouter(prefix="/architecture/workspace", tags=["Architecture Workspace"])
 
@@ -53,7 +54,8 @@ async def read(application_id: str, membership=Depends(member), db: AsyncSession
     app = await application(db, application_id, membership)
     arch = await latest(db, app)
     return {"application_id": app.id, "application_name": app.name, "architecture": output(arch),
-        "capabilities": {"repository_analysis": service.github_available(), "ai_chat": service.ai_available()}}
+        "capabilities": {"repository_analysis": service.github_available(), "ai_chat": service.ai_available(),
+                         "aws_references": knowledge.available()}}
 
 @router.post("/{application_id}/analyze")
 async def analyze(application_id: str, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
@@ -94,6 +96,9 @@ class Apply(BaseModel):
     expected_id: str = Field(max_length=36)
     proposal_id: str = Field(max_length=36)
 
+class ApplyReferences(BaseModel):
+    expected_id: str = Field(max_length=36)
+
 async def current(db, app, expected_id):
     arch = await latest(db, app)
     if not arch or arch.id != expected_id:
@@ -102,6 +107,10 @@ async def current(db, app, expected_id):
 
 async def save_version(db, membership, app, arch, graph, action):
     spec = {**arch.spec_json, "revision": arch.spec_json["revision"] + 1, "graph": graph, "proposal": None}
+    # Approval belongs to one saved version; editing never authorizes deployment.
+    spec.pop("design_approval", None)
+    if graph != arch.spec_json["graph"]:
+        spec.pop("aws_references", None)
     record = Architecture(application_id=app.id, organization_id=membership.organization_id,
         name=app.name, version=f"v{spec['revision']}", status="DRAFT", spec_json=spec)
     db.add(record)
@@ -116,6 +125,29 @@ async def save(application_id: str, payload: Save, membership=Depends(editor), d
     arch = await current(db, app, payload.expected_id)
     return await save_version(db, membership, app, arch, payload.graph.model_dump(), "ARCHITECTURE_DRAFT_SAVED")
 
+@router.post("/{application_id}/approve-design")
+async def approve_design(application_id: str, payload: ApplyReferences,
+                         membership=Depends(editor), db: AsyncSession = Depends(get_db)):
+    app = await application(db, application_id, membership, lock=True)
+    arch = await current(db, app, payload.expected_id)
+    if not arch.spec_json["graph"]["nodes"]:
+        raise HTTPException(409, "Add and save a cloud design before approving it.")
+    if arch.spec_json.get("proposal"):
+        raise HTTPException(409, "Apply and save the pending proposal before approving this design.")
+    if arch.spec_json.get("design_approval"):
+        return output(arch)
+    arch.spec_json = {**arch.spec_json, "design_approval": {
+        "architecture_id": arch.id, "version": arch.version,
+        "graph_fingerprint": knowledge.fingerprint(arch.spec_json["graph"]),
+        "repository_commit": arch.spec_json["evidence"]["commit"],
+        "approved_by": membership.user_id,
+        "approved_at": datetime.now(timezone.utc).isoformat(),
+        "scope": "Saved design only. AWS access, infrastructure plan and deployment approval are still required.",
+    }}
+    await audit(db, membership, app, "ARCHITECTURE_DESIGN_APPROVED")
+    await db.commit()
+    return output(arch)
+
 @router.post("/{application_id}/chat")
 async def chat(application_id: str, payload: Chat, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
@@ -124,12 +156,31 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
     now = datetime.now(timezone.utc)
     if spec.get("last_ai_at") and (now - datetime.fromisoformat(spec["last_ai_at"])).total_seconds() < 5:
         raise HTTPException(429, "Please wait a few seconds before sending another request.")
-    answer = await service.refine(spec["graph"], spec["evidence"], payload.message, spec["messages"])
+    references = spec.get("aws_references")
+    if references and references.get("graph_fingerprint") != knowledge.fingerprint(spec["graph"]):
+        references = None
+    answer = await service.refine(spec["graph"], spec["evidence"], payload.message, spec["messages"], references)
     spec["messages"] = (spec["messages"] + [{"role": "user", "content": payload.message}, {"role": "assistant", "content": answer["message"]}])[-20:]
     spec["proposal"] = {"id": str(uuid.uuid4()), "graph": answer["graph"]}
     spec["last_ai_at"] = now.isoformat()
     arch.spec_json = spec
     await audit(db, membership, app, "ARCHITECTURE_AI_PROPOSAL_CREATED")
+    await db.commit()
+    return output(arch)
+
+@router.post("/{application_id}/references")
+async def find_references(application_id: str, payload: ApplyReferences,
+                          membership=Depends(editor), db: AsyncSession = Depends(get_db)):
+    app = await application(db, application_id, membership, lock=True)
+    arch = await current(db, app, payload.expected_id)
+    previous = arch.spec_json.get("aws_references")
+    if previous and previous.get("graph_fingerprint") == knowledge.fingerprint(arch.spec_json["graph"]):
+        age = (datetime.now(timezone.utc) - datetime.fromisoformat(previous["checked_at"])).total_seconds()
+        if age < 300:
+            return output(arch)
+    review = await knowledge.lookup(arch.spec_json["graph"])
+    arch.spec_json = {**arch.spec_json, "aws_references": review}
+    await audit(db, membership, app, "ARCHITECTURE_AWS_REFERENCES_RETRIEVED")
     await db.commit()
     return output(arch)
 

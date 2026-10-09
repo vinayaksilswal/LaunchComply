@@ -233,6 +233,26 @@ export function RecordWorkspace({ module }: { module: string }) {
         </div>
       )}
       {module === "operations" && <CloudAccounts />}
+      {module === "deployments" && (
+        <section aria-label="Deployment preparation" className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-base font-semibold">From your code to your AWS account</h2>
+          <ol className="mt-4 grid gap-4 text-sm sm:grid-cols-4">
+            {[
+              ["Connect GitHub", "Choose the repository for your application."],
+              ["Refine your design", "Review the diagram and propose changes with the assistant."],
+              ["Approve the design", "Record approval of the saved version in App design → Services & sizing."],
+              ["Prepare AWS deployment", "Verify access to your AWS account, review costs and approve the infrastructure plan."],
+            ].map(([title, description], index) => (
+              <li key={title} className="rounded-lg bg-slate-50 p-3">
+                <p className="font-semibold text-slate-800">{index + 1}. {title}</p>
+                <p className="mt-2 text-xs leading-5 text-slate-500">{description}</p>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-4 text-xs leading-5 text-slate-500">Automatic AWS connection and deployment are not available yet. Use “Help me deploy” to request assistance; progress and published reports appear below. A diagram approval does not provision cloud resources.</p>
+          <Link href="/dashboard/architecture" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-cyan-700">Review your app design <ArrowRight className="h-4 w-4" /></Link>
+        </section>
+      )}
       {module === "compliance" && (
         <div className="grid sm:grid-cols-3 gap-3">
           {[

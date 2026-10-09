@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     GITHUB_APP_PRIVATE_KEY: str = ""
     OPENAI_API_KEY: str = ""
     ARCHITECTURE_AI_MODEL: str = "gpt-4.1-mini"
+    ENABLE_AWS_KNOWLEDGE: bool = False
 
     # Phase 5 Execution Safety Flags
     ENABLE_REAL_MONITORING: bool = False

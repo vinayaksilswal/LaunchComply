@@ -11,6 +11,7 @@ import hashlib
 import secrets
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -35,6 +36,12 @@ from app.services.infrastructure.aws_trust_policy_inspector import (
 
 
 class AWSOnboardingService:
+    @staticmethod
+    def require_demo_runtime():
+        """Legacy onboarding adapters contain simulated AWS outcomes."""
+        if not settings.DEMO_MODE or settings.ENVIRONMENT not in {"development", "test", "demo"}:
+            raise HTTPException(503, "Live AWS account verification and provisioning are not available yet. Request cloud setup assistance; no AWS connection has been verified.")
+
     # Retained for Phase 15 backward compatibility
     LAUNCHCOMPLY_ACCOUNT_ID = getattr(settings, "LAUNCHCOMPLY_AWS_ACCOUNT_ID", "012345678901")
 
@@ -102,6 +109,7 @@ class AWSOnboardingService:
         Generates minimal, least-privilege CloudFormation Quick-Setup template for customer AWS account (§12, §25).
         Verifies LaunchComply identity before generation (§8) and strictly prohibits AdministratorAccess (§40).
         """
+        cls.require_demo_runtime()
         # Enforce verified identity (§8)
         identity = LaunchComplyAwsIdentityResolver.assert_verified_identity(target_partition=partition)
         principal_arn = identity.principal_arn
@@ -256,6 +264,7 @@ Outputs:
         Provides copyable manual IAM role configuration and exact trust policy (§6, §29, §32).
         Uses resolved LaunchComply identity (§7).
         """
+        cls.require_demo_runtime()
         identity = LaunchComplyAwsIdentityResolver.resolve_identity(target_partition=partition)
         principal_arn = identity.principal_arn
         account_id = identity.account_id
@@ -334,6 +343,7 @@ Outputs:
         Validates AssumeRole trust relationship and audits minimum capability readiness (§24).
         Never stores temporary credentials (§53, §107).
         """
+        cls.require_demo_runtime()
         if not role_arn or not role_arn.startswith("arn:aws:iam::") and not role_arn.startswith("arn:aws-us-gov:iam::"):
             return {
                 "valid": False,
@@ -581,6 +591,7 @@ Outputs:
         Audits required and optional IAM permissions across feature profiles (§34, §39).
         Adheres strictly to least privilege: rejects AdministratorAccess (§40).
         """
+        cls.require_demo_runtime()
         if is_simulated_failure and is_simulated_failure != "NONE":
             diag = cls.parse_sts_error(is_simulated_failure, expected_external_id=external_id)
             return {
@@ -642,6 +653,7 @@ Outputs:
         """
         Observes CloudFormation stack status and translates events into customer-safe language (§18-§22).
         """
+        cls.require_demo_runtime()
         now_iso = datetime.utcnow().isoformat()
         status = simulated_status or "CREATE_COMPLETE"
 
@@ -694,6 +706,7 @@ Outputs:
         Performs read-only account resource discovery (§48, §49).
         Discovers VPCs, Subnets, ECS, RDS, and ALBs without mutating anything.
         """
+        cls.require_demo_runtime()
         return {
             "account_id": account_id,
             "region": region,

@@ -32,6 +32,7 @@ import {
 } from "./CloudDiagram";
 import { apiClient } from "@/lib/api";
 import { useAccount } from "@/components/auth/AccountProvider";
+import { AwsReferences, type AwsReferenceReview } from "./AwsReferences";
 
 type Zone = "EDGE" | "APPLICATION" | "DATA" | "SUPPORT";
 interface Node {
@@ -73,12 +74,14 @@ interface Draft {
   messages: { role: string; content: string }[];
   proposal: { id: string; graph: Graph } | null;
   created_at: string;
+  aws_references?: AwsReferenceReview;
+  design_approval?: { approved_at: string; version: string; scope: string; graph_fingerprint: string };
 }
 interface Workspace {
   application_id: string;
   application_name: string;
   architecture: Draft | null;
-  capabilities: { repository_analysis: boolean; ai_chat: boolean };
+  capabilities: { repository_analysis: boolean; ai_chat: boolean; aws_references?: boolean };
 }
 const zones: { id: Zone; name: string; color: string; icon: typeof Globe }[] = [
   { id: "EDGE", name: "Public entry", color: "#0891b2", icon: Globe },
@@ -115,6 +118,7 @@ export function ArchitectureCanvas() {
   const [preview, setPreview] = useState(false);
   const [newConnection, setNewConnection] = useState("");
   const [chatVisible, setChatVisible] = useState(true);
+  const [reviewApproval, setReviewApproval] = useState(false);
   const canvas = useRef<HTMLDivElement>(null);
   const diagram = useRef<SVGSVGElement>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
@@ -137,6 +141,7 @@ export function ArchitectureCanvas() {
     setGraph(result.graph);
     setDirty(false);
     setPreview(false);
+    setReviewApproval(false);
   };
   useEffect(() => {
     if (!organization || accountLoading) return;
@@ -174,6 +179,7 @@ export function ArchitectureCanvas() {
     let active = true;
     setWorkspace(null);
     setSelected(null);
+    setReviewApproval(false);
     setLoading(true);
     setError(null);
     setDirty(false);
@@ -291,10 +297,12 @@ export function ArchitectureCanvas() {
       [
         JSON.stringify(
           {
-            status: "DRAFT_NOT_DEPLOYED",
+            status: !dirty && draft.design_approval ? "DESIGN_APPROVED_NOT_DEPLOYED" : "DRAFT_NOT_DEPLOYED",
             application: workspace?.application_name,
             graph,
             evidence: draft.evidence,
+            aws_references: dirty ? undefined : draft.aws_references,
+            design_approval: dirty ? undefined : draft.design_approval,
           },
           null,
           2,
@@ -608,6 +616,32 @@ export function ArchitectureCanvas() {
                   Review deployment requirements
                   <ArrowRight className="h-4 w-4" />
                 </Link>
+                <section aria-label="Design approval" className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
+                  <h3 className="text-sm font-semibold">Approve your cloud design</h3>
+                  {draft.design_approval && !dirty && !preview ? (
+                    <>
+                      <p className="mt-2 text-sm text-emerald-700">Design {draft.design_approval.version} approved · {new Date(draft.design_approval.approved_at).toLocaleString()}</p>
+                      <p className="mt-2 text-xs leading-5 text-slate-500">{draft.design_approval.scope} Saving changes requires a new design approval.</p>
+                      <Link href="/dashboard/deployments" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-cyan-700">Continue to deployment preparation <ArrowRight className="h-4 w-4" /></Link>
+                    </>
+                  ) : (
+                    <>
+                      <p className="mt-2 text-xs leading-5 text-slate-500">Review all services and requirements above. Approval records this saved version. AWS connection and a costed infrastructure plan follow before deployment.</p>
+                      {reviewApproval ? (
+                        <div className="mt-3 space-y-3">
+                          <p className="text-xs leading-5 text-slate-700">Confirm design {draft.version}? This records your decision and does not create AWS resources or grant cloud permissions.</p>
+                          <div className="flex gap-2">
+                            <button disabled={!!busy || dirty || preview || !!draft.proposal || !canEdit} onClick={() => operation("approve", "approve-design", { expected_id: draft.id })} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">{busy === "approve" ? "Recording approval…" : "Confirm design approval"}</button>
+                            <button disabled={!!busy} onClick={() => setReviewApproval(false)} className="rounded-lg border px-3 py-2 text-xs">Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button disabled={!!busy || dirty || preview || !!draft.proposal || !canEdit || !shown.nodes.length} onClick={() => setReviewApproval(true)} className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">Review design approval</button>
+                      )}
+                      {(dirty || preview || draft.proposal) && <p className="mt-2 text-xs text-amber-700">Apply pending proposals and save changes before approval.</p>}
+                    </>
+                  )}
+                </section>
               </div>
             ) : shown.nodes.length === 0 ? (
               <div className="p-12 text-center text-slate-500 text-sm">
@@ -738,6 +772,13 @@ export function ArchitectureCanvas() {
               </div>
             </div>
             <div className="overflow-y-auto flex-1 p-5 space-y-4">
+              {draft && (
+                <AwsReferences review={draft.aws_references}
+                  enabled={!!workspace?.capabilities.aws_references} canEdit={canEdit}
+                  busy={!!busy} fetching={busy === "references"} unsaved={dirty} preview={preview}
+                  onFind={() => operation("references", "references", { expected_id: draft.id })}
+                />
+              )}
               {node && (
                 <section className="rounded-xl border border-slate-200 p-4 space-y-3">
                   <div className="flex justify-between items-center">

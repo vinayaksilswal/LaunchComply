@@ -43,6 +43,8 @@ ARCHITECTURE_AI_MODEL=gpt-4.1-mini
 
 Chat sends the normalized evidence, current diagram, and recent conversation to the configured OpenAI provider with `store=false`. A validated proposal is previewed and explicitly applied to a new draft version. Chat cannot deploy, run code, change IAM, or invent verified cloud health. Without configuration, it stays unavailable.
 
+Optional official AWS references use `ENABLE_AWS_KNOWLEDGE=true` in Render. The read-only AWS Knowledge MCP integration retrieves real documentation sources for recognized services in the saved graph; it does not validate deployment readiness. See [AWS architecture MCP integration](AWS_ARCHITECTURE_MCP.md) for limits, privacy, and browser acceptance steps. The retired AWS Diagram MCP package is not used.
+
 ## Daily operations
 
 The explicitly authorized existing owner account has database-backed platform admin access. Sign in with that account and open `/platform-admin`.
@@ -57,6 +59,8 @@ The explicitly authorized existing owner account has database-backed platform ad
 Assessment and compliance requests cannot be marked delivered or closed without a published report. Customer owners/admins can submit requests; business members can read their business's requests and reports. Internal operations access is separate from tenant owner/admin roles.
 
 ## Deployment and current integration boundaries
+
+The customer-owned AWS sequence is documented in [Customer AWS deployment](CUSTOMER_AWS_DEPLOYMENT.md): GitHub → design refinement → saved-version design approval → verified customer AWS role → reviewed infrastructure plan → separate deployment approval. Customers do not install MCP clients. LaunchComply needs a real worker identity before issuing customer trust templates; the legacy simulated onboarding adapters are blocked outside explicitly enabled demo/development/test environments.
 
 - Vercel root directory: `apps/web`; `BACKEND_URL=https://launchcomply.onrender.com`.
 - Render Docker root directory: `apps/api`; Dockerfile: `Dockerfile`; database variable: `DATABASE_URL`.
