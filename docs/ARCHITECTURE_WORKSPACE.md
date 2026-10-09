@@ -39,3 +39,11 @@ Analysis pins every source commit, namespaces file/module identities by reposito
 ## Architecture agent
 
 The assistant runs a LangGraph StateGraph with source-context preparation, an asynchronous LangChain RunnableLambda provider stage, and PydanticOutputParser graph validation. LangChain ChatPromptTemplate constructs provider messages; existing free-only OpenRouter failover remains bounded. Missing requirements and source snapshots are recorded in a small workflow receipt. Shared checkpointers, external tracing, code execution and AWS mutation tools are disabled. Durable conversations, proposals and customer approvals remain in the business-scoped database. Schema validation does not establish deployability or cloud readiness. No new agent credential is required beyond the configured model provider.
+
+## Recorded operations and source organization
+
+The internal service queue links to System operations. Its launch gates observe the migration revision, hosted configuration, provider configuration and latest saved AI outcome. Configured integrations remain distinct from verified delivery. Recovery, security acceptance, payment reconciliation and actual provisioning remain open gates until supported by real delivery evidence. The legacy delivery board no longer synthesizes customer names, invoices or measured timings.
+
+AI calls release database locks before provider I/O. The response is saved only after checking the current design version, source state, request identity and active editing membership again. Saving a different version invalidates the request identity. Approval waits for active AI requests. Provider failures record bounded categories, model IDs, timing and response status; prompts, raw provider responses, source contents and credentials are not included in routing diagnostics. The customer receives a reference matching the admin event.
+
+Source sampling favors entry files, routes, services and data definitions over maintenance scripts. File-area labels describe source organization, not verified runtime roles. Code diagrams group inspected files by repository and area; connection lines are resolved static imports only. Full paths in the component finder distinguish repeated filenames. The sample remains bounded and explicitly reports coverage.

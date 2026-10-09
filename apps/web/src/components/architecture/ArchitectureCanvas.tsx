@@ -31,7 +31,7 @@ import {
   downloadArchitectureSvg,
 } from "./CloudDiagram";
 import { apiClient, ApiError } from "@/lib/api";
-import { codeArchitecture, sourceAreas, type SourceModule } from "./codeArchitecture";
+import { codeArchitecture, sourceOverview, sourceAreas, type SourceModule } from "./codeArchitecture";
 import { useAccount } from "@/components/auth/AccountProvider";
 import { ProductionDiagram, productionLayout, type DeploymentRequirements } from "./ProductionDiagram";
 import { RequirementsForm } from "./RequirementsForm";
@@ -117,6 +117,8 @@ export function ArchitectureCanvas() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [graph, setGraph] = useState<Graph>({ nodes: [], edges: [] });
   const [view, setView] = useState<"cloud" | "code" | "inventory">("cloud");
+  const [codeMode, setCodeMode] = useState<"overview" | "files">("overview");
+  const [codeFocus, setCodeFocus] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.85);
   const [busy, setBusy] = useState<string | null>(null);
@@ -134,6 +136,7 @@ export function ArchitectureCanvas() {
   const canvas = useRef<HTMLDivElement>(null);
   const diagram = useRef<SVGSVGElement>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
+  const componentDetails = useRef<HTMLElement>(null);
   const drag = useRef<{
     id: string;
     x: number;
@@ -192,6 +195,7 @@ export function ArchitectureCanvas() {
     let active = true;
     setWorkspace(null);
     setSelected(null);
+    setCodeFocus(null);
     setReviewApproval(false);
     setLoading(true);
     setError(null);
@@ -217,6 +221,9 @@ export function ArchitectureCanvas() {
   useEffect(() => {
     chatEnd.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [draft?.messages.length]);
+  useEffect(() => {
+    if (selected && chatVisible) componentDetails.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [selected, chatVisible]);
 
   const operation = async (name: string, path: string, data?: object) => {
     if (!appId || busy) return;
@@ -266,7 +273,8 @@ export function ArchitectureCanvas() {
     })),
     edges: [],
   };
-  const sourceDesign = codeArchitecture(draft?.evidence.modules || [], draft?.evidence.module_edges || [], draft?.evidence.repositories);
+  const overview = sourceOverview(draft?.evidence.modules || [], draft?.evidence.module_edges || [], draft?.evidence.repositories);
+  const sourceDesign = codeMode === "overview" ? overview : codeArchitecture(codeFocus && overview.groups[codeFocus] ? overview.groups[codeFocus] : draft?.evidence.modules || [], draft?.evidence.module_edges || [], draft?.evidence.repositories);
   if (sourceDesign.graph.nodes.length) {
     codeGraph.nodes = sourceDesign.graph.nodes;
     codeGraph.edges = sourceDesign.graph.edges;
@@ -473,6 +481,11 @@ export function ArchitectureCanvas() {
               ))}
             </div>
             <div className="flex flex-wrap gap-1 items-center">
+              {view === "code" && !!draft?.evidence.modules?.length && <div className="flex gap-1 mr-2">
+                <button aria-pressed={codeMode === "overview"} onClick={() => { setCodeMode("overview"); setCodeFocus(null); setSelected(null); }} className={`rounded-lg border px-2 py-1.5 text-xs ${codeMode === "overview" ? "bg-cyan-50 text-cyan-800" : "bg-white"}`}>Source overview</button>
+                <button aria-pressed={codeMode === "files"} onClick={() => { setCodeMode("files"); setCodeFocus(null); setSelected(null); }} className={`rounded-lg border px-2 py-1.5 text-xs ${codeMode === "files" ? "bg-cyan-50 text-cyan-800" : "bg-white"}`}>All inspected files</button>
+                {codeFocus && <span className="self-center text-xs text-slate-500">Focused group</span>}
+              </div>}
               {!!shown.nodes.length && view !== "inventory" && <select aria-label="Find architecture component" value={selected || ""} onChange={event => {
                 const id = event.target.value; setSelected(id || null);
                 if (!id) { fit(); return; }
@@ -820,7 +833,7 @@ export function ArchitectureCanvas() {
                 />
               )}
               {node && (
-                <section className="rounded-xl border border-slate-200 p-4 space-y-3">
+                <section ref={componentDetails} className="rounded-xl border border-slate-200 p-4 space-y-3">
                   <div className="flex justify-between items-center">
                     <h3 className="font-semibold text-sm">Component details</h3>
                     <button
@@ -830,6 +843,10 @@ export function ArchitectureCanvas() {
                       <X className="w-4 h-4 text-slate-400" />
                     </button>
                   </div>
+                  {view === "code" && codeMode === "overview" && overview.groups[node.id] && <div className="space-y-3">
+                    <button onClick={() => { setCodeMode("files"); setCodeFocus(node.id); setSelected(null); }} className="rounded-lg bg-cyan-50 text-cyan-800 px-3 py-2 text-xs font-semibold">Inspect files in this group</button>
+                    <ul className="text-xs text-slate-500 space-y-2 break-all">{overview.groups[node.id].map(item => <li key={item.id}>{item.path}</li>)}</ul>
+                  </div>}
                   {view !== "code" && !preview && canEdit ? (
                     <>
                       <label className="block text-xs text-slate-500">
