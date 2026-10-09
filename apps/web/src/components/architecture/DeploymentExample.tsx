@@ -233,7 +233,7 @@ function regionalExample(
         label:
           region && n.id === "database"
             ? "Recovery database candidate"
-            : n.label,
+            : region ? `Recovery ${n.label.toLowerCase()}` : n.label,
         description: `${region ? "Recovery region" : "Primary region"} example. ${n.description}${region && n.id === "database" ? " Cross-region replication and promotion need separate review." : ""}`,
       });
     });
@@ -429,18 +429,21 @@ export function DeploymentExample() {
               </button>
               <button
                 aria-label="Fit diagram"
-                onClick={() =>
+                title="Show the entire diagram"
+                onClick={() => {
+                  const bounds = diagramBounds(graph);
                   setZoom(
                     Math.max(
-                      0.65,
+                      0.2,
                       Math.min(
                         1,
-                        ((viewport.current?.clientWidth || 800) - 32) /
-                          diagramBounds(graph).width,
+                        ((viewport.current?.clientWidth || 800) - 32) / bounds.width,
+                        ((viewport.current?.clientHeight || 690) - 32) / bounds.height,
                       ),
                     ),
-                  )
-                }
+                  );
+                  viewport.current?.scrollTo({ top: 0, left: 0 });
+                }}
                 className="p-2 hover:bg-slate-100 rounded-lg"
               >
                 <Maximize2 size={16} />
@@ -473,7 +476,7 @@ export function DeploymentExample() {
               {graph.nodes.length} example services · {graph.edges.length}{" "}
               proposed connections
             </span>
-            <span>Use zoom and scroll to explore each layer.</span>
+            <span>Fit shows the whole design. Zoom in to read and inspect services.</span>
           </div>
         </section>
         <aside className="space-y-6 p-6">

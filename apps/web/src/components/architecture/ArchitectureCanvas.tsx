@@ -142,6 +142,7 @@ export function ArchitectureCanvas() {
     if (!organization || accountLoading) return;
     let active = true;
     setApps([]);
+    setAppId("");
     setWorkspace(null);
     setGraph({ nodes: [], edges: [] });
     setError(null);
@@ -264,10 +265,12 @@ export function ArchitectureCanvas() {
     setDirty(true);
   };
   const fit = () => {
-    if (canvas.current)
+    if (canvas.current) {
       setZoom(
-        Math.max(0.65, Math.min(1, (canvas.current.clientWidth - 32) / width)),
+        Math.max(0.2, Math.min(1, (canvas.current.clientWidth - 32) / width, (canvas.current.clientHeight - 32) / height)),
       );
+      canvas.current.scrollTo({ top: 0, left: 0 });
+    }
   };
   useEffect(() => {
     if (!draftId || !canvas.current) return;
@@ -456,8 +459,9 @@ export function ArchitectureCanvas() {
               </button>
               <button
                 aria-label="Zoom out"
+                disabled={!shown.nodes.length || view === "inventory"}
                 onClick={() => setZoom((value) => Math.max(0.25, value - 0.1))}
-                className="p-1.5 hover:bg-slate-100 rounded"
+                className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-40"
               >
                 <ZoomOut className="w-4 h-4" />
               </button>
@@ -466,15 +470,18 @@ export function ArchitectureCanvas() {
               </span>
               <button
                 aria-label="Zoom in"
+                disabled={!shown.nodes.length || view === "inventory"}
                 onClick={() => setZoom((value) => Math.min(1.6, value + 0.1))}
-                className="p-1.5 hover:bg-slate-100 rounded"
+                className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-40"
               >
                 <ZoomIn className="w-4 h-4" />
               </button>
               <button
                 aria-label="Fit diagram"
+                title="Show the entire diagram"
+                disabled={!shown.nodes.length || view === "inventory"}
                 onClick={fit}
-                className="p-1.5 hover:bg-slate-100 rounded"
+                className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-40"
               >
                 <Maximize2 className="w-4 h-4" />
               </button>
@@ -1109,7 +1116,15 @@ export function ArchitectureCanvas() {
                 </div>
               </div>
               <p className="text-[10px] text-slate-500 leading-4">
-                {dirty
+                {loading || accountLoading
+                  ? "Loading your architecture workspace…"
+                  : !workspace
+                    ? "Create or choose an application to check assistant availability."
+                  : !draft
+                    ? "Analyze your connected repository to start an architecture draft."
+                  : !canEdit
+                    ? "An owner or administrator can request architecture changes."
+                  : dirty
                   ? "Save your changes before asking for another proposal."
                   : !workspace?.capabilities.ai_chat
                     ? "AI chat requires administrator configuration."
