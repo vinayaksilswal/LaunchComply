@@ -232,8 +232,32 @@ async def get_launch_readiness(
     admin_user: User = Depends(require_platform_admin),
     db: AsyncSession = Depends(get_db)
 ):
-    """Evaluates LaunchComply's own 12-point commercial launch checklist."""
+    """Observed configuration, migration and delivery acceptance gates."""
     return await launch_readiness_service.evaluate_launch_readiness(db)
+
+
+@router.get("/architecture-ai")
+async def architecture_ai_operations(admin_user: User = Depends(require_platform_admin), db: AsyncSession = Depends(get_db)):
+    """Actual routing outcomes without prompts, credentials or raw provider output."""
+    from app.core.config import settings
+    from app.models.audit import AuditEvent
+    from app.services.architecture.workspace import ai_available
+    actions = ["ARCHITECTURE_AI_REQUEST_FAILED", "ARCHITECTURE_AI_PROPOSAL_CREATED", "ARCHITECTURE_AI_REQUEST_DISCARDED"]
+    rows = (await db.execute(select(AuditEvent, Organization.name).outerjoin(Organization,
+        Organization.id == AuditEvent.organization_id).where(AuditEvent.action.in_(actions))
+        .order_by(AuditEvent.created_at.desc()).limit(50))).all()
+    events = []
+    for event, business_name in rows:
+        details = event.details or {}
+        events.append({"id": event.id, "business_name": business_name or "Business unavailable", "created_at": event.created_at,
+            "action": event.action, "request_id": details.get("request_id"), "code": details.get("code"),
+            "provider": details.get("provider"), "model": details.get("model"), "attempts": details.get("attempts", [])})
+    models = [value.strip() for value in (settings.OPENROUTER_ARCHITECTURE_MODELS or settings.OPENROUTER_ARCHITECTURE_MODEL).split(",") if value.strip()][:6]
+    return {"configured": ai_available(), "provider": settings.ARCHITECTURE_AI_PROVIDER,
+        "models": models if settings.ARCHITECTURE_AI_PROVIDER == "openrouter" else [settings.ARCHITECTURE_AI_MODEL],
+        "free_only": settings.OPENROUTER_FREE_MODELS_ONLY if settings.ARCHITECTURE_AI_PROVIDER == "openrouter" else False,
+        "data_collection": "deny" if settings.ARCHITECTURE_AI_PROVIDER == "openrouter" else "Provider-specific policy",
+        "events": events, "scope": "Latest 50 recorded request outcomes. Configuration does not prove availability."}
 
 
 @router.get("/status-incidents")
@@ -1594,87 +1618,27 @@ async def get_delivery_board(
     admin_user: User = Depends(require_platform_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """First-10 Repeatable Delivery Board tracking standardized milestones across active customers (§105)."""
-    # Fetch FinScale org
-    res_fin = await db.execute(select(Organization).where(Organization.slug == "finscale"))
-    finscale = res_fin.scalars().first()
-
-    finscale_milestones = []
-    if finscale:
-        ms = await ProductionDeliveryOrchestrator.get_or_seed_delivery_milestones(db, finscale.id)
-        finscale_milestones = [
-            {
-                "key": m.milestone_key,
-                "title": m.title,
-                "status": m.status,
-                "evidence_level": m.evidence_level,
-                "owner": m.owner_name,
-                "blocker_type": m.blocker_type,
-                "blocker_description": m.blocker_description
-            }
-            for m in ms
-        ]
-
+    """Read actual recorded customer milestones without seeding sample deliveries."""
+    from app.models.customer_operations import CustomerDeliveryMilestone
+    rows = (await db.execute(select(CustomerDeliveryMilestone, Organization).join(
+        Organization, Organization.id == CustomerDeliveryMilestone.organization_id
+    ).where(Organization.is_demo.is_(False)).order_by(
+        Organization.name, CustomerDeliveryMilestone.created_at).limit(500))).all()
+    customers = {}
+    for milestone, org in rows:
+        customer = customers.setdefault(org.id, {
+            "organization_id": org.id, "name": org.name, "slug": org.slug,
+            "stage": org.commercial_state, "milestones": [],
+        })
+        customer["milestones"].append({
+            "key": milestone.milestone_key, "title": milestone.title,
+            "status": milestone.status, "evidence_level": milestone.evidence_level,
+            "owner": milestone.owner_name, "blocker_type": milestone.blocker_type,
+            "blocker_description": milestone.blocker_description,
+            "completed_at": milestone.completed_at,
+        })
     return {
-        "cohort": "First 10 Customers Program",
-        "customers": [
-            {
-                "organization_id": finscale.id if finscale else "org-finscale-001",
-                "name": "FinScale Technologies Pvt Ltd",
-                "slug": "finscale",
-                "classification": "PILOT_CUSTOMER",
-                "stage": finscale.commercial_state if finscale else "AWS_ONBOARDING",
-                "outcome": "Deploy fintech SaaS to AWS + demonstrate ISO 27001 readiness",
-                "milestones": finscale_milestones,
-                "active_blocker": "Customer deployment approval before apply (§6)",
-                "next_action": "Customer reviews and authorizes production deployment plan",
-                "commercial": {
-                    "invoice_number": "INV-2026-FINSCALE-001",
-                    "amount": "₹1,49,000",
-                    "payment_state": "PENDING_RECONCILIATION"
-                }
-            },
-            {
-                "organization_id": "org-northstar-002",
-                "name": "Northstar FinTech",
-                "slug": "northstar",
-                "classification": "PROSPECT",
-                "stage": "PILOT_APPROVED",
-                "outcome": "SOC 2 deployment on AWS",
-                "milestones": [],
-                "active_blocker": "Rules of Engagement (RoE) sign-off",
-                "next_action": "Commercial follow-up on mutual RoE agreement",
-                "commercial": {
-                    "invoice_number": "INV-2026-NORTHSTAR-001",
-                    "amount": "₹2,50,000",
-                    "payment_state": "DRAFT"
-                }
-            },
-            {
-                "organization_id": "org-blueledger-003",
-                "name": "BlueLedger Healthcare",
-                "slug": "blueledger",
-                "classification": "PROSPECT",
-                "stage": "DEMO",
-                "outcome": "DPDP-compliant AWS architecture",
-                "milestones": [],
-                "active_blocker": "Infosec review of IAM permissions manifest",
-                "next_action": "Deliver AWS_ACCESS_SECURITY.md Infosec Review Pack",
-                "commercial": {
-                    "invoice_number": None,
-                    "amount": "₹0",
-                    "payment_state": "NOT_INVOICED"
-                }
-            }
-        ],
-        "delivery_time_metrics": {
-            "account_to_aws": "TEST_VERIFIED (< 5 min self-service flow; empirical customer latency tracked)",
-            "aws_to_infra": "2.5 hours",
-            "infra_to_deployment": "1.0 hour",
-            "deployment_to_acceptance": "4.0 hours",
-            "acceptance_to_payment": "PENDING"
-        }
+        "cohort": "Recorded customer deliveries", "customers": list(customers.values()),
+        "delivery_time_metrics": None,
+        "scope": "Up to 500 recorded non-demo milestones. Missing delivery records and measured timings remain unknown.",
     }
-
-
-

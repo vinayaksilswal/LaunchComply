@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.permissions import get_current_membership
 from app.models.auth import OrganizationMembership, MembershipRole, User
 from app.models.application import Application
@@ -40,7 +41,7 @@ async def application(db, application_id, membership, lock=False):
 
 async def latest(db, app):
     records = (await db.execute(select(Architecture).where(Architecture.application_id == app.id,
-        Architecture.organization_id == app.organization_id).order_by(Architecture.created_at.desc()))).scalars().all()
+        Architecture.organization_id == app.organization_id).order_by(Architecture.created_at.desc()).execution_options(populate_existing=True))).scalars().all()
     # Legacy sample topologies have no verified provenance; never present them as code analysis.
     return next((item for item in records if (item.spec_json or {}).get("format") == "repository-draft-v1"), None)
 
@@ -59,10 +60,10 @@ def design_is_approved(arch):
         and approval.get("graph_fingerprint") == knowledge.fingerprint(graph)
         and approval.get("repository_commit") == (spec.get("evidence") or {}).get("commit"))
 
-async def audit(db, membership, app, action):
+async def audit(db, membership, app, action, details=None):
     user = await db.get(User, membership.user_id)
     db.add(AuditEvent(organization_id=membership.organization_id, actor_id=membership.user_id,
-        actor_email=user.email, action=action, entity_type="application", entity_id=app.id, details={"application_name": app.name}))
+        actor_email=user.email, action=action, entity_type="application", entity_id=app.id, details={"application_name": app.name, **(details or {})}))
 
 @router.get("/{application_id}")
 async def read(application_id: str, membership=Depends(member), db: AsyncSession = Depends(get_db)):
@@ -143,6 +144,7 @@ async def save_version(db, membership, app, arch, graph, action, updates=None):
     spec = {**arch.spec_json, "revision": arch.spec_json["revision"] + 1, "graph": graph, "proposal": None, **(updates or {})}
     # Approval belongs to one saved version; editing never authorizes deployment.
     spec.pop("design_approval", None)
+    spec.pop("ai_request", None)
     if graph != arch.spec_json["graph"] or updates:
         spec.pop("aws_references", None)
     record = Architecture(application_id=app.id, organization_id=membership.organization_id,
@@ -170,6 +172,9 @@ async def approve_design(application_id: str, payload: ApplyReferences,
         raise HTTPException(409, "Set expected traffic, region and availability before approving the design.")
     if arch.spec_json.get("proposal"):
         raise HTTPException(409, "Apply and save the pending proposal before approving this design.")
+    running = arch.spec_json.get("ai_request") or {}
+    if running.get("status") == "RUNNING" and (datetime.now(timezone.utc) - datetime.fromisoformat(running["started_at"])).total_seconds() < 110:
+        raise HTTPException(409, "Wait for the current architecture request to finish before approving this design.")
     if arch.spec_json.get("design_approval"):
         return output(arch)
     arch.spec_json = {**arch.spec_json, "design_approval": {
@@ -190,19 +195,58 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
     arch = await current(db, app, payload.expected_id)
     spec = dict(arch.spec_json)
     now = datetime.now(timezone.utc)
+    running = spec.get("ai_request") or {}
+    if running.get("status") == "RUNNING" and (now - datetime.fromisoformat(running["started_at"])).total_seconds() < 110:
+        raise HTTPException(409, "An architecture request is already running. Wait for it to finish before trying again.")
     if spec.get("last_ai_at") and (now - datetime.fromisoformat(spec["last_ai_at"])).total_seconds() < 5:
         raise HTTPException(429, "Please wait a few seconds before sending another request.")
     references = spec.get("aws_references")
     if references and references.get("graph_fingerprint") != knowledge.fingerprint(spec["graph"]):
         references = None
-    answer = await service.refine(spec["graph"], spec["evidence"], payload.message, spec["messages"], references, spec.get("requirements"))
+    request_id = str(uuid.uuid4())
+    spec["ai_request"] = {"id": request_id, "status": "RUNNING", "started_at": now.isoformat()}
+    spec["last_ai_at"] = now.isoformat()
+    arch.spec_json = spec
+    await db.commit()  # Do not keep row locks or a database transaction open across model I/O.
+    failure = None
+    answer = None
+    try:
+        answer = await service.refine(spec["graph"], spec["evidence"], payload.message, spec["messages"], references, spec.get("requirements"))
+    except HTTPException as error:
+        failure = error
+    app = await application(db, application_id, membership, lock=True)
+    fresh_member = await db.get(OrganizationMembership, membership.id, populate_existing=True)
+    fresh_user = await db.get(User, membership.user_id, populate_existing=True)
+    if not fresh_member or not fresh_member.is_active or fresh_member.organization_id != app.organization_id or fresh_member.role not in (MembershipRole.OWNER, MembershipRole.ADMIN) or not fresh_user or not fresh_user.is_active:
+        raise HTTPException(403, "Your business editing access changed during this request. No proposal was saved.")
+    latest_arch = await latest(db, app)
+    if not latest_arch or latest_arch.id != payload.expected_id or latest_arch.spec_json.get("source_changed") or (latest_arch.spec_json.get("ai_request") or {}).get("id") != request_id:
+        await audit(db, membership, app, "ARCHITECTURE_AI_REQUEST_DISCARDED", {"request_id": request_id, "code": "DESIGN_CHANGED"})
+        await db.commit()
+        raise HTTPException(409, "Your design or source changed while AI was responding. Reload before requesting a new proposal.")
+    arch = latest_arch
+    spec = dict(arch.spec_json)
+    finished = datetime.now(timezone.utc).isoformat()
+    if failure:
+        code = failure.detail.get("code", "ARCHITECTURE_AI_UNAVAILABLE") if isinstance(failure.detail, dict) else "ARCHITECTURE_AI_UNAVAILABLE"
+        diagnostics = {"request_id": request_id, "code": code, "provider": settings.ARCHITECTURE_AI_PROVIDER,
+            "attempts": getattr(failure, "attempts", []), "finished_at": finished}
+        spec["last_ai_failure"] = diagnostics
+        spec["ai_request"] = {**spec["ai_request"], "status": "FAILED", "finished_at": finished}
+        arch.spec_json = spec
+        await audit(db, membership, app, "ARCHITECTURE_AI_REQUEST_FAILED", diagnostics)
+        await db.commit()
+        raise HTTPException(failure.status_code, {"code": code, "request_id": request_id, "message": "The architecture request failed. Your saved design is unchanged."})
+    spec.pop("last_ai_failure", None)
+    spec["ai_request"] = {**spec["ai_request"], "status": "COMPLETED", "finished_at": finished}
     spec["messages"] = (spec["messages"] + [{"role": "user", "content": payload.message}, {"role": "assistant", "content": answer["message"]}])[-20:]
     spec["proposal"] = {"id": str(uuid.uuid4()), "graph": answer["graph"]}
     spec["last_ai_at"] = now.isoformat()
     if answer.get("ai_model"): spec["last_ai_model"] = answer["ai_model"]
     if answer.get("agent_workflow"): spec["last_ai_workflow"] = answer["agent_workflow"]
     arch.spec_json = spec
-    await audit(db, membership, app, "ARCHITECTURE_AI_PROPOSAL_CREATED")
+    await audit(db, membership, app, "ARCHITECTURE_AI_PROPOSAL_CREATED", {"request_id": request_id,
+        "provider": settings.ARCHITECTURE_AI_PROVIDER, "model": answer.get("ai_model"), "attempts": answer.get("provider_attempts", [])})
     await db.commit()
     return output(arch)
 

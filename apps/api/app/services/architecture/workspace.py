@@ -310,6 +310,8 @@ async def openrouter_proposal(client, instructions, context, schema):
     instructions += " Return one JSON object only, without Markdown fences. Match this schema exactly: " + json.dumps(schema)
     provider = {"data_collection": "deny"}
     if settings.OPENROUTER_FREE_MODELS_ONLY: provider["max_price"] = {"prompt": 0, "completion": 0}
+    from app.services.architecture.provider_errors import AIProviderError, failure_kind, failure_code, parse_answer, response_payload, model_name
+    attempts = []
     # Native failover handles upstream errors; local validation also retries invalid 200 responses.
     # Prompted JSON is intentional: several free models do not support response_format.
     try:
@@ -317,27 +319,43 @@ async def openrouter_proposal(client, instructions, context, schema):
             for _ in range(3):
                 if not models: break
                 used = models[0]
+                started = time.monotonic()
+                record = {"requested_models": list(models), "selected_model": None, "http_status": None, "kind": "UPSTREAM_UNAVAILABLE"}
                 try:
                     response = await client.post("https://openrouter.ai/api/v1/chat/completions", timeout=28,
                         headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}", "Content-Type": "application/json"},
                         json={"models": models, "max_tokens": 16000, "stream": False, "provider": provider,
                             "messages": provider_messages(instructions, context)})
-                    if response.status_code in (401, 403):
-                        raise HTTPException(503, {"code": "ARCHITECTURE_AI_AUTH_FAILED", "message": "OpenRouter authorization failed."})
+                    record["http_status"] = response.status_code
+                    payload = response_payload(response)
+                    if response.status_code != 200:
+                        record["kind"] = failure_kind(response.status_code, payload)
                     if response.status_code == 200:
-                        payload = response.json()
-                        used = payload.get("model", used)
+                        used = model_name(payload.get("model"), used)
+                        record["selected_model"] = used
+                        record["kind"] = "INVALID_RESPONSE"
                         choice = payload["choices"][0]
-                        if choice.get("finish_reason") != "stop": raise ValueError("Incomplete proposal")
+                        if choice.get("finish_reason") != "stop":
+                            record["kind"] = "TRUNCATED_RESPONSE"
+                            raise ValueError("Incomplete proposal")
                         text = choice["message"]["content"]
-                        if not isinstance(text, str) or len(text) > 100_000: raise ValueError("Invalid content")
                         # Never save unvalidated provider output, extra fields, executable code or broken edges.
-                        answer = AIAnswer.model_validate_json(text).model_dump()
+                        answer = parse_answer(text, AIAnswer)
                         answer["ai_model"] = used
+                        record["kind"] = "VALID_PROPOSAL"
+                        record["elapsed_ms"] = round((time.monotonic() - started) * 1000)
+                        answer["provider_attempts"] = attempts + [record]
                         return answer
+                except httpx.TimeoutException:
+                    record["kind"] = "TIMEOUT"
                 except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
                     pass
+                record["elapsed_ms"] = round((time.monotonic() - started) * 1000)
+                attempts.append(record)
+                if record["kind"] in {"AUTH_FAILED", "CREDIT_LIMIT"}:
+                    raise AIProviderError(failure_code(record["kind"]), attempts, 503)
                 models = [model for model in models if model != used] if used in models else models[1:]
     except TimeoutError:
-        pass
-    raise HTTPException(502, {"code": "ARCHITECTURE_AI_UNAVAILABLE", "message": "The configured free models are busy or returned invalid proposals. Your saved design is unchanged."})
+        attempts.append({"requested_models": [], "selected_model": None, "http_status": None, "kind": "TIMEOUT", "elapsed_ms": 85000})
+    kind = attempts[-1]["kind"] if attempts else "UPSTREAM_UNAVAILABLE"
+    raise AIProviderError(failure_code(kind), attempts)

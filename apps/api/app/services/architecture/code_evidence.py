@@ -9,29 +9,47 @@ MAX_SOURCE_FILES = 40
 MAX_SOURCE_BYTES = 100_000
 EXCLUDED = {"node_modules", "vendor", ".venv", "venv", ".git", ".next", "dist", "build", "__pycache__"}
 
+def source_area(path):
+    """File organization clues, not a claim that code is deployed or reachable."""
+    parts = set(path.lower().split("/"))
+    name = posixpath.basename(path).lower()
+    if name in {"main.py", "app.py", "server.py", "main.ts", "index.ts", "server.ts", "app.tsx", "layout.tsx"}: return "ENTRY"
+    if parts & {"models", "model", "repositories", "repository", "database", "db", "schemas"}: return "DATA"
+    if parts & {"api", "routes", "routers", "controllers", "pages", "app"} and (name in {"page.tsx", "route.ts", "route.js"} or parts & {"api", "routes", "routers", "controllers", "pages"}): return "ROUTES"
+    if parts & {"services", "service", "workers", "worker", "tasks", "jobs", "components", "hooks", "lib", "utils"}: return "SERVICES"
+    return "SUPPORT"
+
+def scaffolding(path):
+    name = posixpath.basename(path).lower()
+    return (bool(set(path.lower().split("/")) & {"tests", "test", "alembic", "migrations", "fixtures", "scripts"})
+        or name.startswith(("test_", "verify_", "rehearse_", "migrate_", "bootstrap_", "reset_", "fix_", "predeploy_", "provision_"))
+        or ".test." in name or ".spec." in name or name.startswith("playwright.config"))
+
 def source_sample(entries, manifest_paths, limit=MAX_SOURCE_FILES):
-    """Round-robin manifest roots and languages; prefer entry points over test scaffolding."""
+    """Balance source roots, languages and file areas before considering scaffolding."""
     roots = sorted({posixpath.dirname(path) for path in manifest_paths}, key=len, reverse=True)
-    groups = {}
+    groups, fallback = {}, []
     for item in entries:
         path = item["path"]
         if not eligible(path) or item.get("size", 0) > MAX_SOURCE_BYTES: continue
+        if scaffolding(path):
+            fallback.append(item)
+            continue
         root = next((root for root in roots if not root or path.startswith(root + "/")), "")
         language = "python" if path.endswith(".py") else "web"
-        groups.setdefault((root, language), []).append(item)
+        groups.setdefault((root, language, source_area(path)), []).append(item)
     def priority(item):
         path = item["path"]
         name = posixpath.basename(path)
-        scaffold = any(part in {"tests", "test", "alembic", "migrations", "fixtures"} for part in path.split("/")) or name.startswith("test_") or ".test." in name or ".spec." in name
         entry = name in {"main.py", "app.py", "server.py", "main.ts", "index.ts", "server.ts", "App.tsx", "page.tsx", "layout.tsx", "api.ts"}
-        return (scaffold, not entry, len(path.split("/")), path)
+        return (not entry, len(path.split("/")), path)
     ordered = [sorted(group, key=priority) for _, group in sorted(groups.items())]
     sample = []
     while ordered and len(sample) < limit:
         for group in ordered:
             if group and len(sample) < limit: sample.append(group.pop(0))
         ordered = [group for group in ordered if group]
-    return sample
+    return sample + sorted(fallback, key=priority)[:max(0, limit - len(sample))]
 
 def eligible(path):
     return path.endswith(SOURCE_SUFFIXES) and not any(part in EXCLUDED for part in path.split("/")) and not path.endswith(".d.ts")
@@ -64,7 +82,7 @@ def inspect_sources(sources, total_candidates):
             status = "UNPARSED"
         imports = sorted(value for value in imports if re.fullmatch(r"[@a-zA-Z0-9_./-]{1,200}", value))[:60]
         modules.append({"id": "src-" + hashlib.sha256(path.encode()).hexdigest()[:16], "path": path,
-            "language": language, "status": status, "imports": imports, "entry_points": sorted(entries)[:20]})
+            "language": language, "area": source_area(path), "status": status, "imports": imports, "entry_points": sorted(entries)[:20]})
     lookup = {item["path"]: item["id"] for item in modules}
     links = set()
     for module in modules:

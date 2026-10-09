@@ -49,6 +49,7 @@ def validate_proposal(state: ArchitectState):
     parsed = PydanticOutputParser(pydantic_object=AIAnswer).parse(json.dumps({
         "message": answer["message"], "graph": answer["graph"]})).model_dump()
     if answer.get("ai_model"): parsed["ai_model"] = answer["ai_model"]
+    if answer.get("provider_attempts"): parsed["provider_attempts"] = answer["provider_attempts"]
     parsed["agent_workflow"] = {**state["workflow"], "stages": state["workflow"]["stages"] + ["graph_schema_validated"],
         "status": "AWAITING_CUSTOMER_REVIEW"}
     return {"answer": parsed}

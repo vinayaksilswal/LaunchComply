@@ -1,6 +1,7 @@
 "use client";
 import { Dialog } from "@/components/ui/Dialog";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { RefreshCw, ArrowRight, X, Building2 } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { apiClient } from "@/lib/api";
@@ -74,13 +75,13 @@ export function OperationsQueue() {
               current.
             </p>
           </div>
-          <button
+          <div className="flex flex-wrap items-center gap-3"><Link href="/platform-admin/system" className="text-sm font-semibold text-cyan-700 border rounded-lg px-4 py-2.5">System operations</Link><button
             onClick={() => setRefresh((value) => value + 1)}
             className="flex items-center gap-2 text-sm border rounded-lg px-4 py-2.5"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
-          </button>
+          </button></div>
         </header>
         {error && (
           <p

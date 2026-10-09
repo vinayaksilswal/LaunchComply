@@ -30,7 +30,8 @@ import {
   diagramBounds,
   downloadArchitectureSvg,
 } from "./CloudDiagram";
-import { apiClient } from "@/lib/api";
+import { apiClient, ApiError } from "@/lib/api";
+import { codeArchitecture, sourceAreas, type SourceModule } from "./codeArchitecture";
 import { useAccount } from "@/components/auth/AccountProvider";
 import { ProductionDiagram, productionLayout, type DeploymentRequirements } from "./ProductionDiagram";
 import { RequirementsForm } from "./RequirementsForm";
@@ -57,7 +58,7 @@ interface Graph {
 }
 interface Evidence {
   repositories?: { id: string; full_name: string; branch: string; commit: string }[];
-  modules?: { id: string; path: string; language: string; status: string; imports: string[]; entry_points: string[] }[];
+  modules?: SourceModule[];
   module_edges?: Edge[];
   source_coverage?: { inspected: number; candidates: number; limit: number };
   repository: string;
@@ -234,7 +235,7 @@ export function ArchitectureCanvas() {
     } catch (failure) {
       setError(
         failure instanceof Error
-          ? failure.message
+          ? failure.message + (failure instanceof ApiError && failure.requestId ? ` Reference: ${failure.requestId.slice(0, 8)}.` : "")
           : "Unable to update architecture.",
       );
     } finally {
@@ -265,9 +266,10 @@ export function ArchitectureCanvas() {
     })),
     edges: [],
   };
-  if (draft?.evidence.modules?.length) {
-    codeGraph.nodes = draft.evidence.modules.map((module, index) => ({ id: module.id, label: module.path.split("/").at(-1) || module.path, service: module.language + " · " + module.status.toLowerCase(), zone: "APPLICATION", description: `${module.path}. ${module.entry_points.join("; ") || "No entry point detected"}. Imports: ${module.imports.join(", ") || "None detected"}`.slice(0, 500), x: 60 + (index % 4) * 330, y: 60 + Math.floor(index / 4) * 180 }));
-    codeGraph.edges = draft.evidence.module_edges || [];
+  const sourceDesign = codeArchitecture(draft?.evidence.modules || [], draft?.evidence.module_edges || [], draft?.evidence.repositories);
+  if (sourceDesign.graph.nodes.length) {
+    codeGraph.nodes = sourceDesign.graph.nodes;
+    codeGraph.edges = sourceDesign.graph.edges;
   }
   const shown =
     view === "code"
@@ -457,7 +459,7 @@ export function ArchitectureCanvas() {
         <section className="min-w-0 min-h-0 flex flex-col border-r border-slate-200">
           <div className="flex flex-wrap justify-between gap-3 items-center px-4 py-2 shrink-0 border-b border-slate-100">
             <div className="flex flex-wrap gap-4">
-              {zones.map((zone) => (
+              {(view === "code" ? sourceAreas : zones).map((zone) => (
                 <span
                   key={zone.id}
                   className="inline-flex gap-1.5 items-center text-[11px] text-slate-500"
@@ -480,7 +482,7 @@ export function ArchitectureCanvas() {
                   const container = canvas.current; setZoom(0.95);
                   requestAnimationFrame(() => container.scrollTo({ left: Math.max(0, instance.x * 0.95 - container.clientWidth / 2 + 90), top: Math.max(0, instance.y * 0.95 - container.clientHeight / 2 + 60), behavior: "smooth" }));
                 }
-              }} className="mr-2 max-w-48 border rounded-lg p-1.5 text-xs bg-white"><option value="">Find a component</option>{shown.nodes.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select>}
+              }} className="mr-2 max-w-48 border rounded-lg p-1.5 text-xs bg-white"><option value="">Find a component</option>{shown.nodes.map(item => <option key={item.id} value={item.id}>{view === "code" ? draft?.evidence.modules?.find(module => module.id === item.id)?.path || item.label : item.label}</option>)}</select>}
               {view === "cloud" && draft?.requirements && <button onClick={() => setNetworkView(value => !value)} className="mr-2 rounded-lg border px-2 py-1.5 text-xs font-semibold">{networkView ? "Edit logical design" : "Network diagram"}</button>}
               <button
                 disabled={
@@ -694,6 +696,7 @@ export function ArchitectureCanvas() {
                   zoom={zoom}
                   selected={selected}
                   code={view === "code"}
+                  boundaries={view === "code" && sourceDesign.boundaries.length ? sourceDesign.boundaries : undefined}
                   onSelect={(id) => {
                     setSelected(id);
                     setChatVisible(true);
