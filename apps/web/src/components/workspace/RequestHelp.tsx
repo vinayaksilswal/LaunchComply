@@ -5,7 +5,7 @@ import { ArrowRight, X, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api";
 import { useAccount } from "@/components/auth/AccountProvider";
-export function RequestHelp({ code, label }: { code: string; label: string }) {
+export function RequestHelp({ code, label, applicationId, architectureId }: { code: string; label: string; applicationId?: string; architectureId?: string }) {
   const { organization } = useAccount();
   const [open, setOpen] = useState(false);
   const [apps, setApps] = useState<{ id: string; name: string }[]>([]);
@@ -26,7 +26,7 @@ export function RequestHelp({ code, label }: { code: string; label: string }) {
       .then((items) => {
         if (active) {
           setApps(items);
-          setAppId(items[0]?.id || "");
+          setAppId(applicationId && items.some(item => item.id === applicationId) ? applicationId : items[0]?.id || "");
         }
       })
       .catch((failure) => {
@@ -35,7 +35,7 @@ export function RequestHelp({ code, label }: { code: string; label: string }) {
     return () => {
       active = false;
     };
-  }, [open, submitted]);
+  }, [open, submitted, applicationId]);
   useEffect(() => {
     setOpen(false);
     setSubmitted(false);
@@ -103,6 +103,7 @@ export function RequestHelp({ code, label }: { code: string; label: string }) {
                         request_id: requestId,
                         service_code: code,
                         application_id: appId || null,
+                        ...(architectureId ? { architecture_id: architectureId } : {}),
                         notes,
                       }),
                     });
@@ -126,10 +127,10 @@ export function RequestHelp({ code, label }: { code: string; label: string }) {
                   your business needs and track the work with you.
                 </p>
                 <label className="block text-sm font-medium">
-                  Application
+                  Business asset
                   <select
                     value={appId}
-                    disabled={busy}
+                    disabled={busy || !!applicationId}
                     onChange={(event) => {
                       setAppId(event.target.value);
                       setRequestId(crypto.randomUUID());

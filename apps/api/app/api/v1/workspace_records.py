@@ -50,6 +50,8 @@ async def records(module: str, application_id: str | None = None, record_id: str
         # Unsupported integrations are explicit rather than accidentally querying a global table.
         return {"records": [], "total": 0, "available": False}
     conditions = [model.organization_id == membership.organization_id]
+    if module == "deployments":
+        conditions.extend([model.deployment_mode != "SIMULATED", model.evidence_level != "SIMULATED"])
     if application_id:
         if not hasattr(model, "application_id"): raise HTTPException(400, "This record type is not application specific.")
         conditions.append(model.application_id == application_id)

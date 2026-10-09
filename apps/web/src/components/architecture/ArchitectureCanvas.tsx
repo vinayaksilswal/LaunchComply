@@ -463,7 +463,7 @@ export function ArchitectureCanvas() {
         </div>
       </div>
       <div
-        className={`relative grid flex-1 min-h-0 overflow-hidden ${chatVisible ? "lg:grid-cols-[minmax(0,1fr)_340px]" : "grid-cols-1"}`}
+        className={`relative grid flex-1 min-h-0 overflow-hidden ${chatVisible ? "md:grid-cols-[minmax(0,1fr)_340px]" : "grid-cols-1"}`}
       >
         <section className="min-w-0 min-h-0 flex flex-col border-r border-slate-200">
           <div className="flex flex-wrap justify-between gap-3 items-center px-4 py-2 shrink-0 border-b border-slate-100">
@@ -482,7 +482,7 @@ export function ArchitectureCanvas() {
               ))}
             </div>
             <div className="flex flex-wrap gap-1 items-center">
-              {view === "code" && !!draft?.evidence.modules?.length && <div className="flex gap-1 mr-2">
+              {view === "code" && !!draft?.evidence.modules?.length && <div className="flex flex-wrap gap-1 mr-2">
                 <button aria-pressed={codeMode === "overview"} onClick={() => { setCodeMode("overview"); setCodeFocus(null); setSelected(null); }} className={`rounded-lg border px-2 py-1.5 text-xs ${codeMode === "overview" ? "bg-cyan-50 text-cyan-800" : "bg-white"}`}>Source overview</button>
                 <button aria-pressed={codeMode === "files"} onClick={() => { setCodeMode("files"); setCodeFocus(null); setSelected(null); }} className={`rounded-lg border px-2 py-1.5 text-xs ${codeMode === "files" ? "bg-cyan-50 text-cyan-800" : "bg-white"}`}>All inspected files</button>
                 {codeFocus && <span className="self-center text-xs text-slate-500">Focused group</span>}
@@ -675,7 +675,7 @@ export function ArchitectureCanvas() {
                     <>
                       <p className="mt-2 text-sm text-emerald-700">Design {draft.design_approval.version} approved · {new Date(draft.design_approval.approved_at).toLocaleString()}</p>
                       <p className="mt-2 text-xs leading-5 text-slate-500">{draft.design_approval.scope} Saving changes requires a new design approval.</p>
-                      <Link href="/dashboard/deployments" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-cyan-700">Continue to deployment preparation <ArrowRight className="h-4 w-4" /></Link>
+                      <Link href={`/dashboard/deployments?application=${appId}`} className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-cyan-700">Continue to deployment preparation <ArrowRight className="h-4 w-4" /></Link>
                     </>
                   ) : (
                     <>
@@ -807,7 +807,7 @@ export function ArchitectureCanvas() {
           </div>
         </section>
         {chatVisible && (
-          <aside className="absolute inset-y-0 right-0 z-20 w-[min(340px,100%)] lg:static lg:w-auto flex flex-col min-h-0 overflow-hidden bg-white border-l shadow-xl lg:shadow-none">
+          <aside className="absolute inset-y-0 right-0 z-20 w-[min(340px,100%)] md:static md:w-auto flex flex-col min-h-0 overflow-hidden bg-white border-l shadow-xl md:shadow-none">
             <div className="px-4 py-3 shrink-0 border-b flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <span className="p-2 rounded-lg bg-indigo-50 text-indigo-600">

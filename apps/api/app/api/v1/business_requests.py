@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.permissions import require_platform_admin
-from app.api.v1.architecture_workspace import editor, member, application
+from app.api.v1.architecture_workspace import editor, member, application, latest, design_is_approved
 from app.models.auth import Organization, User
 from app.models.entities import ServiceRequest
 from app.models.audit import AuditEvent
@@ -50,12 +50,27 @@ class CreateRequest(BaseModel):
     request_id: uuid.UUID
     service_code: Code
     application_id: str | None = Field(default=None, max_length=36)
+    architecture_id: str | None = Field(default=None, max_length=36)
     notes: str = Field(default="", max_length=700)
 
 @router.post("/business-requests")
 async def create(payload: CreateRequest, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, payload.application_id, membership) if payload.application_id else None
     notes = (f"Application: {app.name} ({app.id})\n" if app else "") + payload.notes
+    if payload.architecture_id:
+        if not app or payload.service_code != "DEPLOYMENT_HELP":
+            raise HTTPException(422, "A saved architecture reference is only supported for a business asset deployment review.")
+        arch = await latest(db, app)
+        if not arch or arch.id != payload.architecture_id or (arch.spec_json or {}).get("source_changed"):
+            raise HTTPException(409, "The saved design changed. Refresh deployment preparation before submitting this review.")
+        spec = arch.spec_json or {}
+        evidence = spec.get("evidence") or {}
+        targets = spec.get("requirements") or {}
+        context = (f"Saved design: {arch.version} ({arch.id})\nSource snapshot: {evidence.get('commit') or 'Not recorded'}\n"
+            f"Design approval: {'Recorded' if design_is_approved(arch) else 'Not recorded'}\n"
+            f"Region: {targets.get('region') or 'Not chosen'}; availability: {targets.get('availability') or 'Not chosen'}\n"
+            f"Peak requests/min: {targets.get('peak_requests_per_minute') or 'Not recorded'}; concurrent users: {targets.get('concurrent_users') or 'Not recorded'}\n")
+        notes = context + notes
     existing = await db.get(ServiceRequest, str(payload.request_id))
     if existing:
         if existing.organization_id == membership.organization_id and existing.service_code == payload.service_code and existing.customer_notes == notes:

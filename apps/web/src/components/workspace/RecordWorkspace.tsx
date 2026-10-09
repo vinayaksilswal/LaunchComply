@@ -20,6 +20,7 @@ import { RequestHelp } from "./RequestHelp";
 import { ServiceRequests } from "./ServiceRequests";
 import { ServiceQuotes } from "./ServiceQuotes";
 import { AwsAccountConnection } from "./AwsAccountConnection";
+import { DeploymentPreparation } from "./DeploymentPreparation";
 interface RecordItem {
   id: string;
   title: string;
@@ -195,7 +196,7 @@ export function RecordWorkspace({ module }: { module: string }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {request && module !== "services" && <RequestHelp {...request} />}
+          {request && !["services", "deployments"].includes(module) && <RequestHelp {...request} />}
           <button
             onClick={() => setRefresh((value) => value + 1)}
             className="inline-flex gap-2 items-center px-4 py-2.5 border border-slate-200 rounded-lg text-sm hover:bg-slate-50"
@@ -234,28 +235,9 @@ export function RecordWorkspace({ module }: { module: string }) {
           </button>
         </div>
       )}
+      {module === "deployments" && <DeploymentPreparation />}
       {["operations", "deployments"].includes(module) && <AwsAccountConnection />}
       {module === "billing" && <ServiceQuotes />}
-      {module === "deployments" && (
-        <section aria-label="Deployment preparation" className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-base font-semibold">From your code to your AWS account</h2>
-          <ol className="mt-4 grid gap-4 text-sm sm:grid-cols-4">
-            {[
-              ["Connect GitHub", "Choose the repository for your application."],
-              ["Refine your design", "Review the diagram and propose changes with the assistant."],
-              ["Approve the design", "Record approval of the saved version in App design → Services & sizing."],
-              ["Prepare AWS deployment", "Verify access to your AWS account, review costs and approve the infrastructure plan."],
-            ].map(([title, description], index) => (
-              <li key={title} className="rounded-lg bg-slate-50 p-3">
-                <p className="font-semibold text-slate-800">{index + 1}. {title}</p>
-                <p className="mt-2 text-xs leading-5 text-slate-500">{description}</p>
-              </li>
-            ))}
-          </ol>
-          <p className="mt-4 text-xs leading-5 text-slate-500">Verify your AWS role above, then use “Help me deploy” to request a reviewed service. Operations confirms scope and issues a quote in Billing. Automatic provisioning is not available; approving a diagram or paying does not provision resources.</p>
-          <Link href="/dashboard/architecture" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-cyan-700">Review your app design <ArrowRight className="h-4 w-4" /></Link>
-        </section>
-      )}
       {module === "compliance" && (
         <div className="grid sm:grid-cols-3 gap-3">
           {[

@@ -312,19 +312,20 @@ async def openrouter_proposal(client, instructions, context, schema):
     if settings.OPENROUTER_FREE_MODELS_ONLY: provider["max_price"] = {"prompt": 0, "completion": 0}
     from app.services.architecture.provider_errors import AIProviderError, failure_kind, failure_code, parse_answer, response_payload, model_name
     attempts = []
-    # Native failover handles upstream errors; local validation also retries invalid 200 responses.
+    # Route one model per request so a rejected fallback envelope cannot prevent
+    # every candidate from being considered. The same deadline bounds all attempts.
     # Prompted JSON is intentional: several free models do not support response_format.
     try:
         async with asyncio.timeout(85):
-            for _ in range(3):
+            for _ in range(len(models)):
                 if not models: break
                 used = models[0]
                 started = time.monotonic()
-                record = {"requested_models": list(models), "selected_model": None, "http_status": None, "kind": "UPSTREAM_UNAVAILABLE"}
+                record = {"requested_models": [used], "selected_model": None, "http_status": None, "kind": "UPSTREAM_UNAVAILABLE"}
                 try:
                     response = await client.post("https://openrouter.ai/api/v1/chat/completions", timeout=28,
                         headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-                        json={"model": models[0], "models": models, "max_tokens": 16000, "stream": False, "provider": provider,
+                        json={"model": used, "max_tokens": 16000, "stream": False, "provider": provider,
                             "messages": provider_messages(instructions, context)})
                     record["http_status"] = response.status_code
                     payload = response_payload(response)

@@ -45,7 +45,7 @@ export function AwsAccountConnection() {
     } catch (failure) { setError(failure instanceof Error ? failure.message : "AWS verification did not complete."); }
     finally { setBusy(false); }
   };
-  return <section aria-label="AWS account connection" className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+  return <section id="aws-account-connection" aria-label="AWS account connection" className="overflow-hidden rounded-2xl border border-slate-200 bg-white scroll-mt-6">
     <header className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 p-5">
       <div><h2 className="flex items-center gap-2 font-semibold"><Cloud className="h-5 w-5 text-cyan-700" />Your AWS account</h2>
         <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">Connect with a dedicated AWS role. Your access keys stay out of LaunchComply. Review and approve your app design first.</p></div>

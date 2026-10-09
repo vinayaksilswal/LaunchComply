@@ -28,7 +28,11 @@ export function codeArchitecture(modules: SourceModule[], edges: ArchitectureGra
   for (const repoId of repoIds) {
     const repo = repositories.find(item => item.id === repoId);
     const groups = sourceAreas.map(area => ({ area, modules: modules.filter(item => (item.repository_id || "source") === repoId && (sourceAreas.some(value => value.id === item.area) ? item.area : "SUPPORT") === area.id).sort((a, b) => a.path.localeCompare(b.path)) })).filter(group => group.modules.length);
-    groups.forEach(({ area, modules: items }, column) => {
+    let left = 60;
+    let rows = 1;
+    groups.forEach(({ area, modules: items }) => {
+      const columns = Math.ceil(Math.sqrt(items.length));
+      rows = Math.max(rows, Math.ceil(items.length / columns));
       boundaries.push({ id: `${repoId}-${area.id}`, label: `${repo ? repo.full_name.split("/").at(-1) + " · " : ""}${area.name}`, nodes: items.map(item => item.id), color: area.color });
       items.forEach((item, row) => graph.nodes.push({
         id: item.id,
@@ -36,10 +40,11 @@ export function codeArchitecture(modules: SourceModule[], edges: ArchitectureGra
         service: `${item.language} · ${item.status.toLowerCase()}`,
         zone: area.zone,
         description: `${item.path}. ${item.entry_points.join("; ") || "No entry point detected"}. Imports: ${item.imports.join(", ") || "None detected"}`.slice(0, 700),
-        x: 60 + column * 340, y: top + row * 180,
+        x: left + row % columns * 340, y: top + Math.floor(row / columns) * 180,
       }));
+      left += columns * 340 + 40;
     });
-    top += Math.max(1, ...groups.map(group => group.modules.length)) * 180 + 90;
+    top += rows * 180 + 90;
   }
   const ids = new Set(graph.nodes.map(item => item.id));
   graph.edges = edges.filter(item => ids.has(item.source) && ids.has(item.target));
