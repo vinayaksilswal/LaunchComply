@@ -45,8 +45,15 @@ async def latest(db, app):
     # Legacy sample topologies have no verified provenance; never present them as code analysis.
     return next((item for item in records if (item.spec_json or {}).get("format") == "repository-draft-v1"), None)
 
+def pending_proposal(spec):
+    proposal = spec.get("proposal")
+    return proposal if proposal and proposal.get("graph") != spec.get("graph") else None
+
 def output(arch):
-    return {"id": arch.id, "version": arch.version, "created_at": arch.created_at, **arch.spec_json} if arch else None
+    if not arch:
+        return None
+    return {"id": arch.id, "version": arch.version, "created_at": arch.created_at,
+            **arch.spec_json, "proposal": pending_proposal(arch.spec_json)}
 
 def design_is_approved(arch):
     if not arch:
@@ -55,7 +62,7 @@ def design_is_approved(arch):
     approval = spec.get("design_approval") or {}
     graph = spec.get("graph")
     return bool(isinstance(approval, dict) and isinstance(graph, dict) and graph.get("nodes")
-        and not spec.get("source_changed") and not spec.get("proposal") and approval.get("architecture_id") == arch.id
+        and not spec.get("source_changed") and not pending_proposal(spec) and approval.get("architecture_id") == arch.id
         and approval.get("version") == arch.version
         and approval.get("graph_fingerprint") == knowledge.fingerprint(graph)
         and approval.get("repository_commit") == (spec.get("evidence") or {}).get("commit"))
@@ -170,7 +177,7 @@ async def approve_design(application_id: str, payload: ApplyReferences,
         raise HTTPException(409, "Add and save a cloud design before approving it.")
     if not arch.spec_json.get("requirements"):
         raise HTTPException(409, "Set expected traffic, region and availability before approving the design.")
-    if arch.spec_json.get("proposal"):
+    if pending_proposal(arch.spec_json):
         raise HTTPException(409, "Apply and save the pending proposal before approving this design.")
     running = arch.spec_json.get("ai_request") or {}
     if running.get("status") == "RUNNING" and (datetime.now(timezone.utc) - datetime.fromisoformat(running["started_at"])).total_seconds() < 110:
@@ -246,13 +253,16 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
     spec.pop("last_ai_failure", None)
     spec["ai_request"] = {**spec["ai_request"], "status": "COMPLETED", "finished_at": finished}
     spec["messages"] = (spec["messages"] + [{"role": "user", "content": payload.message}, {"role": "assistant", "content": answer["message"]}])[-20:]
-    spec["proposal"] = {"id": str(uuid.uuid4()), "graph": answer["graph"]}
+    # An explanation with no diagram edits must not block requirement entry or
+    # make the customer apply an unchanged graph. Existing versions stay intact.
+    graph_changed = answer["graph"] != spec["graph"]
+    spec["proposal"] = {"id": str(uuid.uuid4()), "graph": answer["graph"]} if graph_changed else None
     spec["last_ai_at"] = now.isoformat()
     if answer.get("ai_model"): spec["last_ai_model"] = answer["ai_model"]
     if answer.get("agent_workflow"): spec["last_ai_workflow"] = answer["agent_workflow"]
     arch.spec_json = spec
     await audit(db, membership, app, "ARCHITECTURE_AI_PROPOSAL_CREATED", {"request_id": request_id,
-        "provider": settings.ARCHITECTURE_AI_PROVIDER, "model": answer.get("ai_model"), "attempts": answer.get("provider_attempts", [])})
+        "provider": settings.ARCHITECTURE_AI_PROVIDER, "model": answer.get("ai_model"), "attempts": answer.get("provider_attempts", []), "graph_changed": graph_changed})
     await db.commit()
     return output(arch)
 
