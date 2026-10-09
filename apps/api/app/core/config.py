@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     OPENROUTER_ARCHITECTURE_MODEL: str = ""
     OPENROUTER_ARCHITECTURE_MODELS: str = ""
     OPENROUTER_FREE_MODELS_ONLY: bool = True
+    OPENROUTER_FREE_ROUTER_FALLBACK: bool = True
     ARCHITECTURE_AI_MODEL: str = "gpt-4.1-mini"
     ENABLE_AWS_KNOWLEDGE: bool = False
     ENABLE_SERVICE_PAYMENTS: bool = False

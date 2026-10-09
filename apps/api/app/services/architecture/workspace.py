@@ -48,7 +48,8 @@ class AIAnswer(BaseModel):
     graph: Graph
 
 def ai_available():
-    return bool(settings.ENABLE_AI_COPILOT and ((settings.OPENROUTER_API_KEY and (settings.OPENROUTER_ARCHITECTURE_MODELS or settings.OPENROUTER_ARCHITECTURE_MODEL)) if settings.ARCHITECTURE_AI_PROVIDER == "openrouter" else settings.OPENAI_API_KEY))
+    from app.services.architecture.routing import openrouter_models
+    return bool(settings.ENABLE_AI_COPILOT and ((settings.OPENROUTER_API_KEY and openrouter_models()) if settings.ARCHITECTURE_AI_PROVIDER == "openrouter" else settings.OPENAI_API_KEY))
 
 def github_available():
     return bool(settings.GITHUB_APP_ID.isdigit() and settings.GITHUB_APP_PRIVATE_KEY)
@@ -302,11 +303,12 @@ async def provider_refine(graph, evidence, message, history, aws_references=None
 
 async def openrouter_proposal(client, instructions, context, schema):
     from app.services.architecture.agent import provider_messages
-    models = list(dict.fromkeys(value.strip() for value in (settings.OPENROUTER_ARCHITECTURE_MODELS or settings.OPENROUTER_ARCHITECTURE_MODEL).split(",") if value.strip()))[:6]
+    from app.services.architecture.routing import openrouter_models, FREE_ROUTER, REQUEST_BUDGET_SECONDS, MODEL_TIMEOUT_SECONDS
+    models = openrouter_models()
     if not models or any(not re.fullmatch(r"[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.:-]+", value) for value in models):
         raise HTTPException(503, {"code": "ARCHITECTURE_AI_MODEL_CONFIG", "message": "Configure valid architecture model IDs in the backend environment."})
-    if settings.OPENROUTER_FREE_MODELS_ONLY and any(not value.endswith(":free") for value in models):
-        raise HTTPException(503, {"code": "ARCHITECTURE_AI_MODEL_CONFIG", "message": "Free-only routing requires free model IDs."})
+    if settings.OPENROUTER_FREE_MODELS_ONLY and any(not value.endswith(":free") and value != FREE_ROUTER for value in models):
+        raise HTTPException(503, {"code": "ARCHITECTURE_AI_MODEL_CONFIG", "message": "Free-only routing requires free model IDs or the free models router."})
     instructions += " Return one JSON object only, without Markdown fences. Match this schema exactly: " + json.dumps(schema)
     provider = {"data_collection": "deny"}
     if settings.OPENROUTER_FREE_MODELS_ONLY: provider["max_price"] = {"prompt": 0, "completion": 0}
@@ -315,25 +317,31 @@ async def openrouter_proposal(client, instructions, context, schema):
     # Route one model per request so a rejected fallback envelope cannot prevent
     # every candidate from being considered. The same deadline bounds all attempts.
     # Prompted JSON is intentional: several free models do not support response_format.
+    deadline = time.monotonic() + REQUEST_BUDGET_SECONDS
     try:
-        async with asyncio.timeout(85):
-            for _ in range(len(models)):
-                if not models: break
-                used = models[0]
+        async with asyncio.timeout(REQUEST_BUDGET_SECONDS):
+            for candidate in models:
+                # Reserve a full final attempt instead of spending the entire
+                # deadline on slow preferred models. Account policy blocks stop.
+                reserved = MODEL_TIMEOUT_SECONDS if candidate != FREE_ROUTER and FREE_ROUTER in models else 0
+                remaining = deadline - time.monotonic() - reserved
+                if remaining < 1: continue
+                used = candidate
                 started = time.monotonic()
                 record = {"requested_models": [used], "selected_model": None, "http_status": None, "kind": "UPSTREAM_UNAVAILABLE"}
                 try:
-                    response = await client.post("https://openrouter.ai/api/v1/chat/completions", timeout=28,
-                        headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-                        json={"model": used, "max_tokens": 16000, "stream": False, "provider": provider,
-                            "messages": provider_messages(instructions, context)})
+                    async with asyncio.timeout(min(MODEL_TIMEOUT_SECONDS, remaining)):
+                        response = await client.post("https://openrouter.ai/api/v1/chat/completions", timeout=min(MODEL_TIMEOUT_SECONDS, remaining),
+                            headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                            json={"model": used, "max_tokens": 16000, "stream": False, "provider": provider,
+                                "messages": provider_messages(instructions, context)})
                     record["http_status"] = response.status_code
                     payload = response_payload(response)
                     if response.status_code != 200:
                         record["kind"] = failure_kind(response.status_code, payload)
                     if response.status_code == 200:
-                        used = model_name(payload.get("model"), used)
-                        record["selected_model"] = used
+                        selected_model = model_name(payload.get("model"), None)
+                        record["selected_model"] = selected_model
                         record["kind"] = "INVALID_RESPONSE"
                         choice = payload["choices"][0]
                         if choice.get("finish_reason") != "stop":
@@ -342,12 +350,12 @@ async def openrouter_proposal(client, instructions, context, schema):
                         text = choice["message"]["content"]
                         # Never save unvalidated provider output, extra fields, executable code or broken edges.
                         answer = parse_answer(text, AIAnswer)
-                        answer["ai_model"] = used
+                        if selected_model: answer["ai_model"] = selected_model
                         record["kind"] = "VALID_PROPOSAL"
                         record["elapsed_ms"] = round((time.monotonic() - started) * 1000)
                         answer["provider_attempts"] = attempts + [record]
                         return answer
-                except httpx.TimeoutException:
+                except (httpx.TimeoutException, TimeoutError):
                     record["kind"] = "TIMEOUT"
                 except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
                     pass
@@ -355,8 +363,7 @@ async def openrouter_proposal(client, instructions, context, schema):
                 attempts.append(record)
                 if record["kind"] in {"AUTH_FAILED", "CREDIT_LIMIT", "POLICY_BLOCKED"}:
                     raise AIProviderError(failure_code(record["kind"]), attempts, 503)
-                models = [model for model in models if model != used] if used in models else models[1:]
     except TimeoutError:
-        attempts.append({"requested_models": [], "selected_model": None, "http_status": None, "kind": "TIMEOUT", "elapsed_ms": 85000})
+        attempts.append({"requested_models": [], "selected_model": None, "http_status": None, "kind": "TIMEOUT", "elapsed_ms": REQUEST_BUDGET_SECONDS * 1000})
     kind = attempts[-1]["kind"] if attempts else "UPSTREAM_UNAVAILABLE"
     raise AIProviderError(failure_code(kind), attempts)

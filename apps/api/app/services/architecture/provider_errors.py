@@ -23,7 +23,7 @@ def failure_kind(status, payload):
             inner = nested.get("error", nested) if isinstance(nested, dict) else {}
             if isinstance(inner, dict): message += " " + str(inner.get("message", "")).lower()
         except (ValueError, TypeError, RecursionError):
-            pass
+            message += " " + raw.lower()
     if status in {400, 422}:
         if "model" in message and any(word in message for word in ("required", "must specify", "missing")): return "REQUIRED_MODEL"
         if "model" in message and any(word in message for word in ("invalid", "unknown", "not found", "does not exist")): return "INVALID_MODEL"
@@ -33,6 +33,8 @@ def failure_kind(status, payload):
     # Text is inspected only to classify the error; it is never recorded or returned.
     if status == 404 and any(word in message for word in ("privacy", "data policy", "data collection")):
         return "PRIVACY_FILTER"
+    if status == 429 and any(word in message for word in ("free-models-per-day", "daily limit", "daily quota", "requests per day")):
+        return "FREE_ALLOWANCE_EXHAUSTED"
     if status == 403:
         if any(word in message for word in ("guardrail", "content filter", "prompt injection", "sensitive info", "moderation")): return "POLICY_BLOCKED"
         if any(word in message for word in ("budget", "credit", "spending", "allowance")): return "CREDIT_LIMIT"
@@ -45,6 +47,7 @@ def failure_code(kind):
     return {"AUTH_FAILED": "ARCHITECTURE_AI_AUTH_FAILED", "CREDIT_LIMIT": "ARCHITECTURE_AI_CREDIT_LIMIT",
         "NO_ENDPOINT": "ARCHITECTURE_AI_NO_ENDPOINT", "PRIVACY_FILTER": "ARCHITECTURE_AI_PRIVACY_FILTER",
         "RATE_LIMIT": "ARCHITECTURE_AI_RATE_LIMIT", "TIMEOUT": "ARCHITECTURE_AI_TIMEOUT",
+        "FREE_ALLOWANCE_EXHAUSTED": "ARCHITECTURE_AI_FREE_ALLOWANCE_EXHAUSTED",
         "CONTEXT_LIMIT": "ARCHITECTURE_AI_CONTEXT_LIMIT", "REQUEST_REJECTED": "ARCHITECTURE_AI_REQUEST_REJECTED",
         "INVALID_MODEL": "ARCHITECTURE_AI_MODEL_CONFIG", "OUTPUT_BUDGET": "ARCHITECTURE_AI_REQUEST_REJECTED",
         "MODEL_ACCESS_DENIED": "ARCHITECTURE_AI_ACCESS_DENIED", "POLICY_BLOCKED": "ARCHITECTURE_AI_POLICY_BLOCKED",

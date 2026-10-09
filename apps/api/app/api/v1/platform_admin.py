@@ -252,12 +252,20 @@ async def architecture_ai_operations(admin_user: User = Depends(require_platform
         events.append({"id": event.id, "business_name": business_name or "Business unavailable", "created_at": event.created_at,
             "action": event.action, "request_id": details.get("request_id"), "code": details.get("code"),
             "provider": details.get("provider"), "model": details.get("model"), "attempts": details.get("attempts", [])})
-    models = [value.strip() for value in (settings.OPENROUTER_ARCHITECTURE_MODELS or settings.OPENROUTER_ARCHITECTURE_MODEL).split(",") if value.strip()][:6]
+    from app.services.architecture.routing import openrouter_models
+    models = openrouter_models()
     return {"configured": ai_available(), "provider": settings.ARCHITECTURE_AI_PROVIDER,
         "models": models if settings.ARCHITECTURE_AI_PROVIDER == "openrouter" else [settings.ARCHITECTURE_AI_MODEL],
         "free_only": settings.OPENROUTER_FREE_MODELS_ONLY if settings.ARCHITECTURE_AI_PROVIDER == "openrouter" else False,
         "data_collection": "deny" if settings.ARCHITECTURE_AI_PROVIDER == "openrouter" else "Provider-specific policy",
         "events": events, "scope": "Latest 50 recorded request outcomes. Configuration does not prove availability."}
+
+
+@router.get("/architecture-ai/provider-status")
+async def architecture_ai_provider_status(admin_user: User = Depends(require_platform_admin)):
+    """Explicit, read-only key/allowance observation. No completion or source upload."""
+    from app.services.architecture.provider_status import observe_provider_access
+    return await observe_provider_access()
 
 
 @router.get("/status-incidents")
