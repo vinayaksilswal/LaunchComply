@@ -19,6 +19,7 @@ from app.schemas.application import (
 from app.core.audit import log_audit_event
 from app.models.source_control import Repository, ApplicationRepository, SourceControlConnection, ConnectionStatus
 from app.models.audit import AuditEvent
+from app.models.source_archive import ApplicationSourceArchive
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
 
@@ -35,12 +36,16 @@ async def application_workspace(application_id: str, request: Request,
         .join(SourceControlConnection).where(ApplicationRepository.application_id == application.id,
             ApplicationRepository.organization_id == org_id, Repository.organization_id == org_id, Repository.selected == True,
             SourceControlConnection.organization_id == org_id, SourceControlConnection.status == ConnectionStatus.ACTIVE).limit(1))).scalar_one_or_none()
+    upload = (await db.execute(select(ApplicationSourceArchive.filename, ApplicationSourceArchive.sha256,
+        ApplicationSourceArchive.size_bytes, ApplicationSourceArchive.file_count, ApplicationSourceArchive.created_at).where(
+        ApplicationSourceArchive.application_id == application.id, ApplicationSourceArchive.organization_id == org_id))).mappings().one_or_none()
     activity = (await db.execute(select(AuditEvent).where(AuditEvent.organization_id == org_id,
         AuditEvent.entity_id == application.id).order_by(AuditEvent.created_at.desc()).limit(10))).scalars().all()
     return {"id": application.id, "name": application.name, "created_at": application.created_at,
         "repository": {"full_name": repository.full_name, "url": repository.html_url,
             "branch": repository.default_branch, "visibility": repository.visibility, "last_synced_at": repository.last_synced_at} if repository else None,
         "submitted_repository_url": application.repo_url,
+        "source_archive": dict(upload) if upload else None,
         "assessments": {"architecture": "NOT_ASSESSED", "deployment": "NOT_VERIFIED", "security": "NOT_ASSESSED", "compliance": "NOT_ASSESSED"},
         "activity": [{"id": item.id, "action": item.action, "created_at": item.created_at} for item in activity]}
 
@@ -83,6 +88,7 @@ async def list_applications(
             slug=app.slug,
             description=app.description,
             repo_url=app.repo_url,
+            repo_provider=app.repo_provider,
             repo_branch=app.repo_branch,
             framework_frontend=app.framework_frontend,
             framework_backend=app.framework_backend,
@@ -159,6 +165,7 @@ async def create_application(
         slug=app.slug,
         description=app.description,
         repo_url=app.repo_url,
+            repo_provider=app.repo_provider,
         repo_branch=app.repo_branch,
         framework_frontend=app.framework_frontend,
         framework_backend=app.framework_backend,

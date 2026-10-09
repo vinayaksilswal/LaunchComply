@@ -8,6 +8,7 @@ from app.services.seed_service import seed_initial_data
 from app.api.v1.router import api_v1_router
 from sqlalchemy import text
 from sqlalchemy.orm import configure_mappers
+from app.core.upload_limits import CodeUploadLimitMiddleware
 import asyncio
 import app.models  # Ensure all models are registered with Base
 
@@ -54,6 +55,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(CodeUploadLimitMiddleware, path=f"{settings.API_V1_STR}/onboarding/upload")
 
 # Security Headers Middleware
 @app.middleware("http")

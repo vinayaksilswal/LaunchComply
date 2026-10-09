@@ -22,6 +22,7 @@ class ApplicationCreate(BaseModel):
     database_engine: str = "Not analyzed"
 
 class ApplicationResponse(BaseModel):
+    repo_provider: Optional[str] = None
     id: str
     organization_id: str
     name: str

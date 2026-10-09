@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Fragment } from "react";
+import { usePathname } from "next/navigation";
 import { useAccount } from "@/components/auth/AccountProvider";
 
 export default function DashboardLayout({
@@ -18,9 +19,10 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const fixedWorkspace = usePathname() === "/dashboard/architecture";
   const { organization, loading, error } = useAccount();
   return (
-    <div className="min-h-screen bg-white flex text-slate-900">
+    <div className={`${fixedWorkspace ? "h-dvh overflow-hidden" : "min-h-screen"} bg-white flex text-slate-900`}>
       <a href="#workspace-content" className="skip-link">
         Skip to workspace
       </a>
@@ -31,9 +33,9 @@ export default function DashboardLayout({
       <CommandPalette />
 
       {/* Main Content Area */}
-      <div className="flex-1 lg:ml-64 flex flex-col min-w-0 bg-slate-50/40 pt-14 lg:pt-0">
+      <div className="flex-1 lg:ml-64 flex flex-col min-w-0 min-h-0 bg-slate-50/40 pt-14 lg:pt-0">
         {/* Top Header */}
-        <header className="h-14 bg-white/95 border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md">
+        <header className="h-14 shrink-0 bg-white/95 border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md">
           {/* Breadcrumb / Context */}
           <div className="flex items-center gap-2 text-xs truncate">
             <span className="text-slate-500 font-medium hidden sm:inline">
@@ -88,7 +90,7 @@ export default function DashboardLayout({
         <main
           id="workspace-content"
           tabIndex={-1}
-          className="flex-1 overflow-y-auto"
+          className={`flex-1 min-h-0 ${fixedWorkspace ? "overflow-hidden" : "overflow-y-auto"}`}
         >
           {loading ? (
             <div role="status" className="p-8 text-sm text-slate-500">

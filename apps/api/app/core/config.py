@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     GITHUB_CALLBACK_URL: str = ""
     GITHUB_APP_PRIVATE_KEY: str = ""
     OPENAI_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
+    ARCHITECTURE_AI_PROVIDER: Literal["openai", "openrouter"] = "openai"
+    OPENROUTER_ARCHITECTURE_MODEL: str = ""
+    OPENROUTER_ARCHITECTURE_MODELS: str = ""
+    OPENROUTER_FREE_MODELS_ONLY: bool = True
     ARCHITECTURE_AI_MODEL: str = "gpt-4.1-mini"
     ENABLE_AWS_KNOWLEDGE: bool = False
     ENABLE_SERVICE_PAYMENTS: bool = False

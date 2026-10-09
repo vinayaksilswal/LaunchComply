@@ -162,7 +162,7 @@ export const CloudDiagram = forwardRef<
     <svg
       ref={ref}
       role="img"
-      aria-label={`${code ? "Detected dependency components" : "Proposed cloud architecture"} diagram`}
+      aria-label={`${code ? "Static code findings" : "Proposed cloud architecture"} diagram`}
       width={width * zoom}
       height={height * zoom}
       viewBox={`0 0 ${width} ${height}`}
@@ -173,7 +173,7 @@ export const CloudDiagram = forwardRef<
     >
       <title>
         {code
-          ? "Repository dependency findings"
+          ? "Static repository code findings"
           : "Cloud architecture proposal — not deployed"}
       </title>
       <desc>
@@ -463,7 +463,7 @@ export const CloudDiagram = forwardRef<
               fontWeight="600"
               fill={layer.color}
             >
-              {code ? "DEPENDENCY FINDING" : "PROPOSED SERVICE"}
+              {code ? "STATIC CODE FINDING" : "PROPOSED SERVICE"}
             </text>
             <text
               x={node.x + 264}

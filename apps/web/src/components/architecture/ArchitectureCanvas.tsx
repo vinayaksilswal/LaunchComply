@@ -32,6 +32,8 @@ import {
 } from "./CloudDiagram";
 import { apiClient } from "@/lib/api";
 import { useAccount } from "@/components/auth/AccountProvider";
+import { ProductionDiagram, productionLayout, type DeploymentRequirements } from "./ProductionDiagram";
+import { RequirementsForm } from "./RequirementsForm";
 import { AwsReferences, type AwsReferenceReview } from "./AwsReferences";
 
 type Zone = "EDGE" | "APPLICATION" | "DATA" | "SUPPORT";
@@ -54,6 +56,9 @@ interface Graph {
   edges: Edge[];
 }
 interface Evidence {
+  modules?: { id: string; path: string; language: string; status: string; imports: string[]; entry_points: string[] }[];
+  module_edges?: Edge[];
+  source_coverage?: { inspected: number; candidates: number; limit: number };
   repository: string;
   branch: string;
   commit: string;
@@ -67,6 +72,7 @@ interface Evidence {
   }[];
 }
 interface Draft {
+  requirements?: DeploymentRequirements;
   id: string;
   version: string;
   graph: Graph;
@@ -119,6 +125,8 @@ export function ArchitectureCanvas() {
   const [newConnection, setNewConnection] = useState("");
   const [chatVisible, setChatVisible] = useState(true);
   const [reviewApproval, setReviewApproval] = useState(false);
+  const [requirementsVisible, setRequirementsVisible] = useState(false);
+  const [networkView, setNetworkView] = useState(true);
   const canvas = useRef<HTMLDivElement>(null);
   const diagram = useRef<SVGSVGElement>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
@@ -218,6 +226,7 @@ export function ArchitectureCanvas() {
         }),
       );
       if (name === "chat") setPrompt("");
+      if (name === "requirements") setRequirementsVisible(false);
     } catch (failure) {
       setError(
         failure instanceof Error
@@ -252,6 +261,10 @@ export function ArchitectureCanvas() {
     })),
     edges: [],
   };
+  if (draft?.evidence.modules?.length) {
+    codeGraph.nodes = draft.evidence.modules.map((module, index) => ({ id: module.id, label: module.path.split("/").at(-1) || module.path, service: module.language + " · " + module.status.toLowerCase(), zone: "APPLICATION", description: `${module.path}. ${module.entry_points.join("; ") || "No entry point detected"}. Imports: ${module.imports.join(", ") || "None detected"}`.slice(0, 500), x: 60 + (index % 4) * 330, y: 60 + Math.floor(index / 4) * 180 }));
+    codeGraph.edges = draft.evidence.module_edges || [];
+  }
   const shown =
     view === "code"
       ? codeGraph
@@ -259,7 +272,8 @@ export function ArchitectureCanvas() {
         ? draft.proposal.graph
         : graph;
   const node = shown.nodes.find((item) => item.id === selected);
-  const { width, height } = diagramBounds(shown);
+  const production = view === "cloud" && networkView && draft?.requirements && shown.nodes.length > 0;
+  const { width, height } = production ? productionLayout(shown, draft!.requirements!) : diagramBounds(shown);
   const updateNode = (change: Partial<Node>) => {
     if (!node || !canEdit || busy || view === "code" || preview) return;
     setGraph((current) => ({
@@ -273,7 +287,7 @@ export function ArchitectureCanvas() {
   const fit = () => {
     if (canvas.current) {
       setZoom(
-        Math.max(0.2, Math.min(1, (canvas.current.clientWidth - 32) / width, (canvas.current.clientHeight - 32) / height)),
+        Math.max(0.08, Math.min(1, (canvas.current.clientWidth - 32) / width, (canvas.current.clientHeight - 32) / height)),
       );
       canvas.current.scrollTo({ top: 0, left: 0 });
     }
@@ -284,13 +298,17 @@ export function ArchitectureCanvas() {
       if (canvas.current)
         setZoom(
           Math.max(
-            0.65,
-            Math.min(1, (canvas.current.clientWidth - 32) / width),
+            0.08,
+            Math.min(1, (canvas.current.clientWidth - 32) / width, (canvas.current.clientHeight - 24) / height),
           ),
         );
     });
-    return () => cancelAnimationFrame(frame);
-  }, [draftId, view, chatVisible, width]);
+    const observer = new ResizeObserver(() => {
+      if (canvas.current) setZoom(Math.max(0.08, Math.min(1, (canvas.current.clientWidth - 32) / width, (canvas.current.clientHeight - 24) / height)));
+    });
+    observer.observe(canvas.current);
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); };
+  }, [draftId, view, chatVisible, width, height]);
   const exportDraft = () => {
     if (!draft) return;
     const blob = new Blob(
@@ -300,6 +318,7 @@ export function ArchitectureCanvas() {
             status: !dirty && draft.design_approval ? "DESIGN_APPROVED_NOT_DEPLOYED" : "DRAFT_NOT_DEPLOYED",
             application: workspace?.application_name,
             graph,
+            requirements: draft.requirements,
             evidence: draft.evidence,
             aws_references: dirty ? undefined : draft.aws_references,
             design_approval: dirty ? undefined : draft.design_approval,
@@ -318,8 +337,8 @@ export function ArchitectureCanvas() {
     URL.revokeObjectURL(url);
   };
   return (
-    <div className="bg-white min-h-[calc(100vh-56px)] text-slate-900">
-      <header className="px-6 py-5 border-b border-slate-200 flex flex-wrap gap-4 items-center justify-between">
+    <div className="bg-white h-full min-h-0 overflow-hidden flex flex-col text-slate-900">
+      <header className="px-5 py-3 shrink-0 border-b border-slate-200 flex flex-wrap gap-4 items-center justify-between">
         <div className="flex gap-3 items-center">
           <span className="p-2.5 rounded-xl bg-cyan-50 text-cyan-700">
             <Network className="w-6 h-6" />
@@ -334,6 +353,7 @@ export function ArchitectureCanvas() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {draft && <button disabled={!!busy || dirty || !canEdit} onClick={() => { setRequirementsVisible(value => !value); setChatVisible(true); }} className="rounded-lg border px-3 py-2 text-xs font-semibold">Traffic & availability</button>}
           <select
             aria-label="Architecture application"
             disabled={loading || !!busy || dirty}
@@ -386,11 +406,11 @@ export function ArchitectureCanvas() {
           </button>
         </div>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-b border-slate-200">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-2 shrink-0 border-b border-slate-200">
         <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
           {[
             { id: "cloud", label: "Cloud deployment design" },
-            { id: "code", label: "Application code findings" },
+            { id: "code", label: "Application code map" },
             { id: "inventory", label: "Services & sizing" },
           ].map((tab) => (
             <button
@@ -407,6 +427,7 @@ export function ArchitectureCanvas() {
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs">
+          {draft && <button disabled={!!busy || dirty || !canEdit} onClick={() => operation("analyze", "analyze")} className="font-semibold text-cyan-700 disabled:opacity-40">{busy === "analyze" ? "Inspecting source…" : "Refresh code findings"}</button>}
           <span className="text-amber-700 bg-amber-50 rounded-full px-3 py-1.5 border border-amber-100">
             {dirty
               ? "Unsaved changes"
@@ -426,10 +447,10 @@ export function ArchitectureCanvas() {
         </div>
       </div>
       <div
-        className={`grid ${chatVisible ? "xl:grid-cols-[minmax(0,1fr)_360px]" : "grid-cols-1"}`}
+        className={`relative grid flex-1 min-h-0 overflow-hidden ${chatVisible ? "lg:grid-cols-[minmax(0,1fr)_340px]" : "grid-cols-1"}`}
       >
-        <section className="min-w-0 border-r border-slate-200">
-          <div className="flex flex-wrap justify-between gap-3 items-center px-5 py-3 border-b border-slate-100">
+        <section className="min-w-0 min-h-0 flex flex-col border-r border-slate-200">
+          <div className="flex flex-wrap justify-between gap-3 items-center px-4 py-2 shrink-0 border-b border-slate-100">
             <div className="flex flex-wrap gap-4">
               {zones.map((zone) => (
                 <span
@@ -445,9 +466,10 @@ export function ArchitectureCanvas() {
               ))}
             </div>
             <div className="flex flex-wrap gap-1 items-center">
+              {view === "cloud" && draft?.requirements && <button onClick={() => setNetworkView(value => !value)} className="mr-2 rounded-lg border px-2 py-1.5 text-xs font-semibold">{networkView ? "Edit logical design" : "Network diagram"}</button>}
               <button
                 disabled={
-                  !draft || view === "code" || preview || !!busy || !canEdit
+                  !draft || view === "code" || preview || !!busy || !canEdit || !!production
                 }
                 onClick={() => {
                   setGraph(arrangeArchitecture(graph));
@@ -468,7 +490,7 @@ export function ArchitectureCanvas() {
               <button
                 aria-label="Zoom out"
                 disabled={!shown.nodes.length || view === "inventory"}
-                onClick={() => setZoom((value) => Math.max(0.25, value - 0.1))}
+                onClick={() => setZoom((value) => Math.max(0.08, value - 0.1))}
                 className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-40"
               >
                 <ZoomOut className="w-4 h-4" />
@@ -497,7 +519,7 @@ export function ArchitectureCanvas() {
           </div>
           <div
             ref={canvas}
-            className="relative overflow-auto min-h-[580px] h-[calc(100vh-260px)] bg-white"
+            className="relative overflow-auto flex-1 min-h-0 bg-white"
             style={{
               backgroundImage: "radial-gradient(#dbe3ec 1px, transparent 1px)",
               backgroundSize: "20px 20px",
@@ -512,7 +534,7 @@ export function ArchitectureCanvas() {
                 Loading architecture…
               </div>
             ) : !draft ? (
-              <div className="flex flex-col items-center justify-center min-h-[580px] p-8 text-center">
+              <div className="flex flex-col items-center justify-center h-full p-5 text-center">
                 <span className="rounded-2xl border border-cyan-100 bg-cyan-50 p-5 mb-5">
                   <Network className="w-12 h-12 text-cyan-600" />
                 </span>
@@ -626,7 +648,7 @@ export function ArchitectureCanvas() {
                     </>
                   ) : (
                     <>
-                      <p className="mt-2 text-xs leading-5 text-slate-500">Review all services and requirements above. Approval records this saved version. AWS connection and a costed infrastructure plan follow before deployment.</p>
+                      <p className="mt-2 text-xs leading-5 text-slate-500">Review all services and save traffic, region and availability requirements above. Approval records this saved version. AWS connection and a costed infrastructure plan follow before deployment.</p>
                       {reviewApproval ? (
                         <div className="mt-3 space-y-3">
                           <p className="text-xs leading-5 text-slate-700">Confirm design {draft.version}? This records your decision and does not create AWS resources or grant cloud permissions.</p>
@@ -636,7 +658,7 @@ export function ArchitectureCanvas() {
                           </div>
                         </div>
                       ) : (
-                        <button disabled={!!busy || dirty || preview || !!draft.proposal || !canEdit || !shown.nodes.length} onClick={() => setReviewApproval(true)} className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">Review design approval</button>
+                        <button disabled={!!busy || dirty || preview || !!draft.proposal || !canEdit || !shown.nodes.length || !draft.requirements} onClick={() => setReviewApproval(true)} className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">Review design approval</button>
                       )}
                       {(dirty || preview || draft.proposal) && <p className="mt-2 text-xs text-amber-700">Apply pending proposals and save changes before approval.</p>}
                     </>
@@ -651,7 +673,7 @@ export function ArchitectureCanvas() {
               </div>
             ) : (
               <div style={{ width: width * zoom, height: height * zoom }}>
-                <CloudDiagram
+                {production ? <ProductionDiagram ref={diagram} graph={shown} requirements={draft!.requirements!} zoom={zoom} selected={selected} onSelect={id => { setSelected(id); setChatVisible(true); }} /> : <CloudDiagram
                   ref={diagram}
                   graph={shown}
                   zoom={zoom}
@@ -705,16 +727,14 @@ export function ArchitectureCanvas() {
                   onPointerUp={() => {
                     drag.current = null;
                   }}
-                />
+                />}
               </div>
             )}
           </div>
-          <p className="px-5 py-3 border-t border-slate-100 text-[11px] leading-5 text-slate-500">
-            Arrows show proposed flow. Layer placement does not verify VPC
-            isolation, availability zones, IAM permissions, or deployed
-            resources.
+          <p className="px-4 py-1.5 shrink-0 border-t border-slate-100 text-[11px] leading-5 text-slate-500">
+            {view === "code" ? "Static imports from the inspected source sample. Dynamic runtime connections are not verified." : "Proposed placement · not deployed. Traffic targets inform planning; exact capacity, networking and recovery require validation."}
           </p>
-          <div className="px-5 py-3 border-t flex flex-wrap justify-between items-center gap-3 text-xs text-slate-500">
+          <div className="px-4 py-2 shrink-0 border-t flex flex-wrap justify-between items-center gap-3 text-xs text-slate-500">
             <span className="inline-flex gap-2 items-center">
               <MousePointer2 className="w-3.5 h-3.5" />
               Select a component to inspect
@@ -755,8 +775,8 @@ export function ArchitectureCanvas() {
           </div>
         </section>
         {chatVisible && (
-          <aside className="flex flex-col min-h-[650px] xl:h-[calc(100vh-183px)] bg-white">
-            <div className="px-5 py-4 border-b flex items-center justify-between">
+          <aside className="absolute inset-y-0 right-0 z-20 w-[min(340px,100%)] lg:static lg:w-auto flex flex-col min-h-0 overflow-hidden bg-white border-l shadow-xl lg:shadow-none">
+            <div className="px-4 py-3 shrink-0 border-b flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <span className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
                   <Sparkles className="w-4 h-4" />
@@ -771,7 +791,9 @@ export function ArchitectureCanvas() {
                 </div>
               </div>
             </div>
-            <div className="overflow-y-auto flex-1 p-5 space-y-4">
+            <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-4">
+              {draft && (requirementsVisible || !draft.requirements) && <RequirementsForm key={draft.id} value={draft.requirements} disabled={!!busy || dirty || !canEdit || !!draft.proposal} saving={busy === "requirements"} onSave={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} />}
+              {draft && !requirementsVisible && draft.requirements && <div className="rounded-xl border p-3 text-xs leading-5 text-slate-600"><strong className="text-slate-900">Deployment targets</strong><br />{draft.requirements.region} · {draft.requirements.availability.replaceAll("_", " ").toLowerCase()}<br />{draft.requirements.peak_requests_per_minute.toLocaleString()} requests/min · {draft.requirements.concurrent_users.toLocaleString()} users</div>}
               {draft && (
                 <AwsReferences review={draft.aws_references}
                   enabled={!!workspace?.capabilities.aws_references} canEdit={canEdit}
@@ -977,6 +999,7 @@ export function ArchitectureCanvas() {
                   <p className="text-slate-500 leading-5 mt-2">
                     {draft.evidence.scope}
                   </p>
+                  {draft.evidence.source_coverage && <p className="mt-2 text-slate-500">Static source sample: {draft.evidence.source_coverage.inspected} of {draft.evidence.source_coverage.candidates} candidate files (limit {draft.evidence.source_coverage.limit}).</p>}
                   <ul className="mt-3 space-y-2">
                     {draft.evidence.files.map((file) => (
                       <li key={file.path} className="break-all text-slate-600">
@@ -1116,7 +1139,7 @@ export function ArchitectureCanvas() {
                 event.preventDefault();
                 send();
               }}
-              className="border-t p-4 space-y-2"
+              className="border-t p-3 shrink-0 space-y-2"
             >
               <div className="rounded-xl border border-slate-200 focus-within:border-cyan-400 p-3">
                 <textarea
