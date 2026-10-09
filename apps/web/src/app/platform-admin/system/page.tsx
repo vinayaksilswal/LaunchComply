@@ -16,6 +16,8 @@ const remedies: Record<string, string> = {
   RATE_LIMIT: "Check the provider's free allowance and retry after its limit resets.",
   CREDIT_LIMIT: "Review account or key limits in the provider console.",
   AUTH_FAILED: "Check backend provider credentials privately in Render.",
+  MODEL_ACCESS_DENIED: "Review access to this model in the provider console. Other configured models may remain available.",
+  POLICY_BLOCKED: "The provider blocked the request under its policy. Routing stops; review the permitted request scope and account policy.",
   REQUEST_REJECTED: "Review configured model IDs and provider routing parameters.",
   INVALID_MODEL: "An upstream response rejected a model ID. Compare the configured IDs with the provider catalog.",
   REQUIRED_MODEL: "The upstream service requires an explicit primary model. Check the deployed routing request contract.",

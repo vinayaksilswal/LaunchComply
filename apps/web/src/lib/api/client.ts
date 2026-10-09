@@ -18,6 +18,8 @@ const serviceMessages: Record<string, string> = {
   ARCHITECTURE_AI_PRIVACY_FILTER: "No configured model endpoint meets the business data privacy policy. Ask your platform administrator to select a compatible provider.",
   ARCHITECTURE_AI_CONTEXT_LIMIT: "The model cannot process this design's context size. Ask your platform administrator to review the model configuration.",
   ARCHITECTURE_AI_REQUEST_REJECTED: "The model provider rejected the request configuration. Ask your platform administrator to review the routing diagnostics.",
+  ARCHITECTURE_AI_ACCESS_DENIED: "The provider denied access to the configured models. Your saved design is unchanged. Ask your platform administrator to review provider access and routing.",
+  ARCHITECTURE_AI_POLICY_BLOCKED: "The provider's content or account policy blocked this request. Your saved design is unchanged. Ask your platform administrator to review the recorded policy outcome.",
 };
 
 export interface ApiErrorDetails {

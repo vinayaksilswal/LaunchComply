@@ -33,7 +33,12 @@ def failure_kind(status, payload):
     # Text is inspected only to classify the error; it is never recorded or returned.
     if status == 404 and any(word in message for word in ("privacy", "data policy", "data collection")):
         return "PRIVACY_FILTER"
-    return {400: "REQUEST_REJECTED", 401: "AUTH_FAILED", 403: "AUTH_FAILED", 402: "CREDIT_LIMIT",
+    if status == 403:
+        if any(word in message for word in ("guardrail", "content filter", "prompt injection", "sensitive info", "moderation")): return "POLICY_BLOCKED"
+        if any(word in message for word in ("budget", "credit", "spending", "allowance")): return "CREDIT_LIMIT"
+        if any(word in message for word in ("invalid api key", "invalid key", "authentication", "unauthorized", "user not found")): return "AUTH_FAILED"
+        return "MODEL_ACCESS_DENIED"
+    return {400: "REQUEST_REJECTED", 401: "AUTH_FAILED", 402: "CREDIT_LIMIT",
         404: "NO_ENDPOINT", 408: "TIMEOUT", 413: "CONTEXT_LIMIT", 422: "REQUEST_REJECTED", 429: "RATE_LIMIT"}.get(status, "UPSTREAM_UNAVAILABLE")
 
 def failure_code(kind):
@@ -42,6 +47,7 @@ def failure_code(kind):
         "RATE_LIMIT": "ARCHITECTURE_AI_RATE_LIMIT", "TIMEOUT": "ARCHITECTURE_AI_TIMEOUT",
         "CONTEXT_LIMIT": "ARCHITECTURE_AI_CONTEXT_LIMIT", "REQUEST_REJECTED": "ARCHITECTURE_AI_REQUEST_REJECTED",
         "INVALID_MODEL": "ARCHITECTURE_AI_MODEL_CONFIG", "OUTPUT_BUDGET": "ARCHITECTURE_AI_REQUEST_REJECTED",
+        "MODEL_ACCESS_DENIED": "ARCHITECTURE_AI_ACCESS_DENIED", "POLICY_BLOCKED": "ARCHITECTURE_AI_POLICY_BLOCKED",
         "REQUIRED_MODEL": "ARCHITECTURE_AI_REQUEST_REJECTED",
         "ROUTING_LIMIT": "ARCHITECTURE_AI_REQUEST_REJECTED", "ROUTING_PARAMETER": "ARCHITECTURE_AI_REQUEST_REJECTED",
         "INVALID_RESPONSE": "ARCHITECTURE_AI_INVALID_PROPOSAL", "TRUNCATED_RESPONSE": "ARCHITECTURE_AI_INVALID_PROPOSAL"}.get(kind, "ARCHITECTURE_AI_UNAVAILABLE")

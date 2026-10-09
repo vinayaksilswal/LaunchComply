@@ -353,7 +353,7 @@ async def openrouter_proposal(client, instructions, context, schema):
                     pass
                 record["elapsed_ms"] = round((time.monotonic() - started) * 1000)
                 attempts.append(record)
-                if record["kind"] in {"AUTH_FAILED", "CREDIT_LIMIT"}:
+                if record["kind"] in {"AUTH_FAILED", "CREDIT_LIMIT", "POLICY_BLOCKED"}:
                     raise AIProviderError(failure_code(record["kind"]), attempts, 503)
                 models = [model for model in models if model != used] if used in models else models[1:]
     except TimeoutError:
