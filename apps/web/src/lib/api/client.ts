@@ -12,7 +12,7 @@ const serviceMessages: Record<string, string> = {
   ARCHITECTURE_AI_UNAVAILABLE: "The configured models are unavailable or could not return a valid proposal. Your saved design is unchanged. Try again shortly.",
   ARCHITECTURE_AI_INVALID_PROPOSAL: "The assistant returned an incomplete proposal. Your saved design is unchanged. Please try again.",
   ARCHITECTURE_AI_TIMEOUT: "The architecture assistant took too long. Your saved design is unchanged. Please try again.",
-  ARCHITECTURE_AI_RATE_LIMIT: "The free model allowance is currently exhausted or rate limited. Your design is unchanged. Try again later.",
+  ARCHITECTURE_AI_RATE_LIMIT: "The AI provider is currently rate limiting requests. Your design is unchanged. Try again later; daily quota may still be available.",
   ARCHITECTURE_AI_FREE_ALLOWANCE_EXHAUSTED: "The AI provider's daily free allowance is exhausted. Your design is unchanged. Try again after the allowance resets.",
   ARCHITECTURE_AI_CREDIT_LIMIT: "The AI account has reached its allowance or credit limit. Ask your platform administrator to check the provider account.",
   ARCHITECTURE_AI_NO_ENDPOINT: "No endpoint is currently available for the configured models. Ask your platform administrator to review the model routing.",

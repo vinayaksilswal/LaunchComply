@@ -14,7 +14,7 @@ const words = (text: string) => text.toLowerCase().replaceAll("_", " ");
 const remedies: Record<string, string> = {
   PRIVACY_FILTER: "Select a model with endpoints that support the current business privacy policy.",
   NO_ENDPOINT: "Check that the configured model is still available and has an eligible endpoint.",
-  RATE_LIMIT: "Check the provider's free allowance and retry after its limit resets.",
+  RATE_LIMIT: "Check the observed daily allowance. Provider capacity or short-term limits can block requests even when daily quota remains. Retry later.",
   FREE_ALLOWANCE_EXHAUSTED: "The provider reported its daily free allowance is exhausted. Changing models cannot restore an account-wide allowance; wait for its reset.",
   CREDIT_LIMIT: "Review account or key limits in the provider console.",
   AUTH_FAILED: "Check backend provider credentials privately in Render.",
