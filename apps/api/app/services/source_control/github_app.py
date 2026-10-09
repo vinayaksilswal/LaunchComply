@@ -20,7 +20,10 @@ def configured():
 
 def require_configuration():
     if not configured():
-        raise HTTPException(503, "GitHub connection is not available yet. Contact your administrator.")
+        raise HTTPException(503, detail={
+            "code": "GITHUB_APP_NOT_CONFIGURED",
+            "message": "GitHub connection is not available yet. Contact your administrator.",
+        })
 
 def state_hash(value):
     return hashlib.sha256(value.encode()).hexdigest()

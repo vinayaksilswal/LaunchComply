@@ -99,7 +99,7 @@ export default function OnboardingPage() {
         {loadingRepos && <p role="status" className="text-sm text-slate-600">Checking your connected repositories…</p>}
         {repositories.length > 0 && <div className="space-y-3"><p className="text-sm font-semibold">Choose a repository</p>{repositories.map(repo => <button key={repo.id} aria-pressed={selectedRepo === repo.id} onClick={() => setSelectedRepo(repo.id)} className={`w-full text-left p-4 rounded-lg border ${selectedRepo === repo.id ? "border-cyan-600 bg-cyan-50" : "border-slate-200"}`}><span className="block font-semibold text-sm">{repo.full_name}</span><span className="text-xs text-slate-500">{repo.visibility} · {repo.default_branch}</span></button>)}</div>}
         <p className="text-xs text-slate-500">You choose which repositories the GitHub App can access. Architecture and cloud setup happen in your workspace after onboarding.</p>
-        {error && <p role="alert" className="rounded-lg bg-rose-50 text-rose-700 p-3 text-sm">{error}</p>}
+        {error && <div role="alert" className="rounded-lg bg-rose-50 text-rose-700 p-3 text-sm"><p>{error}</p><Link href="/dashboard/support" className="inline-block mt-2 font-semibold underline">Get workspace help</Link></div>}
         <div className="flex justify-between border-t pt-4"><button disabled={busy} onClick={() => setStep(2)} className="px-4 py-2 text-sm">Back</button><button disabled={busy || !selectedRepo || !appName.trim()} onClick={finish} className={buttonStyle}>Finish Setup</button></div>
       </div>}
     </main><footer className="p-6 border-t bg-white text-center text-xs text-slate-500">LaunchComply · From Localhost to Real Business.</footer>

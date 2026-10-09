@@ -59,7 +59,7 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    if request.url.path in ("/health", "/health/live", "/health/ready", f"{settings.API_V1_STR}/health/ready"):
+    if request.url.path.startswith(f"{settings.API_V1_STR}/") or request.url.path in ("/health", "/health/live", "/health/ready"):
         response.headers["Cache-Control"] = "no-store"
     return response
 

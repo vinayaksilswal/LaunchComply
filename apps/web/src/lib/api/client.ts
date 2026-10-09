@@ -165,13 +165,16 @@ export async function apiClient<T>(
         const code =
           errorPayload?.error?.code ||
           errorPayload?.code ||
+          errorPayload?.detail?.code ||
           `HTTP_${response.status}`;
         const detail = errorPayload?.detail;
         const validationMessage = Array.isArray(detail)
           ? detail.map((item: { msg?: string }) => item.msg).filter(Boolean).join("; ")
           : typeof detail === "string" ? detail : undefined;
         const message = response.status >= 500
-          ? "The service is temporarily unavailable. Please try again shortly."
+          ? code === "GITHUB_APP_NOT_CONFIGURED"
+            ? "GitHub connection needs to be configured by the platform administrator. Contact workspace support to continue."
+            : "The service is temporarily unavailable. Please try again shortly."
           :
           errorPayload?.error?.message ||
           validationMessage ||
