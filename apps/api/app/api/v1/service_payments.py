@@ -15,7 +15,7 @@ from app.models.auth import User
 from app.models.application import Application
 from app.models.entities import ServiceRequest, CloudAccount
 from app.models.audit import AuditEvent
-from app.models.service_payments import ServiceQuote, ServiceCheckout, ServicePaymentEvent
+from app.models.service_payments import ServicePaymentQuote, ServiceCheckout, ServicePaymentEvent
 from app.services.commercial import service_payments as gateway
 
 router = APIRouter(tags=["Service Payments"])
@@ -57,10 +57,10 @@ async def deployment_design(db, item):
 
 @router.get("/service-payments/quotes")
 async def quotes(request_id: str | None = None, membership=Depends(member), db: AsyncSession = Depends(get_db)):
-    conditions = [ServiceQuote.organization_id == membership.organization_id]
-    if request_id: conditions.append(ServiceQuote.request_id == request_id)
-    rows = (await db.execute(select(ServiceQuote, ServiceCheckout).outerjoin(ServiceCheckout, ServiceCheckout.quote_id == ServiceQuote.id)
-        .where(*conditions).order_by(ServiceQuote.created_at.desc()).limit(100))).all()
+    conditions = [ServicePaymentQuote.organization_id == membership.organization_id]
+    if request_id: conditions.append(ServicePaymentQuote.request_id == request_id)
+    rows = (await db.execute(select(ServicePaymentQuote, ServiceCheckout).outerjoin(ServiceCheckout, ServiceCheckout.quote_id == ServicePaymentQuote.id)
+        .where(*conditions).order_by(ServicePaymentQuote.created_at.desc()).limit(100))).all()
     return {"quotes": [quote_output(quote, checkout) for quote, checkout in rows],
             "providers": [gateway.provider_config(provider) for provider in ("STRIPE", "RAZORPAY")]}
 
@@ -77,8 +77,8 @@ class QuoteRequest(BaseModel):
 
 @router.get("/admin/operations-queue/{request_id}/quote")
 async def admin_quote(request_id: str, admin=Depends(require_platform_admin), db: AsyncSession = Depends(get_db)):
-    row = (await db.execute(select(ServiceQuote, ServiceCheckout).outerjoin(ServiceCheckout, ServiceCheckout.quote_id == ServiceQuote.id)
-        .where(ServiceQuote.request_id == request_id))).one_or_none()
+    row = (await db.execute(select(ServicePaymentQuote, ServiceCheckout).outerjoin(ServiceCheckout, ServiceCheckout.quote_id == ServicePaymentQuote.id)
+        .where(ServicePaymentQuote.request_id == request_id))).one_or_none()
     return {"quote": quote_output(*row) if row else None}
 
 
@@ -86,7 +86,7 @@ async def admin_quote(request_id: str, admin=Depends(require_platform_admin), db
 async def create_quote(request_id: str, payload: QuoteRequest, admin=Depends(require_platform_admin), db: AsyncSession = Depends(get_db)):
     item = (await db.execute(select(ServiceRequest).where(ServiceRequest.id == request_id).with_for_update())).scalar_one_or_none()
     if not item: raise HTTPException(404, "Request not found.")
-    existing = (await db.execute(select(ServiceQuote).where(ServiceQuote.request_id == request_id))).scalar_one_or_none()
+    existing = (await db.execute(select(ServicePaymentQuote).where(ServicePaymentQuote.request_id == request_id))).scalar_one_or_none()
     if existing:
         if existing.id == str(payload.quote_id) and existing.amount_minor == payload.amount_minor and existing.currency == payload.currency and existing.scope == payload.scope and existing.title == payload.title:
             return quote_output(existing)
@@ -94,7 +94,7 @@ async def create_quote(request_id: str, payload: QuoteRequest, admin=Depends(req
     if item.status not in {"REVIEWING", "WAITING_CUSTOMER"}:
         raise HTTPException(409, "Review the request and confirm delivery scope before publishing a quote.")
     arch = await deployment_design(db, item)
-    quote = ServiceQuote(id=str(payload.quote_id), organization_id=item.organization_id, request_id=item.id,
+    quote = ServicePaymentQuote(id=str(payload.quote_id), organization_id=item.organization_id, request_id=item.id,
         architecture_id=arch.id if arch else None, created_by=admin.id, title=payload.title, scope=payload.scope,
         amount_minor=payload.amount_minor, currency=payload.currency, status="OPEN", delivery_mode="ASSISTED_SERVICE")
     db.add(quote)
@@ -115,8 +115,8 @@ class CheckoutRequest(BaseModel):
 
 @router.post("/service-payments/quotes/{quote_id}/checkout")
 async def checkout(quote_id: str, payload: CheckoutRequest, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
-    quote = (await db.execute(select(ServiceQuote).where(ServiceQuote.id == quote_id,
-        ServiceQuote.organization_id == membership.organization_id).with_for_update())).scalar_one_or_none()
+    quote = (await db.execute(select(ServicePaymentQuote).where(ServicePaymentQuote.id == quote_id,
+        ServicePaymentQuote.organization_id == membership.organization_id).with_for_update())).scalar_one_or_none()
     if not quote: raise HTTPException(404, "Quote not found in your business.")
     if quote.status != "OPEN": raise HTTPException(409, "This quote is no longer payable.")
     item = await db.get(ServiceRequest, quote.request_id)
@@ -133,7 +133,7 @@ async def checkout(quote_id: str, payload: CheckoutRequest, membership=Depends(e
         db.add(record)
         # Persist the recovery reference before any external request.
         await db.commit()
-        quote = (await db.execute(select(ServiceQuote).where(ServiceQuote.id == quote_id).with_for_update()
+        quote = (await db.execute(select(ServicePaymentQuote).where(ServicePaymentQuote.id == quote_id).with_for_update()
                                  .execution_options(populate_existing=True))).scalar_one()
         record = (await db.execute(select(ServiceCheckout).where(ServiceCheckout.quote_id == quote.id)
                                   .execution_options(populate_existing=True))).scalar_one()
@@ -178,8 +178,8 @@ async def reconcile(db, quote, checkout):
 
 @router.post("/service-payments/quotes/{quote_id}/refresh")
 async def refresh_payment(quote_id: str, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
-    quote = (await db.execute(select(ServiceQuote).where(ServiceQuote.id == quote_id,
-        ServiceQuote.organization_id == membership.organization_id).with_for_update())).scalar_one_or_none()
+    quote = (await db.execute(select(ServicePaymentQuote).where(ServicePaymentQuote.id == quote_id,
+        ServicePaymentQuote.organization_id == membership.organization_id).with_for_update())).scalar_one_or_none()
     if not quote: raise HTTPException(404, "Quote not found in your business.")
     checkout = (await db.execute(select(ServiceCheckout).where(ServiceCheckout.quote_id == quote.id))).scalar_one_or_none()
     if not checkout: raise HTTPException(409, "No checkout has been created.")
@@ -213,7 +213,7 @@ async def webhook(provider: Literal["stripe", "razorpay"], request: Request, db:
     checkout = (await db.execute(select(ServiceCheckout).where(ServiceCheckout.provider == name,
         ServiceCheckout.provider_reference == ref))).scalar_one_or_none() if ref else None
     if not checkout: return {"status": "IGNORED"}
-    quote = (await db.execute(select(ServiceQuote).where(ServiceQuote.id == checkout.quote_id).with_for_update())).scalar_one()
+    quote = (await db.execute(select(ServicePaymentQuote).where(ServicePaymentQuote.id == checkout.quote_id).with_for_update())).scalar_one()
     checkout = (await db.execute(select(ServiceCheckout).where(ServiceCheckout.id == checkout.id)
                                 .execution_options(populate_existing=True))).scalar_one()
     previous = (await db.execute(select(ServicePaymentEvent).where(ServicePaymentEvent.provider == name,

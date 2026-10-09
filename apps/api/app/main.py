@@ -7,6 +7,7 @@ from app.core.database import engine, Base, AsyncSessionLocal
 from app.services.seed_service import seed_initial_data
 from app.api.v1.router import api_v1_router
 from sqlalchemy import text
+from sqlalchemy.orm import configure_mappers
 import asyncio
 import app.models  # Ensure all models are registered with Base
 
@@ -15,6 +16,9 @@ async def lifespan(app: FastAPI):
     valid, blockers, _ = settings.validate_hosted_environment()
     if not valid:
         raise RuntimeError("Invalid hosted configuration: " + " ".join(blockers))
+
+    # Resolve every model relationship before reporting readiness or accepting requests.
+    configure_mappers()
 
     # Hosted schemas are managed by Alembic before deployment, never by startup.
     if settings.ENVIRONMENT.lower() in ("development", "test", "demo"):

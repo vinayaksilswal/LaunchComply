@@ -3,7 +3,7 @@ from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey, Uniq
 from app.models.base import BaseModel
 
 
-class ServiceQuote(BaseModel):
+class ServicePaymentQuote(BaseModel):
     __tablename__ = "service_quotes"
     organization_id = Column(String(36), ForeignKey("organizations.id"), nullable=False, index=True)
     request_id = Column(String(36), ForeignKey("service_requests.id"), nullable=False, unique=True)
