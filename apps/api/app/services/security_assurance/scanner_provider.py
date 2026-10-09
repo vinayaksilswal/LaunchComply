@@ -3,6 +3,7 @@ Includes SSRF / Target Validation, rate limiting, and scanner implementations fo
 SAST, SCA, Secret Scanning, Container Security, Cloud Config, TLS, Passive DAST, and API Security.
 """
 from abc import ABC, abstractmethod
+from app.core.demo_boundary import require_demo_result_engine
 from datetime import datetime
 import ipaddress
 import re
@@ -88,6 +89,7 @@ class SASTScanner(SecurityScannerProvider):
     """Source code static analysis for Python, JavaScript, and TypeScript."""
 
     def scan(self, scope_name: str, target: str, context: Optional[Dict[str, Any]] = None) -> List[RawFinding]:
+        require_demo_result_engine()
         findings: List[RawFinding] = []
         # Analyzes source code patterns safely
         findings.append(RawFinding(
@@ -116,6 +118,7 @@ class SCAScanner(SecurityScannerProvider):
     """Software Composition Analysis from dependency manifests and SBOM."""
 
     def scan(self, scope_name: str, target: str, context: Optional[Dict[str, Any]] = None) -> List[RawFinding]:
+        require_demo_result_engine()
         return [
             RawFinding(
                 scanner="SCA_SCANNER",
@@ -144,6 +147,7 @@ class SecretScanner(SecurityScannerProvider):
     """Scans repository code and configuration files for exposed credentials."""
 
     def scan(self, scope_name: str, target: str, context: Optional[Dict[str, Any]] = None) -> List[RawFinding]:
+        require_demo_result_engine()
         return [
             RawFinding(
                 scanner="SECRET_SCANNER",
@@ -171,6 +175,7 @@ class ContainerSecurityScanner(SecurityScannerProvider):
     """Container image vulnerability and misconfiguration scanner."""
 
     def scan(self, scope_name: str, target: str, context: Optional[Dict[str, Any]] = None) -> List[RawFinding]:
+        require_demo_result_engine()
         return [
             RawFinding(
                 scanner="CONTAINER_SCANNER",
@@ -198,6 +203,7 @@ class CloudConfigurationScanner(SecurityScannerProvider):
     """Evaluates AWS configuration against CIS AWS Foundations Benchmark."""
 
     def scan(self, scope_name: str, target: str, context: Optional[Dict[str, Any]] = None) -> List[RawFinding]:
+        require_demo_result_engine()
         return [
             RawFinding(
                 scanner="CLOUD_CONFIG_SCANNER",
@@ -225,6 +231,7 @@ class TLSScanner(SecurityScannerProvider):
     """Validates SSL/TLS certificates, protocol version, and HSTS headers."""
 
     def scan(self, scope_name: str, target: str, context: Optional[Dict[str, Any]] = None) -> List[RawFinding]:
+        require_demo_result_engine()
         return [
             RawFinding(
                 scanner="TLS_SCANNER",
@@ -251,6 +258,7 @@ class DASTScanner(SecurityScannerProvider):
     """Safe, non-destructive dynamic application security testing."""
 
     def scan(self, scope_name: str, target: str, context: Optional[Dict[str, Any]] = None) -> List[RawFinding]:
+        require_demo_result_engine()
         # Validates SSRF safety first
         val = validate_target_url(target)
         if not val["valid"]:
@@ -282,6 +290,7 @@ class APISecurityScanner(SecurityScannerProvider):
     """OpenAPI schema inspection and endpoint authorization testing."""
 
     def scan(self, scope_name: str, target: str, context: Optional[Dict[str, Any]] = None) -> List[RawFinding]:
+        require_demo_result_engine()
         return [
             RawFinding(
                 scanner="API_SECURITY_SCANNER",

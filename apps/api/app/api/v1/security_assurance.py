@@ -1,11 +1,12 @@
 """Phase 6 Security Assurance, Authorized VAPT, DR, & Auditor Trust Portal API Router."""
 from datetime import datetime
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.core.database import get_db
+from app.core.demo_boundary import require_demo_result_engine
 from app.core.permissions import require_permission
 from app.core.audit import log_audit_event
 from app.models.auth import OrganizationMembership
@@ -81,7 +82,15 @@ from app.services.security_assurance.scanner_provider import (
     APISecurityScanner,
 )
 
-router = APIRouter(prefix="/security", tags=["Security Assurance & VAPT"])
+def require_observed_security_results(request: Request):
+    if request.method != "GET" and (
+        request.url.path.endswith(("/assessments/trigger", "/retest", "/remediation/generate", "/report", "/dr/drills"))
+        or "/remediation-prs/" in request.url.path
+    ):
+        require_demo_result_engine()
+
+
+router = APIRouter(prefix="/security", tags=["Security Assurance & VAPT"], dependencies=[Depends(require_observed_security_results)])
 
 scope_mgr = ScopeManager()
 finding_mgr = FindingManager()

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.core.config import settings
+from app.core.demo_boundary import require_demo_result_engine
 from app.models.operations import SecuritySignal, Incident, IncidentTimelineEvent
 
 
@@ -22,6 +23,7 @@ class AWSSecurityProvider(CloudSecurityProvider):
     """Ingests and normalizes AWS GuardDuty, Security Hub, and CloudTrail events."""
 
     def get_security_signals(self, environment_id: str) -> List[Dict[str, Any]]:
+        require_demo_result_engine()
         if not settings.ENABLE_REAL_SECURITY_INGESTION:
             # Deterministic simulation for test/dev environments
             return [

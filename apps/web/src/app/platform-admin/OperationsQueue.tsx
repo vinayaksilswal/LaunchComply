@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { apiClient } from "@/lib/api";
 import { ReportPublisher } from "./ReportPublisher";
 import { QuotePublisher } from "./QuotePublisher";
+import { RequestProgress } from "@/components/workspace/RequestProgress";
 interface RequestItem {
   id: string;
   organization_name: string;
@@ -39,6 +40,7 @@ export function OperationsQueue() {
   const [selected, setSelected] = useState<RequestItem | null>(null);
   const [state, setState] = useState("");
   const [note, setNote] = useState("");
+  const [customerUpdate, setCustomerUpdate] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -136,6 +138,7 @@ export function OperationsQueue() {
                   setSelected(item);
                   setState(item.status);
                   setNote("");
+                  setCustomerUpdate("");
                 }}
                 className="w-full text-left p-5 border-b last:border-0 flex gap-4 items-center justify-between hover:bg-slate-50"
               >
@@ -198,6 +201,7 @@ export function OperationsQueue() {
                       expected_status: selected.status,
                       status: state,
                       note,
+                      customer_update: customerUpdate,
                     }),
                   });
                   setSelected(null);
@@ -243,14 +247,14 @@ export function OperationsQueue() {
                   className="block mt-2 w-full bg-white border rounded-lg p-2.5 capitalize"
                 >
                   {states.map((item) => (
-                    <option key={item} value={item}>
+                    <option key={item} value={item} disabled={item !== selected.status && !({ REQUESTED: ["REVIEWING", "WAITING_CUSTOMER"], REVIEWING: ["IN_PROGRESS", "WAITING_CUSTOMER"], IN_PROGRESS: ["WAITING_CUSTOMER", "DELIVERED"], WAITING_CUSTOMER: ["REVIEWING", "IN_PROGRESS"], DELIVERED: ["CLOSED", "REVIEWING"], CLOSED: [] } as Record<string, string[]>)[selected.status]?.includes(item)}>
                       {text(item)}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="block text-sm font-medium">
-                Operations note
+                Internal operations note
                 <textarea
                   disabled={busy}
                   maxLength={1000}
@@ -259,6 +263,9 @@ export function OperationsQueue() {
                   onChange={(event) => setNote(event.target.value)}
                   className="block mt-2 w-full border rounded-lg p-3 resize-none"
                 />
+              </label>
+              <label className="block text-sm font-medium">Update visible to the customer
+                <textarea disabled={busy} maxLength={1000} rows={3} required={state === "WAITING_CUSTOMER"} value={customerUpdate} onChange={event => setCustomerUpdate(event.target.value)} placeholder="Explain progress or the information needed. This appears on the customer application." className="mt-2 block w-full resize-none rounded-lg border p-3" />
               </label>
               {error && (
                 <p role="alert" className="text-sm text-rose-700">
@@ -276,6 +283,7 @@ export function OperationsQueue() {
                 No deployment or assessment runs automatically.
               </p>
               <QuotePublisher key={selected.id} requestId={selected.id} disabled={busy} onBusyChange={setBusy} />
+              <RequestProgress requestId={selected.id} admin />
               <ReportPublisher
                 requestId={selected.id}
                 disabled={busy}

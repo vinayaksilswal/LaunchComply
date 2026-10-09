@@ -330,8 +330,11 @@ async def openrouter_proposal(client, instructions, context, schema):
                 started = time.monotonic()
                 record = {"requested_models": [used], "selected_model": None, "http_status": None, "kind": "UPSTREAM_UNAVAILABLE"}
                 try:
-                    async with asyncio.timeout(min(MODEL_TIMEOUT_SECONDS, remaining)):
-                        response = await client.post("https://openrouter.ai/api/v1/chat/completions", timeout=min(MODEL_TIMEOUT_SECONDS, remaining),
+                    # The final router can use unused time from fast failures;
+                    # it remains bounded by the overall request deadline.
+                    attempt_budget = remaining if candidate == FREE_ROUTER else min(MODEL_TIMEOUT_SECONDS, remaining)
+                    async with asyncio.timeout(attempt_budget):
+                        response = await client.post("https://openrouter.ai/api/v1/chat/completions", timeout=attempt_budget,
                             headers={"Authorization": f"Bearer {settings.OPENROUTER_API_KEY}", "Content-Type": "application/json"},
                             json={"model": used, "max_tokens": 16000, "stream": False, "provider": provider,
                                 "messages": provider_messages(instructions, context)})

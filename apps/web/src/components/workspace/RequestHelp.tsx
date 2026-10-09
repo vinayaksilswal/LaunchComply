@@ -10,6 +10,8 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
   const [open, setOpen] = useState(false);
   const [apps, setApps] = useState<{ id: string; name: string; repo_url?: string }[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(true);
+  const [assetsError, setAssetsError] = useState(false);
+  const [assetRefresh, setAssetRefresh] = useState(0);
   const [appId, setAppId] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -24,21 +26,22 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
     let active = true;
     setError("");
     setAssetsLoading(true);
+    setAssetsError(false);
     apiClient<{ id: string; name: string; repo_url?: string }[]>("/applications/")
       .then((items) => {
         if (active) {
           setApps(items);
           setAppId(applicationId ? items.some(item => item.id === applicationId) ? applicationId : "" : items[0]?.id || "");
-          if (applicationId && !items.some(item => item.id === applicationId)) setError("This business asset is no longer available. Close this form and refresh preparation.");
+          if (applicationId && !items.some(item => item.id === applicationId)) { setAssetsError(true); setError("This business asset is no longer available. Close this form and refresh preparation."); }
         }
       })
       .catch((failure) => {
-        if (active) setError(failure.message);
+        if (active) { setAssetsError(true); setError(failure.message); }
       }).finally(() => { if (active) setAssetsLoading(false); });
     return () => {
       active = false;
     };
-  }, [open, submitted, applicationId]);
+  }, [open, submitted, applicationId, assetRefresh]);
   useEffect(() => {
     setOpen(false);
     setSubmitted(false);
@@ -97,7 +100,7 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
                 className="mt-5 space-y-4"
                 onSubmit={async (event) => {
                   event.preventDefault();
-                  if (assetsLoading || (applicationId && appId !== applicationId)) return;
+                  if (assetsLoading || assetsError || (applicationId && appId !== applicationId)) return;
                   setBusy(true);
                   setError("");
                   try {
@@ -130,8 +133,11 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
                   Send a request to the operations team. They will review what
                   your business needs and track the work with you.
                 </p>
+                {["VAPT_ASSESSMENT", "SECURITY_ASSESSMENT"].includes(code) && <p className="rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">This applies for a scope review. It does not authorize testing. The team will agree on targets, ownership, permitted methods and written authorization before an assessment begins.</p>}
+                {["COMPLIANCE_HELP", "ISO27001_HELP", "SOC2_HELP", "PRIVACY_HELP"].includes(code) && <p className="rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">Describe the business processes and systems you want reviewed. Preparation and delivered reports do not by themselves certify or attest your business.</p>}
                 {architectureVersion && <p className="rounded-lg bg-cyan-50 p-3 text-xs leading-5 text-cyan-800">Saved design {architectureVersion}, its source snapshot and recorded planning targets will be attached for review.</p>}
                 {assetsLoading && <p role="status" className="text-xs text-slate-500">Loading your business assets…</p>}
+                {assetsError && <button type="button" disabled={busy || assetsLoading} onClick={() => setAssetRefresh(value => value + 1)} className="text-xs font-semibold text-cyan-700">Reload business assets</button>}
                 <label className="block text-sm font-medium">
                   Business asset
                   <select
@@ -173,7 +179,7 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
                   </p>
                 )}
                 <button
-                  disabled={busy || assetsLoading || (!!applicationId && appId !== applicationId)}
+                  disabled={busy || assetsLoading || assetsError || (!!applicationId && appId !== applicationId)}
                   type="submit"
                   className="w-full rounded-lg bg-slate-900 text-white px-4 py-3 text-sm font-semibold disabled:opacity-40"
                 >

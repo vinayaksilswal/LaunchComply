@@ -14,15 +14,22 @@ from app.models.entities import ServiceRequest
 from app.models.audit import AuditEvent
 from app.models.service_delivery import ServiceDeliveryReport
 from app.models.service_payments import ServicePaymentQuote, ServiceCheckout
+from app.services.commercial.request_workflow import activity, TRANSITIONS, require_real_service_payment
 
 router = APIRouter(tags=["Business Requests"])
 Code = Literal["DEPLOYMENT_HELP", "SECURITY_ASSESSMENT", "COMPLIANCE_HELP", "AWS_CONNECTION", "BACKUP_REVIEW", "COST_REVIEW", "SUPPORT", "VAPT_ASSESSMENT", "ISO27001_HELP", "SOC2_HELP", "PRIVACY_HELP"]
 State = Literal["REQUESTED", "REVIEWING", "IN_PROGRESS", "WAITING_CUSTOMER", "DELIVERED", "CLOSED"]
+SERVICE_FAMILIES = {
+    "security": {"SECURITY_ASSESSMENT", "VAPT_ASSESSMENT"},
+    "compliance": {"COMPLIANCE_HELP", "ISO27001_HELP", "SOC2_HELP", "PRIVACY_HELP"},
+}
 
 @router.get("/business-requests")
-async def customer_requests(service_code: Code | None = None, membership=Depends(member), db: AsyncSession = Depends(get_db)):
+async def customer_requests(service_code: Code | None = None, service_family: Literal["security", "compliance"] | None = None,
+    membership=Depends(member), db: AsyncSession = Depends(get_db)):
     conditions = [ServiceRequest.organization_id == membership.organization_id]
     if service_code: conditions.append(ServiceRequest.service_code == service_code)
+    if service_family: conditions.append(ServiceRequest.service_code.in_(SERVICE_FAMILIES[service_family]))
     items = (await db.execute(select(ServiceRequest).where(*conditions).order_by(ServiceRequest.created_at.desc()).limit(100))).scalars().all()
     ids = [item.id for item in items]
     reports = (await db.execute(select(ServiceDeliveryReport).where(ServiceDeliveryReport.organization_id == membership.organization_id,
@@ -32,7 +39,7 @@ async def customer_requests(service_code: Code | None = None, membership=Depends
     quote_map = {quote.request_id: {"id": quote.id, "title": quote.title, "amount_minor": quote.amount_minor,
         "currency": quote.currency, "status": quote.status, "is_real_payment_verified": bool(checkout and checkout.is_real_payment_verified)}
         for quote, checkout in quotes}
-    return {"requests": [{"id": item.id, "title": item.title, "service_code": item.service_code, "status": item.status,
+    return {"truncated": len(items) == 100, "requests": [{"id": item.id, "title": item.title, "service_code": item.service_code, "status": item.status,
         "notes": item.customer_notes, "created_at": item.created_at, "estimated_delivery": item.estimated_delivery,
         "quote": quote_map.get(item.id),
         "reports": [{"id": report.id, "title": report.title, "created_at": report.created_at, "sha256": report.content_sha256}
@@ -71,6 +78,8 @@ async def create(payload: CreateRequest, membership=Depends(editor), db: AsyncSe
             f"Region: {targets.get('region') or 'Not chosen'}; availability: {targets.get('availability') or 'Not chosen'}\n"
             f"Peak requests/min: {targets.get('peak_requests_per_minute') or 'Not recorded'}; concurrent users: {targets.get('concurrent_users') or 'Not recorded'}\n")
         notes = context + notes
+    if len(notes) > 1000:
+        raise HTTPException(422, "These notes and saved design references exceed the request limit. Shorten your notes before submitting.")
     existing = await db.get(ServiceRequest, str(payload.request_id))
     if existing:
         if existing.organization_id == membership.organization_id and existing.service_code == payload.service_code and existing.customer_notes == notes:
@@ -95,6 +104,40 @@ async def create(payload: CreateRequest, membership=Depends(editor), db: AsyncSe
         raise HTTPException(409, "This request identifier has already been used.") from None
     return {"id": item.id, "status": item.status}
 
+@router.get("/business-requests/{request_id}/activity")
+async def customer_activity(request_id: str, membership=Depends(member), db: AsyncSession = Depends(get_db)):
+    item = (await db.execute(select(ServiceRequest).where(ServiceRequest.id == request_id,
+        ServiceRequest.organization_id == membership.organization_id))).scalar_one_or_none()
+    if not item: raise HTTPException(404, "Request not found in your business.")
+    return await activity(db, item)
+
+class CustomerReply(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+    reply_id: uuid.UUID
+    expected_status: State
+    message: str = Field(min_length=3, max_length=1000)
+
+@router.post("/business-requests/{request_id}/replies")
+async def reply(request_id: str, payload: CustomerReply, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
+    item = (await db.execute(select(ServiceRequest).where(ServiceRequest.id == request_id,
+        ServiceRequest.organization_id == membership.organization_id).with_for_update())).scalar_one_or_none()
+    if not item: raise HTTPException(404, "Request not found in your business.")
+    existing = await db.get(AuditEvent, str(payload.reply_id))
+    if existing:
+        if existing.organization_id == membership.organization_id and existing.entity_id == item.id and existing.action == "BUSINESS_REQUEST_CUSTOMER_REPLIED" and (existing.details or {}).get("message") == payload.message:
+            return {"id": existing.id, "status": item.status}
+        raise HTTPException(409, "This reply identifier has already been used.")
+    if item.status != payload.expected_status: raise HTTPException(409, "This request changed. Refresh its progress before replying.")
+    if item.status == "CLOSED": raise HTTPException(409, "This request is closed. Apply for a new service or contact support.")
+    before = item.status
+    if before == "WAITING_CUSTOMER": item.status = "REVIEWING"
+    user = await db.get(User, membership.user_id)
+    db.add(AuditEvent(id=str(payload.reply_id), organization_id=membership.organization_id,
+        actor_id=membership.user_id, actor_email=user.email, entity_type="service_request", entity_id=item.id,
+        action="BUSINESS_REQUEST_CUSTOMER_REPLIED", details={"message": payload.message, "status": item.status, "previous_status": before}))
+    await db.commit()
+    return {"id": str(payload.reply_id), "status": item.status}
+
 @router.get("/admin/operations-queue")
 async def queue(offset: int = Query(default=0, ge=0, le=10000), status: State | None = None,
     admin=Depends(require_platform_admin), db: AsyncSession = Depends(get_db)):
@@ -108,22 +151,24 @@ async def queue(offset: int = Query(default=0, ge=0, le=10000), status: State | 
         "created_at": item.created_at} for item, name in rows], "offset": offset}
 
 class UpdateRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     status: State
     expected_status: str = Field(max_length=50)
     note: str = Field(default="", max_length=1000)
     estimated_delivery: str | None = Field(default=None, max_length=100)
+    customer_update: str = Field(default="", max_length=1000)
 
 @router.patch("/admin/operations-queue/{request_id}")
 async def update(request_id: str, payload: UpdateRequest, admin=Depends(require_platform_admin), db: AsyncSession = Depends(get_db)):
     item = (await db.execute(select(ServiceRequest).where(ServiceRequest.id == request_id).with_for_update())).scalar_one_or_none()
     if not item: raise HTTPException(404, "Request not found.")
     if item.status != payload.expected_status: raise HTTPException(409, "Another operator updated this request. Refresh before changing it.")
+    if payload.status != item.status and payload.status not in TRANSITIONS.get(item.status, set()):
+        raise HTTPException(409, "This status change is not part of the delivery workflow. Review the request before starting work or delivering it.")
+    if payload.status == "WAITING_CUSTOMER" and not payload.customer_update:
+        raise HTTPException(422, "Tell the customer what information you need before marking this request waiting for them.")
     if payload.status in {"IN_PROGRESS", "DELIVERED"}:
-        quote = (await db.execute(select(ServicePaymentQuote).where(ServicePaymentQuote.request_id == item.id))).scalar_one_or_none()
-        if quote:
-            checkout = (await db.execute(select(ServiceCheckout).where(ServiceCheckout.quote_id == quote.id))).scalar_one_or_none()
-            if not checkout or not checkout.is_real_payment_verified:
-                raise HTTPException(409, "This quoted service requires a verified real payment before work or delivery can begin.")
+        await require_real_service_payment(db, item)
     if payload.status in {"DELIVERED", "CLOSED"} and item.service_code in {"SECURITY_ASSESSMENT", "COMPLIANCE_HELP", "VAPT_ASSESSMENT", "ISO27001_HELP", "SOC2_HELP", "PRIVACY_HELP"}:
         count = (await db.execute(select(func.count()).select_from(ServiceDeliveryReport).where(ServiceDeliveryReport.request_id == item.id))).scalar_one()
         if not count: raise HTTPException(409, "Publish the assessment report before marking this service delivered.")
@@ -132,9 +177,15 @@ async def update(request_id: str, payload: UpdateRequest, admin=Depends(require_
     if payload.estimated_delivery: item.estimated_delivery = payload.estimated_delivery
     db.add(AuditEvent(organization_id=item.organization_id, actor_id=admin.id, actor_email=admin.email,
         action="BUSINESS_REQUEST_STATUS_UPDATED", entity_type="service_request", entity_id=item.id,
-        details={"previous_status": before, "status": item.status, "note": payload.note}))
+        details={"previous_status": before, "status": item.status, "note": payload.note, "customer_update": payload.customer_update}))
     await db.commit()
     return {"id": item.id, "status": item.status}
+
+@router.get("/admin/operations-queue/{request_id}/activity")
+async def admin_activity(request_id: str, admin=Depends(require_platform_admin), db: AsyncSession = Depends(get_db)):
+    item = await db.get(ServiceRequest, request_id)
+    if not item: raise HTTPException(404, "Request not found.")
+    return await activity(db, item)
 
 class PublishReport(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -162,6 +213,9 @@ async def publish(request_id: str, payload: PublishReport, admin=Depends(require
         if existing.request_id == item.id and existing.content_sha256 == digest and existing.title == payload.title:
             return {"id": existing.id, "status": item.status}
         raise HTTPException(409, "This report identifier has already been used.")
+    if item.status not in {"REVIEWING", "IN_PROGRESS", "DELIVERED"}:
+        raise HTTPException(409, "Review this request before publishing delivered work. Closed or waiting requests cannot be delivered.")
+    await require_real_service_payment(db, item)
     report = ServiceDeliveryReport(id=str(payload.report_id), organization_id=item.organization_id,
         request_id=item.id, published_by=admin.id, title=payload.title, content=payload.content, content_sha256=digest)
     db.add(report)

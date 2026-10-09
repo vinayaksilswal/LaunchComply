@@ -11,6 +11,7 @@ from app.models.auth import Organization, User
 from app.models.entities import CloudAccount
 from app.models.audit import AuditEvent
 from app.services.infrastructure import aws_account_connection as service
+from app.services.infrastructure import aws_security_observation as security
 
 router = APIRouter(prefix="/aws-account-connection", tags=["Verified AWS Account Connection"])
 
@@ -33,7 +34,7 @@ async def bounded(function, *args):
         async with asyncio.timeout(60):
             return await asyncio.to_thread(function, *args)
     except TimeoutError:
-        raise HTTPException(504, "AWS verification timed out. No connection result was saved.") from None
+        raise HTTPException(504, "The AWS read timed out. No new observation or connection result was saved.") from None
 
 
 @router.get("")
@@ -41,6 +42,42 @@ async def accounts(membership=Depends(member), db: AsyncSession = Depends(get_db
     rows = (await db.execute(select(CloudAccount).where(CloudAccount.organization_id == membership.organization_id,
         CloudAccount.provider == "AWS").order_by(CloudAccount.created_at.desc()).limit(50))).scalars().all()
     return {"available": service.configured(), "accounts": [output(account) for account in rows]}
+
+
+@router.get("/security")
+async def security_observations(membership=Depends(member), db: AsyncSession = Depends(get_db)):
+    rows = (await db.execute(select(CloudAccount).where(CloudAccount.organization_id == membership.organization_id,
+        CloudAccount.provider == "AWS", CloudAccount.status == "CONNECTED").order_by(CloudAccount.created_at.desc()).limit(50))).scalars().all()
+    return {"available": service.configured(), "required_read_actions": security.SECURITY_READ_ACTIONS,
+        "accounts": [{"id": row.id, "account_id": row.account_id, "region": row.region,
+            "snapshot": (row.permission_profiles_json or {}).get("security_snapshot")}
+            for row in rows if (row.permission_profiles_json or {}).get("verification_source") == "AWS_STS_API"],
+        "scope": "AWS account findings are separate from application assessments and compliance services. Refresh contacts AWS; stored results are not a real-time stream."}
+
+
+@router.post("/{connection_id}/security/refresh")
+async def refresh_security(connection_id: str, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
+    account = (await db.execute(select(CloudAccount).where(CloudAccount.id == connection_id,
+        CloudAccount.organization_id == membership.organization_id, CloudAccount.provider == "AWS").with_for_update())).scalar_one_or_none()
+    if not account: raise HTTPException(404, "AWS connection not found in your business.")
+    details = account.permission_profiles_json or {}
+    if account.status != "CONNECTED" or details.get("verification_source") != "AWS_STS_API":
+        raise HTTPException(409, "Verify this customer AWS connection before reading security findings.")
+    previous = details.get("security_snapshot") or {}
+    try:
+        checked = datetime.fromisoformat(previous.get("checked_at", ""))
+        if checked.tzinfo and (datetime.now(timezone.utc) - checked).total_seconds() < 60:
+            return {"snapshot": previous, "cached": True}
+    except (ValueError, TypeError):
+        pass
+    snapshot = await bounded(security.observe, account.account_id, account.role_arn, account.external_id, account.region)
+    account.permission_profiles_json = {**details, "security_snapshot": snapshot}
+    user = await db.get(User, membership.user_id)
+    db.add(AuditEvent(organization_id=membership.organization_id, actor_id=membership.user_id, actor_email=user.email,
+        action="AWS_SECURITY_OBSERVED", entity_type="cloud_account", entity_id=account.id,
+        details={"region": account.region, "sources": snapshot["sources"]}))
+    await db.commit()
+    return {"snapshot": snapshot, "cached": False}
 
 
 class Setup(BaseModel):

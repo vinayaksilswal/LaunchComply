@@ -45,12 +45,13 @@ def setup_template(account_id, external_id, region):
                 "Condition": {"StringEquals": {"sts:ExternalId": external_id}}}]},
             "Policies": [{"PolicyName": "LaunchComplyObservedInventory", "PolicyDocument": {
                 "Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": [
-                    "ec2:DescribeVpcs", "ecs:ListClusters", "rds:DescribeDBInstances", "elasticloadbalancing:DescribeLoadBalancers"],
+                    "ec2:DescribeVpcs", "ecs:ListClusters", "rds:DescribeDBInstances", "elasticloadbalancing:DescribeLoadBalancers",
+                    "securityhub:GetFindings", "guardduty:ListDetectors", "guardduty:ListFindings", "guardduty:GetFindings"],
                     "Resource": "*"}]}}]}}},
         "Outputs": {"ObserverRoleArn": {"Value": {"Fn::GetAtt": ["LaunchComplyObserver", "Arn"]}}}}
 
 
-def verify(account_id, role_arn, external_id, region):
+def customer_session(account_id, role_arn, external_id, region):
     from botocore.exceptions import BotoCoreError, ClientError
     match = ROLE.fullmatch(role_arn)
     if not match or match.group(1) != account_id:
@@ -83,6 +84,12 @@ def verify(account_id, role_arn, external_id, region):
         raise HTTPException(502, "AWS could not confirm the assumed customer identity.") from None
     if identity.get("Account") != account_id:
         raise HTTPException(409, "AWS returned a different customer account. Connection was not saved.")
+    return customer, config, identity
+
+
+def verify(account_id, role_arn, external_id, region):
+    from botocore.exceptions import BotoCoreError, ClientError
+    customer, config, identity = customer_session(account_id, role_arn, external_id, region)
     resources, observations = [], []
     calls = (
         ("ec2", "describe_vpcs", {"MaxResults": 20}, "Vpcs", "VPC", "VpcId"),

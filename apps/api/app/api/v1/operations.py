@@ -3,12 +3,13 @@ Exposes endpoints for Environment Health, CloudWatch Telemetry, Logs Explorer,
 Alerts, Incidents, Backup & DR Restore Drills, Security Signals, Cloud Cost, and Continuous Compliance.
 """
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.demo_boundary import require_demo_result_engine
 from app.core.permissions import get_current_membership, require_permission
 from app.core.audit import log_audit_event
 from app.models.auth import OrganizationMembership
@@ -54,7 +55,15 @@ from app.services.operations import (
     UptimeEngine,
 )
 
-router = APIRouter(prefix="/operations", tags=["Operations"])
+def require_observed_operations_results(request: Request):
+    path = request.url.path
+    if ("/environments/" in path and path.endswith(("/health", "/metrics", "/logs", "/tls"))) or (
+        "/cost/environments/" in path or path.endswith("/restore-drill")
+    ):
+        require_demo_result_engine()
+
+
+router = APIRouter(prefix="/operations", tags=["Operations"], dependencies=[Depends(require_observed_operations_results)])
 
 health_engine = OperationalHealthEngine()
 alert_engine = AlertEngine()
@@ -515,8 +524,9 @@ async def list_security_signals(
     res = await db.execute(q.order_by(SecuritySignal.detected_at.desc()))
     signals = res.scalars().all()
 
-    # If empty in dev, run initial sync
-    if not signals and environment_id:
+    # Preset sync is restricted to explicit local demo mode.
+    from app.core.config import settings
+    if not signals and environment_id and settings.DEMO_MODE and settings.ENVIRONMENT in {"development", "test", "demo"}:
         signals = await security_engine.sync_security_signals(
             db=db,
             environment_id=environment_id,

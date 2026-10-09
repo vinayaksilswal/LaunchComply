@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FileText, Download, X, RefreshCw } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { useAccount } from "@/components/auth/AccountProvider";
+import { RequestProgress } from "./RequestProgress";
 interface RequestItem {
   id: string;
   title: string;
@@ -22,9 +23,11 @@ interface Report {
 }
 export function ServiceRequests({
   code,
+  family,
   compact = false,
 }: {
   code?: string;
+  family?: "security" | "compliance";
   compact?: boolean;
 }) {
   const { organization } = useAccount();
@@ -33,16 +36,18 @@ export function ServiceRequests({
   const [report, setReport] = useState<Report | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<RequestItem | null>(null);
+  const [truncated, setTruncated] = useState(false);
   useEffect(() => {
     if (!organization) return;
     let active = true;
     setError("");
     setItems(null);
-    apiClient<{ requests: RequestItem[] }>("/business-requests", {
-      params: { service_code: code },
+    apiClient<{ requests: RequestItem[]; truncated?: boolean }>("/business-requests", {
+      params: { service_code: code, service_family: family },
     })
       .then((result) => {
-        if (active) setItems(result.requests);
+        if (active) { setItems(result.requests); setTruncated(!!result.truncated); }
       })
       .catch((failure) => {
         if (active) setError(failure.message);
@@ -50,7 +55,7 @@ export function ServiceRequests({
     return () => {
       active = false;
     };
-  }, [organization, code, refresh]);
+  }, [organization, code, family, refresh]);
   useEffect(() => {
     const update = () => setRefresh((value) => value + 1);
     window.addEventListener("launchcomply:service-request-submitted", update);
@@ -62,6 +67,7 @@ export function ServiceRequests({
   }, []);
   useEffect(() => {
     setReport(null);
+    setProgress(null);
   }, [organization]);
   return (
     <section className="border border-slate-200 rounded-2xl bg-white overflow-hidden">
@@ -156,9 +162,11 @@ export function ServiceRequests({
             {item.quote && <Link href={`/dashboard/billing#quote-${item.quote.id}`} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-cyan-700">
               {item.quote.is_real_payment_verified ? "Payment verified · View quote" : "Review service quote"} · {new Intl.NumberFormat(undefined, { style: "currency", currency: item.quote.currency }).format(item.quote.amount_minor / 100)}
             </Link>}
+            <button onClick={() => setProgress(item)} className="mt-3 block text-sm font-semibold text-cyan-700">View progress & reply</button>
           </div>
         ))
       )}
+      {truncated && <p className="border-t p-4 text-xs text-slate-500">Showing the latest 100 applications. Older records remain stored; contact your operations team for earlier history.</p>}
       {compact && (
         <div className="border-t border-slate-100 p-5">
           <Link
@@ -219,6 +227,12 @@ export function ServiceRequests({
           </article>
         </Dialog>
       )}
+      {progress && <Dialog label="Service application progress" className="max-w-2xl" onDismiss={() => setProgress(null)}>
+        <div className="max-h-[85vh] w-full space-y-5 overflow-auto rounded-2xl bg-white p-6">
+          <header className="flex justify-between gap-3"><h2 className="text-lg font-semibold">{progress.title}</h2><button aria-label="Close request progress" onClick={() => setProgress(null)}><X className="h-5 w-5" /></button></header>
+          <RequestProgress requestId={progress.id} />
+        </div>
+      </Dialog>}
     </section>
   );
 }

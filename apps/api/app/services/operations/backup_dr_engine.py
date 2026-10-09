@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from app.core.config import settings
+from app.core.demo_boundary import require_demo_result_engine
 from app.models.operations import (
     BackupObservation,
     RestoreDrill,
@@ -54,7 +55,7 @@ class BackupDREngine:
         latest_drill = drill_res.scalars().first()
 
         # 4-stage readiness evaluation
-        backup_configured = True  # Infrastructure baseline enforces RDS automated retention
+        backup_configured = None  # Configuration needs an observed provider record; existence is not proof.
         backup_succeeded = latest_backup is not None and latest_backup.status == "SUCCESS"
         restore_tested = latest_drill is not None
         recovery_verified = (
@@ -129,6 +130,7 @@ class BackupDREngine:
         """Executes a safe, non-destructive restore drill into an isolated temporary database.
         NEVER overwrites or modifies the active production database instance.
         """
+        require_demo_result_engine()
         temp_instance_id = f"lc-drill-temp-rds-{int(time.time())}"
         start_time = datetime.utcnow()
 
