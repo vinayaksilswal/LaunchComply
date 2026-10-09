@@ -110,9 +110,11 @@ export function ServiceRequests({
                 {item.status.toLowerCase().replaceAll("_", " ")}
               </span>
             </div>
-            <p className="mt-3 text-xs text-slate-500">
-              Delivery: {item.estimated_delivery}
-            </p>
+            {!["DELIVERED", "CLOSED"].includes(item.status.toUpperCase()) && item.estimated_delivery && (
+              <p className="mt-3 text-xs text-slate-500">
+                Delivery: {item.estimated_delivery}
+              </p>
+            )}
             {item.reports.length ? (
               <div className="mt-4 space-y-2">
                 {item.reports.map((record) => (

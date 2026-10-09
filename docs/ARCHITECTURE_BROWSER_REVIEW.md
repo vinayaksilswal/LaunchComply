@@ -23,3 +23,14 @@ This release was reviewed through the browser. No automated test suite was run, 
 ## Remaining acceptance gates
 
 Connect an authorized repository and configure the GitHub App/AI provider before accepting actual repository analysis and AI proposal persistence. Instance sizing, region choices, network rules, IAM, recovery, costs, and live provisioning need requirements review and provider verification. The browser walkthrough exposed a Render wake-up delay; hosting availability must be resolved before offering business uptime guarantees.
+
+## Live follow-up — 9 October 2026
+
+- Confirmed that preserving the incoming slash alone was insufficient: the wildcard rewrite still produced a Render-origin redirect. Exact collection-root rewrites now cover applications, architecture, audit events, and deployments under both frontend API prefixes. The signed-in My apps and App design pages now load Tech Invenso's actual empty application list.
+- Exercised background jobs, cache, two-region recovery, recovery component inspection, and a successful SVG download in the live public example. The example remains separate from business records.
+- Fit now considers both canvas dimensions and resets the scroll position. Recovery services have distinct labels. Empty/inventory views disable graph controls, and assistant guidance distinguishes missing applications, missing analysis, permissions, and provider configuration.
+- GitHub authorization still returned an unavailable response. Added a structured setup error and a support link; successful provider authorization and code-derived AI changes remain unverified.
+- Submitted one explicitly labeled browser-review support request through the customer UI. It appeared in the platform operations queue, was updated to reviewing, and received a report containing the actual browser observations and remaining gates. This is a real product review record, not a security assessment or compliance certificate.
+- Report publishing exposed competing enabled status controls. The parent dialog and publisher now share their busy state. Enter in the report title cannot accidentally submit a status update. Completed requests no longer display stale pending delivery estimates.
+- Added no-store headers for versioned API responses. No automated test suite was run. Frontend production builds, including lint and type checks, completed successfully.
+- The delivered review report was opened and downloaded from the customer Service requests page. Its recorded findings, publication time, and content checksum were visible. Keyboard selection of the recovery database component also worked.

@@ -275,6 +275,8 @@ export function OperationsQueue() {
               </p>
               <ReportPublisher
                 requestId={selected.id}
+                disabled={busy}
+                onBusyChange={setBusy}
                 onPublished={() => {
                   setSelected(null);
                   setRefresh((value) => value + 1);
