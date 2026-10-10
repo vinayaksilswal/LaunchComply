@@ -1,7 +1,7 @@
 """Phase 8 Platform Admin Router (Isolated from Tenant Roles)."""
 from datetime import datetime
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -116,6 +116,17 @@ async def list_crm_leads(
     """Lists CRM sales leads."""
     res = await db.execute(select(Lead).order_by(Lead.created_at.desc()))
     return res.scalars().all()
+
+
+@router.get("/consultations")
+async def consultation_inbox(offset: int = Query(default=0, ge=0, le=10000),
+    admin_user: User = Depends(require_platform_admin), db: AsyncSession = Depends(get_db)):
+    """Only platform operators can read prospective customer contact details."""
+    rows = (await db.execute(select(Lead).where(Lead.source == "WEBSITE_CONSULTATION")
+        .order_by(Lead.created_at.desc(), Lead.id.desc()).offset(offset).limit(51))).scalars().all()
+    return {"has_more": len(rows) > 50, "offset": offset, "inquiries": [{"id": lead.id, "name": lead.name,
+        "email": lead.email, "company": lead.company, "status": lead.status, "notes": lead.notes,
+        "created_at": lead.created_at} for lead in rows[:50]]}
 
 
 @router.get("/support")

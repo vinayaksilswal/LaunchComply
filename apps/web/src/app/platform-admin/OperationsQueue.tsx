@@ -77,7 +77,7 @@ export function OperationsQueue() {
               current.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3"><Link href="/platform-admin/system" className="text-sm font-semibold text-cyan-700 border rounded-lg px-4 py-2.5">System operations</Link><button
+          <div className="flex flex-wrap items-center gap-3"><Link href="/platform-admin/consultations" className="text-sm font-semibold text-cyan-700 border rounded-lg px-4 py-2.5">Business inquiries</Link><Link href="/platform-admin/system" className="text-sm font-semibold text-cyan-700 border rounded-lg px-4 py-2.5">System operations</Link><button
             onClick={() => setRefresh((value) => value + 1)}
             className="flex items-center gap-2 text-sm border rounded-lg px-4 py-2.5"
           >

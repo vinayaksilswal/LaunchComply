@@ -123,7 +123,7 @@ export function ArchitectureCanvas() {
   const { graph, setGraph, resetGraph, beginEdit, endEdit, undo, redo, canUndo, canRedo } = useGraphHistory();
   const [arrangedView, setArrangedView] = useState(true);
   const [cloudFocus, setCloudFocus] = useState<string | null>(null);
-  const [view, setView] = useState<"cloud" | "code" | "inventory">("cloud");
+  const [view, setView] = useState<"cloud" | "code" | "inventory">(query.get("step") === "approval" ? "inventory" : "cloud");
   const [codeMode, setCodeMode] = useState<"overview" | "files">("overview");
   const [codeFocus, setCodeFocus] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -137,7 +137,14 @@ export function ArchitectureCanvas() {
   const [newConnection, setNewConnection] = useState("");
   const [chatVisible, setChatVisible] = useState(true);
   const [reviewApproval, setReviewApproval] = useState(false);
-  const [requirementsVisible, setRequirementsVisible] = useState(false);
+  const [requirementsVisible, setRequirementsVisible] = useState(query.get("step") === "targets");
+  useEffect(() => {
+    if (query.get("step") === "targets") {
+      setView("cloud"); setRequirementsVisible(true); setChatVisible(true);
+    } else if (query.get("step") === "approval") {
+      setView("inventory"); setRequirementsVisible(false);
+    }
+  }, [query]);
   const canvas = useRef<HTMLDivElement>(null);
   const autoFit = useRef(true);
   const keepEditZoom = useRef(false);

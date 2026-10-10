@@ -14,7 +14,7 @@ interface Preparation {
   accounts: { id: string; account_id: string; region: string; checked_at: string }[];
 }
 
-export function DeploymentPreparation() {
+export function DeploymentPreparation({ home = false }: { home?: boolean }) {
   const { organization } = useAccount();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assetId, setAssetId] = useState("");
@@ -48,7 +48,7 @@ export function DeploymentPreparation() {
   const next = data?.checks.find(check => !check.complete);
   return <section aria-label="Deployment preparation" className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
     <header className="p-5 border-b flex flex-wrap gap-4 justify-between items-start">
-      <div><h2 className="font-semibold">Prepare your business for deployment</h2>
+      <div><h2 className="font-semibold">{home ? "Your next launch step" : "Prepare your business for deployment"}</h2>
         <p className="mt-2 text-sm text-slate-500">Follow the next step for your saved design.</p></div>
       <div className="flex flex-wrap gap-2 items-center">
         {!!assets.length && <select aria-label="Business asset to prepare" value={assetId} onChange={event => setAssetId(event.target.value)} className="rounded-lg border px-3 py-2 text-sm max-w-full bg-white">
@@ -76,8 +76,9 @@ export function DeploymentPreparation() {
         </ol>
         {!!data.accounts.length && <p className="text-xs text-slate-500">Verified account records: {data.accounts.map(account => `${account.account_id} · ${account.region}`).join(", ")}</p>}
         <div className="flex flex-wrap gap-3 items-center">
-          {next && next.id !== "plan" && <Link href={next.href} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 text-white px-4 py-2.5 text-sm font-semibold">{next.title} <ArrowRight className="w-4 h-4" /></Link>}
+          {next && next.id !== "plan" && <Link href={next.id === "aws" && home ? `/dashboard/deployments?application=${encodeURIComponent(assetId)}#aws-account-connection` : next.id === "targets" ? `/dashboard/architecture?application=${encodeURIComponent(assetId)}&step=targets` : next.id === "approval" ? `/dashboard/architecture?application=${encodeURIComponent(assetId)}&step=approval` : next.href} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 text-white px-4 py-2.5 text-sm font-semibold">{next.title} <ArrowRight className="w-4 h-4" /></Link>}
           <RequestHelp key={`${assetId}:${data.architecture_id}`} code="DEPLOYMENT_HELP" label="Request deployment review" applicationId={assetId} architectureId={data.architecture_id || undefined} architectureVersion={data.version || undefined} />
+          {home && <Link href="/dashboard/services" className="text-sm font-semibold text-cyan-700">Follow requests & reports</Link>}
         </div>
       </>}
       <p className="text-xs leading-5 text-slate-500">Automatic provisioning is not available. Design approval and payment do not create AWS resources. The operations team reviews the deployment plan and scope with you.</p>

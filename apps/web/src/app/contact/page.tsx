@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, LifeBuoy, BookOpen, Building2 } from "lucide-react";
+import { ConsultationForm } from "@/components/marketing/ConsultationForm";
 import {
   PublicShell,
   FAQ,
@@ -13,7 +14,7 @@ import {
 export const metadata: Metadata = {
   title: "Contact and support | LaunchComply",
   description:
-    "Find help getting started or submit a business support request through your LaunchComply workspace.",
+    "Request a cloud architecture or launch consultation, or get support through your LaunchComply business workspace.",
 };
 export default function ContactPage() {
   return (
@@ -23,12 +24,14 @@ export default function ContactPage() {
           Let&apos;s find your next step
         </p>
         <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">
-          The right place for your question.
+          Let&apos;s plan your next step.
         </h1>
         <p className="mt-6 max-w-2xl text-base leading-8 text-slate-600">
-          Keep business requests connected to the right account, application,
-          and delivery record. Choose where you&apos;d like to start.
+          Start with a scope review for your cloud architecture, deployment,
+          security, or compliance needs. Existing customers can follow their
+          service requests and reports in their workspace.
         </p>
+        <div className="mt-10"><ConsultationForm /></div>
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           {[
             {

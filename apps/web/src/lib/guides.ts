@@ -9,6 +9,21 @@ export const GUIDES: Record<
     note: string;
   }
 > = {
+  "first-business-launch": {
+    title: "Plan your first business launch",
+    description: "A practical path from connected code to a reviewed, assisted deployment engagement.",
+    steps: [
+      { title: "Start with your business outcome", text: "Use Contact & support to request a scope review without creating an account. Tell operations what your SaaS does, your launch timeline, and whether you have an existing cloud setup. Keep credentials and customer data out of the inquiry." },
+      { title: "Connect your business assets", text: "Create a workspace, then connect GitHub or upload a ZIP. Select frontend, backend, and other repositories together under one business asset. Review the repository names and the coverage of the actual source findings." },
+      { title: "Prepare the cloud design", text: "Open Business architecture. Review services, connections, proposed public and private subnets, expected peak traffic, region, and availability. AI proposals require your review. Saving a draft does not approve or deploy it." },
+      { title: "Follow the recorded next step", text: "Home and Deployments show source findings, planning targets, saved design approval, and recent AWS role verification. Open the next action directly. A verified observation role does not prove provisioning permissions." },
+      { title: "Agree an assisted engagement", text: "Request deployment review from the saved design. Operations reviews the scope, infrastructure plan, cloud costs, build settings, access, delivery terms, and any payment arrangements before work starts. Automatic provisioning is currently unavailable." },
+      { title: "Review the actual handover", text: "Follow Service requests for the status, customer questions, and published report. Check what was deployed and validated, what remains open, who handles support, and the agreed recovery arrangements. Request security and compliance preparation separately when needed." },
+    ],
+    next: "/contact#consultation",
+    nextLabel: "Discuss your business launch",
+    note: "Enterprise service commitments, recovery targets, assessment authorization, and audit outcomes require separate evidence and agreement. A saved design or report alone does not establish production readiness.",
+  },
   "getting-started": {
     title: "Create your first business workspace",
     description:

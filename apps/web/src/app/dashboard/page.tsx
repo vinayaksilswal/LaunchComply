@@ -7,12 +7,11 @@ import {
   Github,
   Link2,
   ArrowRight,
-  CheckCircle2,
-  Circle,
   Activity,
 } from "lucide-react";
 import { ServiceRequests } from "@/components/workspace/ServiceRequests";
 import { RequestHelp } from "@/components/workspace/RequestHelp";
+import { DeploymentPreparation } from "@/components/workspace/DeploymentPreparation";
 import { apiClient } from "@/lib/api";
 import { useAccount } from "@/components/auth/AccountProvider";
 
@@ -91,7 +90,7 @@ export default function DashboardOverviewPage() {
             Welcome{user ? `, ${user.full_name.split(" ")[0]}` : ""}
           </h1>
           <p className="text-sm text-slate-500 mt-2">
-            Your applications, connections, and latest workspace activity for{" "}
+            Your business assets, connections, and latest workspace activity for{" "}
             {organization?.name || "your business"}.
           </p>
         </div>
@@ -99,7 +98,7 @@ export default function DashboardOverviewPage() {
           href="/onboarding"
           className="inline-flex items-center gap-2 rounded-lg bg-slate-900 text-white px-5 py-3 text-sm font-semibold"
         >
-          Create application
+          Connect business asset
           <ArrowRight className="w-4 h-4" />
         </Link>
       </section>
@@ -117,16 +116,12 @@ export default function DashboardOverviewPage() {
           </button>
         </div>
       )}
+      <DeploymentPreparation home />
       <section
-        className="grid sm:grid-cols-3 gap-4"
-        aria-label="Get help with your app"
+        className="grid sm:grid-cols-2 gap-4"
+        aria-label="Business services"
       >
         {[
-          {
-            code: "DEPLOYMENT_HELP",
-            label: "Help me deploy",
-            description: "Get your app ready for customers.",
-          },
           {
             code: "SECURITY_ASSESSMENT",
             label: "Apply for security review",
@@ -179,10 +174,10 @@ export default function DashboardOverviewPage() {
       )}
       <ServiceRequests compact />
       {data && (
-        <div className="grid lg:grid-cols-3 gap-6">
-          <section className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="grid gap-6">
+          <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div className="p-6 border-b flex justify-between">
-              <h2 className="font-bold text-slate-900">Your applications</h2>
+              <h2 className="font-bold text-slate-900">My business assets</h2>
               <Link
                 href="/dashboard/applications"
                 className="text-sm text-cyan-700"
@@ -228,45 +223,7 @@ export default function DashboardOverviewPage() {
               </div>
             )}
           </section>
-          <section className="bg-white border border-slate-200 rounded-2xl p-6 text-slate-900 space-y-5">
-            <p className="text-xs uppercase tracking-widest text-cyan-700">
-              Next steps
-            </p>
-            <h2 className="text-xl font-bold">Set up your workspace</h2>
-            {[
-              { label: "Business account created", done: true, href: null },
-              {
-                label: "Connect GitHub",
-                done: data.connection_count > 0,
-                href: "/onboarding",
-              },
-              {
-                label: "Create an application",
-                done: data.application_count > 0,
-                href: "/onboarding",
-              },
-            ].map((item) => (
-              <div key={item.label} className="flex gap-3 items-center text-sm">
-                {item.done ? (
-                  <CheckCircle2 className="w-5 h-5 text-cyan-700 shrink-0" />
-                ) : (
-                  <Circle className="w-5 h-5 text-slate-500 shrink-0" />
-                )}
-                {item.href ? (
-                  <Link href={item.href} className="hover:underline">
-                    {item.label}
-                  </Link>
-                ) : (
-                  <span>{item.label}</span>
-                )}
-              </div>
-            ))}
-            <p className="pt-4 border-t border-slate-200 text-xs text-slate-500">
-              Architecture, cloud access, and deployment are configured in their
-              dedicated workflows.
-            </p>
-          </section>
-          <section className="lg:col-span-3 rounded-2xl bg-white border border-slate-200">
+          <section className="rounded-2xl bg-white border border-slate-200">
             <div className="p-6 border-b flex gap-2 items-center">
               <Activity className="w-4 h-4 text-cyan-700" />
               <h2 className="font-bold">Recent activity</h2>

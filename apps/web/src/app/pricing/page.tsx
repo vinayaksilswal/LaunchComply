@@ -114,6 +114,10 @@ export default function PricingPage() {
           commitments are agreed separately; applying does not charge a card or
           provision cloud resources.
         </aside>
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-cyan-100 bg-cyan-50 p-5">
+          <p className="text-sm leading-6 text-slate-600">Have several repositories or an existing cloud setup? Tell us what you need before creating a workspace.</p>
+          <Link href="/contact#consultation" className={primaryLink}>Discuss scope & pricing <ArrowRight className="h-4 w-4" /></Link>
+        </div>
       </section>
       <FAQ
         items={[

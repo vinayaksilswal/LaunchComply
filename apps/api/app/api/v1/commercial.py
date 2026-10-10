@@ -1,5 +1,10 @@
 """Phase 8 Commercial SaaS FastAPI Router (Catalog, Billing, Invoices, Usage, Invitations, Support, CRM)."""
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
+from datetime import datetime, timezone, timedelta
+from uuid import UUID
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from fastapi import APIRouter, Depends, HTTPException, status, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -431,6 +436,7 @@ async def create_crm_lead(
     db: AsyncSession = Depends(get_db)
 ):
     """Public lead capture endpoint for website demo and consultation requests."""
+    await check_inquiry_capacity(db, str(payload.email).lower())
     lead = await crm_services_service.create_lead(
         db=db,
         name=payload.name,
@@ -441,7 +447,64 @@ async def create_crm_lead(
         notes=payload.notes,
         estimated_value=payload.estimated_value
     )
-    return {"status": "SUCCESS", "lead_id": lead.id, "message": "Demo request logged. Sales team notified."}
+    return {"status": "SUCCESS", "lead_id": lead.id, "message": "Request saved in the operations inbox."}
+
+
+async def check_inquiry_capacity(db, email):
+    from app.models.crm import Lead
+    since = datetime.now(timezone.utc) - timedelta(hours=1)
+    recent = [Lead.created_at >= since]
+    count = (await db.execute(select(func.count()).select_from(Lead).where(*recent, Lead.email == email))).scalar_one()
+    total = (await db.execute(select(func.count()).select_from(Lead).where(*recent))).scalar_one()
+    if count >= 3 or total >= 200:
+        raise HTTPException(429, "The consultation inbox is receiving too many requests. Please try again later.", headers={"Retry-After": "3600"})
+
+
+class ConsultationRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+    request_id: UUID
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr = Field(max_length=255)
+    company: str = Field(min_length=2, max_length=160)
+    interest: Literal["ARCHITECTURE", "DEPLOYMENT", "SECURITY", "COMPLIANCE", "CLOUD_OPERATIONS"]
+    message: str = Field(min_length=10, max_length=1000)
+    contact_permission: Literal[True]
+    website: str = Field(default="", max_length=255)
+
+
+@router.post("/consultations", status_code=201)
+async def request_consultation(payload: ConsultationRequest, db: AsyncSession = Depends(get_db)):
+    """Save an inquiry, not an engagement, assessment, payment or email delivery."""
+    from app.models.crm import Lead, LeadStatus
+    # The extra website field is never visible to human visitors.
+    if payload.website:
+        return {"status": "SAVED", "reference": str(payload.request_id)}
+    email = str(payload.email).lower()
+    notes = f"Interest: {payload.interest}\nPermission to contact about this inquiry: recorded\n{payload.message}"
+    async def existing_result():
+        existing = await db.get(Lead, str(payload.request_id))
+        if not existing:
+            return None
+        if (existing.source, existing.name, existing.email, existing.company, existing.notes) != (
+                "WEBSITE_CONSULTATION", payload.name, email, payload.company, notes):
+            raise HTTPException(409, "This request reference has already been used. Refresh the form before submitting a different inquiry.")
+        return {"status": "SAVED", "reference": existing.id}
+    result = await existing_result()
+    if result:
+        return result
+    await check_inquiry_capacity(db, email)
+    lead = Lead(id=str(payload.request_id), name=payload.name, email=email, company=payload.company,
+        source="WEBSITE_CONSULTATION", status=LeadStatus.NEW, estimated_value=0, notes=notes)
+    db.add(lead)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        result = await existing_result()
+        if result:
+            return result
+        raise
+    return {"status": "SAVED", "reference": lead.id}
 
 
 @router.post("/services/quotes")

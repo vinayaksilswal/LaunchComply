@@ -1,7 +1,7 @@
 """Phase 8 Commercial Schemas for Billing, Support, CRM, Invitations, and Platform Admin."""
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
 
 from app.models.auth import MembershipRole
 from app.models.support import TicketCategory, TicketPriority, TicketStatus
@@ -59,13 +59,14 @@ class TicketMessageRequest(BaseModel):
 
 
 class LeadCreateRequest(BaseModel):
-    name: str
-    email: str
-    company: Optional[str] = None
-    phone: Optional[str] = None
-    source: str = "WEBSITE"
-    notes: Optional[str] = None
-    estimated_value: float = 0.0
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+    name: str = Field(min_length=2, max_length=255)
+    email: EmailStr = Field(max_length=255)
+    company: Optional[str] = Field(default=None, max_length=255)
+    phone: Optional[str] = Field(default=None, max_length=50)
+    source: str = Field(default="WEBSITE", max_length=100)
+    notes: Optional[str] = Field(default=None, max_length=1000)
+    estimated_value: float = Field(default=0.0, ge=0, le=100_000_000, allow_inf_nan=False)
 
 
 class ServiceQuoteRequest(BaseModel):

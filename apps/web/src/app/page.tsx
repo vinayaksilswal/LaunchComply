@@ -68,7 +68,7 @@ export default function LandingPage() {
         <div>
           <p className="inline-flex items-center gap-2 rounded-full border border-cyan-100 bg-cyan-50/60 px-3 py-1.5 text-xs font-medium text-cyan-800">
             <span className="h-1.5 w-1.5 rounded-full bg-cyan-600" />
-            For the business behind the app
+            Architecture planning & assisted launch
           </p>
           <h1 className="mt-6 text-[2.7rem] font-semibold leading-[1.08] tracking-[-0.045em] text-slate-950 sm:text-6xl">
             From localhost
@@ -89,18 +89,18 @@ export default function LandingPage() {
               Create your workspace
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link href="/deployment" className={secondaryLink}>
-              See how it works
+            <Link href="/contact#consultation" className={secondaryLink}>
+              Discuss your business
             </Link>
           </div>
           <div className="mt-7 flex flex-wrap gap-5 text-xs text-slate-500">
             <span className="flex items-center gap-1.5">
               <Github className="h-3.5 w-3.5" />
-              Connect your repository
+              Connect multiple repositories
             </span>
             <span className="flex items-center gap-1.5">
               <LifeBuoy className="h-3.5 w-3.5" />
-              Ask for the help you need
+              Review scope before service work
             </span>
           </div>
         </div>
