@@ -14,8 +14,8 @@ export interface SavedDesignReview {
   references: { title: string; url: string }[];
 }
 
-export function DesignReview({ review, version, saved, assetId }: {
-  review?: SavedDesignReview; version: string; saved: boolean; assetId: string;
+export function DesignReview({ review, version, saved, assetId, actionable = true }: {
+  review?: SavedDesignReview; version: string; saved: boolean; assetId: string; actionable?: boolean;
 }) {
   if (!review) return <p className="mt-5 text-sm text-slate-500">The saved design review is unavailable. Reload after the latest API release is available.</p>;
   const missing = review.items.filter(item => item.state === "MISSING");
@@ -46,7 +46,7 @@ export function DesignReview({ review, version, saved, assetId }: {
         </summary>
         <p className="mt-2 text-xs leading-5 text-slate-600">{item.detail}</p>
         {item.node_ids.length > 0 && <p className="mt-2 text-xs leading-5 text-slate-500">Components: {item.node_ids.map(id => labels.get(id) || id).join("; ")}</p>}
-        {item.code === "TARGETS" && item.state === "MISSING" && <Link href={`/dashboard/architecture?application=${encodeURIComponent(assetId)}&step=targets`} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-cyan-700">Set traffic and availability <ArrowRight className="h-3 w-3" /></Link>}
+        {actionable && item.code === "TARGETS" && item.state === "MISSING" && <Link href={`/dashboard/architecture?application=${encodeURIComponent(assetId)}&step=targets`} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-cyan-700">Set traffic and availability <ArrowRight className="h-3 w-3" /></Link>}
       </details>)}
     </div>
     <p className="mt-3 break-all text-[11px] leading-5 text-slate-400">Evaluated {new Date(review.evaluated_at).toLocaleString()} · Design fingerprint {review.graph_fingerprint}</p>

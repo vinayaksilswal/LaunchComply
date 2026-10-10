@@ -35,10 +35,17 @@ async def activity(db, request):
         AuditEvent.organization_id == request.organization_id,
         AuditEvent.entity_type == "service_request", AuditEvent.entity_id == request.id,
         AuditEvent.action.in_(PUBLIC_ACTIONS)).order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).limit(100))).scalars().all()
+    submission = (await db.execute(select(AuditEvent).where(
+        AuditEvent.organization_id == request.organization_id,
+        AuditEvent.entity_type == "service_request", AuditEvent.entity_id == request.id,
+        AuditEvent.action == "BUSINESS_REQUEST_SUBMITTED").order_by(AuditEvent.created_at.asc(), AuditEvent.id.asc()).limit(1))).scalar_one_or_none()
+    # Only the server-generated submission snapshot is shared, never arbitrary audit fields.
+    submitted_design = (submission.details or {}).get("submitted_design") if submission else None
     # No email, actor ID, internal note, arbitrary audit fields or cross-tenant data.
     return {"request": {"id": request.id, "title": request.title, "status": request.status,
         "service_code": request.service_code, "notes": request.customer_notes,
         "created_at": request.created_at, "estimated_delivery": request.estimated_delivery},
+        "submitted_design": submitted_design,
         "events": [{"id": event.id, "action": event.action, "created_at": event.created_at,
             "status": (event.details or {}).get("status"),
             "message": (event.details or {}).get("customer_update", "") if event.action == "BUSINESS_REQUEST_STATUS_UPDATED"

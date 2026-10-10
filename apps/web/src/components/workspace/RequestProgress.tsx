@@ -3,8 +3,10 @@ import { useEffect, useState } from "react";
 import { RefreshCw, Send } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { useAccount } from "@/components/auth/AccountProvider";
+import { DesignReview, type SavedDesignReview } from "@/components/architecture/DesignReview";
 
 interface Progress {
+  submitted_design?: { architecture_id: string; version: string; application_id: string; review: SavedDesignReview } | null;
   request: { id: string; title: string; status: string; notes: string; estimated_delivery: string };
   events: { id: string; action: string; created_at: string; status?: string; message: string }[];
   truncated: boolean;
@@ -45,6 +47,11 @@ export function RequestProgress({ requestId, admin = false, refreshKey = 0, onUp
     {data && <>
       <div className="rounded-xl bg-cyan-50 p-4 text-sm leading-6 text-cyan-950"><p className="font-semibold capitalize">{readable(data.request.status)}</p><p>{explanations[data.request.status] || "Review the recorded progress below."}</p></div>
       {!admin && data.request.notes && <details className="rounded-xl border p-4"><summary className="cursor-pointer text-sm font-semibold">Your application details</summary><p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-600">{data.request.notes}</p></details>}
+      {data.submitted_design && <details className="rounded-xl border p-4">
+        <summary className="cursor-pointer text-sm font-semibold">Submitted design checklist · {data.submitted_design.version}</summary>
+        <p className="mt-3 text-xs leading-5 text-slate-500">Captured when this request was submitted. Later design changes do not update this snapshot. Agree the scope and any revised design with the team before work begins.</p>
+        <DesignReview review={data.submitted_design.review} version={data.submitted_design.version} saved={true} assetId={data.submitted_design.application_id} actionable={false} />
+      </details>}
       <ol className="space-y-3 border-l-2 border-slate-100 pl-4">
         {data.events.map(event => <li key={event.id} className="rounded-lg border border-slate-100 p-3">
           <p className="text-xs font-semibold text-slate-700">{event.action === "BUSINESS_REQUEST_SUBMITTED" ? "Application submitted" : event.action === "SERVICE_REPORT_PUBLISHED" ? "Report published" : event.action === "BUSINESS_REQUEST_CUSTOMER_REPLIED" ? "Customer reply" : `Team update${event.status ? ` · ${readable(event.status)}` : ""}`}</p>

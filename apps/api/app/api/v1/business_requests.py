@@ -63,6 +63,7 @@ class CreateRequest(BaseModel):
 @router.post("/business-requests")
 async def create(payload: CreateRequest, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, payload.application_id, membership, lock=bool(payload.architecture_id)) if payload.application_id else None
+    submitted_design = None
     notes = (f"Application: {app.name} ({app.id})\n" if app else "") + payload.notes
     if payload.architecture_id:
         if not app or payload.service_code != "DEPLOYMENT_HELP":
@@ -73,6 +74,9 @@ async def create(payload: CreateRequest, membership=Depends(editor), db: AsyncSe
         spec = arch.spec_json or {}
         evidence = spec.get("evidence") or {}
         targets = spec.get("requirements") or {}
+        from app.services.architecture.design_review import build_review
+        submitted_design = {"architecture_id": arch.id, "version": arch.version, "application_id": app.id,
+            "review": build_review(spec["graph"], evidence, targets, spec.get("source_changed", False))}
         context = (f"Saved design: {arch.version} ({arch.id})\nSource snapshot: {evidence.get('commit') or 'Not recorded'}\n"
             f"Design approval: {'Recorded' if design_is_approved(arch) else 'Not recorded'}\n"
             f"Region: {targets.get('region') or 'Not chosen'}; availability: {targets.get('availability') or 'Not chosen'}\n"
@@ -93,7 +97,8 @@ async def create(payload: CreateRequest, membership=Depends(editor), db: AsyncSe
     user = await db.get(User, membership.user_id)
     db.add(AuditEvent(organization_id=membership.organization_id, actor_id=membership.user_id, actor_email=user.email,
         action="BUSINESS_REQUEST_SUBMITTED", entity_type="service_request", entity_id=item.id,
-        details={"service_code": item.service_code, "application_id": app.id if app else None}))
+        details={"service_code": item.service_code, "application_id": app.id if app else None,
+                 "submitted_design": submitted_design}))
     try:
         await db.commit()
     except IntegrityError:

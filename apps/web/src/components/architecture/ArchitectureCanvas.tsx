@@ -141,6 +141,7 @@ export function ArchitectureCanvas() {
   const [reviewApproval, setReviewApproval] = useState(false);
   const [requirementsVisible, setRequirementsVisible] = useState(query.get("step") === "targets");
   useEffect(() => {
+    if (window.matchMedia("(max-width: 767px)").matches && query.get("step") !== "targets") setChatVisible(false);
     if (query.get("step") === "targets") {
       setView("cloud"); setRequirementsVisible(true); setChatVisible(true);
     } else if (["approval", "review"].includes(query.get("step") || "")) {
@@ -550,13 +551,13 @@ export function ArchitectureCanvas() {
                 </span>
               ))}
             </div>
-            <div className="flex flex-wrap gap-1 items-center">
+            {view !== "inventory" && <div className="flex flex-wrap gap-1 items-center">
               {view === "code" && !!draft?.evidence.modules?.length && <div className="flex flex-wrap gap-1 mr-2">
                 <button aria-pressed={codeMode === "overview"} onClick={() => { setCodeMode("overview"); setCodeFocus(null); setSelected(null); }} className={`rounded-lg border px-2 py-1.5 text-xs ${codeMode === "overview" ? "bg-cyan-50 text-cyan-800" : "bg-white"}`}>Source overview</button>
                 <button aria-pressed={codeMode === "files"} onClick={() => { setCodeMode("files"); setCodeFocus(null); setSelected(null); }} className={`rounded-lg border px-2 py-1.5 text-xs ${codeMode === "files" ? "bg-cyan-50 text-cyan-800" : "bg-white"}`}>All inspected files</button>
                 {codeFocus && <span className="self-center text-xs text-slate-500">Focused group</span>}
               </div>}
-              {!!shown.nodes.length && view !== "inventory" && <select aria-label="Find architecture component" value={selected || ""} onChange={event => {
+              {!!shown.nodes.length && <select aria-label="Find architecture component" value={selected || ""} onChange={event => {
                 const id = event.target.value; setSelected(id || null);
                 if (!id) { fit(); return; }
                 autoFit.current = false;
@@ -589,7 +590,7 @@ export function ArchitectureCanvas() {
                 Arrange layers
               </button>
               <button
-                disabled={!draft || view === "inventory"}
+                disabled={!draft}
                 onClick={() => downloadArchitectureSvg(diagram.current, view === "code" ? "source-code-findings.svg" : "cloud-architecture-proposal.svg")}
                 aria-label="Download diagram SVG"
                 className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-40"
@@ -598,7 +599,7 @@ export function ArchitectureCanvas() {
               </button>
               <button
                 aria-label="Zoom out"
-                disabled={!shown.nodes.length || view === "inventory"}
+                disabled={!shown.nodes.length}
                 onClick={() => { autoFit.current = false; setZoom((value) => Math.max(0.08, value - 0.1)); }}
                 className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-40"
               >
@@ -609,7 +610,7 @@ export function ArchitectureCanvas() {
               </span>
               <button
                 aria-label="Zoom in"
-                disabled={!shown.nodes.length || view === "inventory"}
+                disabled={!shown.nodes.length}
                 onClick={() => { autoFit.current = false; setZoom((value) => Math.min(1.6, value + 0.1)); }}
                 className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-40"
               >
@@ -618,13 +619,13 @@ export function ArchitectureCanvas() {
               <button
                 aria-label="Fit diagram"
                 title="Show the entire diagram"
-                disabled={!shown.nodes.length || view === "inventory"}
+                disabled={!shown.nodes.length}
                 onClick={fit}
                 className="p-1.5 hover:bg-slate-100 rounded disabled:opacity-40"
               >
                 <Maximize2 className="w-4 h-4" />
               </button>
-            </div>
+            </div>}
           </div>
           <div
             ref={canvas}
@@ -918,7 +919,7 @@ export function ArchitectureCanvas() {
           </div>
         </section>
         {chatVisible && (
-          <aside className="absolute inset-y-0 right-0 z-20 w-[min(340px,100%)] md:static md:w-auto flex flex-col min-h-0 overflow-hidden bg-white border-l shadow-xl md:shadow-none">
+          <aside className="absolute inset-y-0 right-0 z-20 w-full md:static md:w-auto flex flex-col min-h-0 overflow-hidden bg-white border-l shadow-xl md:shadow-none">
             <div className="px-4 py-3 shrink-0 border-b flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <span className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
@@ -933,6 +934,7 @@ export function ArchitectureCanvas() {
                   </p>
                 </div>
               </div>
+              <button aria-label="Close architecture assistant" onClick={() => setChatVisible(false)} className="ml-2 rounded-lg p-2 hover:bg-slate-100"><X className="h-4 w-4" /></button>
             </div>
             <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-4">
               {draft && (requirementsVisible || !draft.requirements) && <RequirementsForm key={draft.id} value={draft.requirements} disabled={!!busy || dirty || !canEdit || !!draft.proposal} saving={busy === "requirements"} onSave={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} />}

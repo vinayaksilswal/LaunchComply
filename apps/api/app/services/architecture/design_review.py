@@ -63,7 +63,7 @@ def build_review(graph, evidence=None, requirements=None, source_changed=False):
     disconnected = [node["id"] for node in nodes if node["id"] not in connected]
     uncertain = sum(bool(re.search(r"inferred|proposed|candidate", edge.get("label", ""), re.I)) for edge in edges)
     add("CONNECTIONS", "Confirm service connections", "REVIEW",
-        f"{len(edges)} diagram connections; {uncertain} explicitly labelled inferred or proposed. {len(disconnected)} services have no drawn connections. Confirm frontend/API destinations, database consumers, queues and image delivery from source and runtime settings; drawing a line does not verify a connection.", disconnected)
+        f"{len(edges)} diagram connections; {uncertain} explicitly labelled inferred or proposed. Services without drawn connections: {len(disconnected)}. Confirm frontend/API destinations, database consumers, queues and image delivery from source and runtime settings; drawing a line does not verify a connection.", disconnected)
 
     private_compute = [item["node_id"] for item in services if item["placement"] == "PRIVATE_COMPUTE"]
     private_data = [item["node_id"] for item in services if item["placement"] == "PRIVATE_DATA"]
