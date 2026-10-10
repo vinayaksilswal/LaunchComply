@@ -1,6 +1,7 @@
 """Phase 8 Platform Admin Router (Isolated from Tenant Roles)."""
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
+from pydantic import BaseModel, ConfigDict, Field
 from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -10,7 +11,8 @@ from app.core.permissions import require_platform_admin
 from app.core.audit import log_audit_event
 from app.models.auth import User, Organization
 from app.models.billing import Subscription, SubscriptionStatus
-from app.models.crm import Lead
+from app.models.crm import Lead, LeadStatus
+from app.models.audit import AuditEvent
 from app.models.support import SupportTicket, SupportMessage, TicketStatus
 from app.models.platform_admin import StatusIncident, StatusIncidentState, StatusIncidentImpact
 from app.schemas.commercial import TicketMessageRequest
@@ -127,6 +129,32 @@ async def consultation_inbox(offset: int = Query(default=0, ge=0, le=10000),
     return {"has_more": len(rows) > 50, "offset": offset, "inquiries": [{"id": lead.id, "name": lead.name,
         "email": lead.email, "company": lead.company, "status": lead.status, "notes": lead.notes,
         "created_at": lead.created_at} for lead in rows[:50]]}
+
+
+class ConsultationReview(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    expected_status: LeadStatus
+    status: Literal["NEW", "QUALIFIED", "UNQUALIFIED"]
+    note: str = Field(min_length=5, max_length=1000)
+
+
+@router.patch("/consultations/{inquiry_id}")
+async def review_consultation(inquiry_id: str, payload: ConsultationReview,
+    admin_user: User = Depends(require_platform_admin), db: AsyncSession = Depends(get_db)):
+    lead = (await db.execute(select(Lead).where(Lead.id == inquiry_id, Lead.source == "WEBSITE_CONSULTATION")
+        .with_for_update())).scalar_one_or_none()
+    if not lead:
+        raise HTTPException(404, "Inquiry not found.")
+    if lead.status != payload.expected_status:
+        raise HTTPException(409, "Another operator reviewed this inquiry. Refresh before making changes.")
+    before = lead.status
+    lead.status = LeadStatus(payload.status)
+    # Prospect reviews belong to the platform, never to an arbitrary customer tenant.
+    db.add(AuditEvent(organization_id="PLATFORM", actor_id=admin_user.id, actor_email=admin_user.email,
+        action="BUSINESS_INQUIRY_REVIEWED", entity_type="commercial_lead", entity_id=lead.id,
+        details={"previous_status": before.value, "status": payload.status, "note": payload.note}))
+    await db.commit()
+    return {"id": lead.id, "status": lead.status}
 
 
 @router.get("/support")

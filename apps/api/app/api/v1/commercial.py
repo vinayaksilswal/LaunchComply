@@ -452,6 +452,7 @@ async def create_crm_lead(
 
 async def check_inquiry_capacity(db, email):
     from app.models.crm import Lead
+    email = str(email).strip().lower()
     since = datetime.now(timezone.utc) - timedelta(hours=1)
     recent = [Lead.created_at >= since]
     count = (await db.execute(select(func.count()).select_from(Lead).where(*recent, Lead.email == email))).scalar_one()
@@ -672,6 +673,7 @@ async def create_qualified_demo_request(
     db: AsyncSession = Depends(get_db)
 ):
     """Public lead capture for Book Demo and sales consultation requests (§42-44)."""
+    await check_inquiry_capacity(db, str(payload.email))
     return await crm_services_service.create_demo_request(
         db=db,
         name=payload.name,

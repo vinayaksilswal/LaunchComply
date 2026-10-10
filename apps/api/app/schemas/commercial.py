@@ -90,17 +90,18 @@ class ConnectorSyncRequest(BaseModel):
 
 
 class DemoRequestSchema(BaseModel):
-    name: str = Field(..., description="Prospect full name")
-    email: str = Field(..., description="Work email address")
-    company: str = Field(..., description="Company name")
-    phone: Optional[str] = None
-    source: str = Field(default="BOOK_DEMO", description="Lead source channel")
-    use_case: Optional[str] = Field(default="SaaS Production Readiness", description="Primary use case or challenge")
-    company_size: Optional[str] = Field(default="11-50", description="Team / employee count")
-    cloud_provider: Optional[str] = Field(default="AWS", description="Current or target cloud provider")
-    current_deployment: Optional[str] = None
-    desired_compliance: Optional[str] = Field(default="ISO 27001 / SOC 2", description="Target framework")
-    notes: Optional[str] = None
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    name: str = Field(min_length=2, max_length=120, description="Prospect full name")
+    email: EmailStr = Field(max_length=255, description="Work email address")
+    company: str = Field(min_length=2, max_length=160, description="Company name")
+    phone: Optional[str] = Field(default=None, max_length=50)
+    source: str = Field(default="BOOK_DEMO", max_length=100, description="Lead source channel")
+    use_case: Optional[str] = Field(default=None, max_length=500, description="Primary use case or challenge")
+    company_size: Optional[str] = Field(default=None, max_length=100, description="Team / employee count")
+    cloud_provider: Optional[str] = Field(default=None, max_length=100, description="Current or target cloud provider")
+    current_deployment: Optional[str] = Field(default=None, max_length=500)
+    desired_compliance: Optional[str] = Field(default=None, max_length=200, description="Target framework")
+    notes: Optional[str] = Field(default=None, max_length=1000)
 
 
 class CancellationFeedbackRequest(BaseModel):

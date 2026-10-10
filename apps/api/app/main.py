@@ -56,6 +56,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(CodeUploadLimitMiddleware, path=f"{settings.API_V1_STR}/onboarding/upload")
+for public_inquiry_path in ("commercial/consultations", "commercial/crm/leads", "commercial/crm/demo-request"):
+    app.add_middleware(CodeUploadLimitMiddleware, path=f"{settings.API_V1_STR}/{public_inquiry_path}",
+        maximum=16 * 1024, size_error="The inquiry is too large. Keep your message under 1,000 characters.")
 
 # Security Headers Middleware
 @app.middleware("http")

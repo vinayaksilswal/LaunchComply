@@ -204,10 +204,9 @@ class CRMService:
         notes: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Creates a qualified sales demo request (§42, §43, §44), automatically logging
-        both a Lead and an active Sales Opportunity.
+        Records an unqualified inquiry and an unscoped opportunity for operator review.
         """
-        qualification_notes = f"Use Case: {use_case or 'SaaS Production Readiness'} | Size: {company_size or '11-50'} | Cloud: {cloud_provider or 'AWS'} | Compliance: {desired_compliance or 'ISO 27001 / SOC 2'} | Additional: {notes or 'None'}"
+        qualification_notes = f"Use Case: {use_case or 'Not provided'} | Size: {company_size or 'Not provided'} | Cloud: {cloud_provider or 'Not provided'} | Current deployment: {current_deployment or 'Not provided'} | Compliance: {desired_compliance or 'Not provided'} | Additional: {notes or 'None'}"
 
         lead = Lead(
             name=name,
@@ -216,7 +215,7 @@ class CRMService:
             phone=phone,
             source=source,
             status=LeadStatus.NEW,
-            estimated_value=199990.00,
+            estimated_value=0.0,
             notes=qualification_notes
         )
         db.add(lead)
@@ -224,15 +223,15 @@ class CRMService:
 
         # Create Opportunity
         opp = Opportunity(
-            title=f"{company} - {desired_compliance or 'SaaS GA Launch & Compliance'}",
+            title=f"{company} - {desired_compliance or 'Scope review'}",
             lead_id=lead.id,
             stage=OpportunityStage.NEW,
-            product_or_service=desired_compliance or "Growth SaaS Subscription",
-            estimated_value=199990.00,
+            product_or_service=desired_compliance or "Unscoped inquiry",
+            estimated_value=0.0,
             currency="INR",
-            expected_close_date=datetime.utcnow() + timedelta(days=21),
-            owner="Commercial Sales Lead",
-            next_action="Confirm 20-minute demo slot"
+            expected_close_date=None,
+            owner="Unassigned",
+            next_action="Review inquiry and agree scope"
         )
         db.add(opp)
         await db.commit()
@@ -244,7 +243,7 @@ class CRMService:
             "lead_id": lead.id,
             "opportunity_id": opp.id,
             "company": company,
-            "message": "Demo request logged. Sales team notified."
+            "message": "Demo request saved for operator review. Follow-up is manual."
         }
 
     async def create_service_quote(

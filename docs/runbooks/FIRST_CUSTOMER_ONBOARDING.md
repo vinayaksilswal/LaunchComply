@@ -1,5 +1,7 @@
 # LaunchComply First-Customer Onboarding Runbook
 
+**Historical target workflow.** The automated provisioning, delivery and acceptance steps below are not verified capabilities of the current release. Use [the current business onboarding procedure](FIRST_BUSINESS_OPERATIONS.md) and the observed `/platform-admin/system` gates before making a customer commitment.
+
 ## 1. Objective
 Ensures a structured, repeatable, white-glove onboarding experience for LaunchComply's initial paying enterprise customers—taking them safely from localhost to a fully deployed, secured, audited, and compliant production business.
 

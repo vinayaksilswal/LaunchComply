@@ -1,5 +1,15 @@
 # Current production reality
 
+## 2026-10-10 live update
+
+The older 2026-10-07 startup failure below is historical. The signed-in live System operations page now observes **4 passing checks out of 12 gates**: migration revision `ad0e4f5a6b7c`, hosted configuration, real-business mode and the latest schema-valid architecture model response. GitHub credentials are configured; actual source findings and editable architecture were reviewed in the browser. Service-request conversation and a labelled browser-workflow report were delivered and downloaded; that record is not an actual compliance assessment or customer deployment.
+
+General enterprise production launch remains blocked. Stripe and Razorpay live service payments and the platform AWS observation connection are not configured. Automatic provisioning is not implemented. Recovery rehearsal, independent security/tenant-isolation acceptance and a real customer end-to-end delivery acceptance remain unverified. Do not count credentials, design drafts, a browser-review report, or old simulated delivery gates as proof of production readiness.
+
+The first-business journey now includes public consultation intake, an operator inquiry inbox, and Home's recorded deployment preparation steps. Use [the current business operations procedure](docs/runbooks/FIRST_BUSINESS_OPERATIONS.md). Scope any early engagement around actual capabilities and delivery capacity before quoting or advertising it as an enterprise service.
+
+## Historical 2026-10-07 audit
+
 Updated: 2026-10-07. Target: Vercel frontend + Render API/PostgreSQL for private owner testing, followed by AWS and a controlled B2B beta.
 
 Launch decision: **NO_GO for public customers**. Render's Docker image build is verified by the owner's log, but the API fails startup because private environment values are missing. A Neon read-only connection passed; schema migrations and application acceptance remain unverified there. No real owner application deployment or backup restore has been verified. This is a deployment audit with a focused authentication fix, not a completed repository security assessment.
