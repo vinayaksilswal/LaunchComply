@@ -1026,7 +1026,7 @@ export function ArchitectureCanvas() {
                             .filter((n) => n.id !== node.id)
                             .map((n) => (
                               <option key={n.id} value={n.id}>
-                                {n.label}
+                                {n.label} · {n.service}
                               </option>
                             ))}
                         </select>
