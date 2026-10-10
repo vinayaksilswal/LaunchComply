@@ -52,8 +52,11 @@ def pending_proposal(spec):
 def output(arch):
     if not arch:
         return None
+    from app.services.architecture.design_review import build_review
+    spec = arch.spec_json
     return {"id": arch.id, "version": arch.version, "created_at": arch.created_at,
-            **arch.spec_json, "proposal": pending_proposal(arch.spec_json)}
+            **spec, "proposal": pending_proposal(spec),
+            "design_review": build_review(spec["graph"], spec.get("evidence"), spec.get("requirements"), spec.get("source_changed", False))}
 
 def design_is_approved(arch):
     if not arch:

@@ -41,6 +41,7 @@ import { AwsReferences, type AwsReferenceReview } from "./AwsReferences";
 
 import { useGraphHistory } from "./useGraphHistory";
 import { NetworkReview } from "./networkPlacement";
+import { DesignReview, type SavedDesignReview } from "./DesignReview";
 
 type Zone = "EDGE" | "APPLICATION" | "DATA" | "SUPPORT";
 interface Node {
@@ -79,6 +80,7 @@ interface Evidence {
   }[];
 }
 interface Draft {
+  design_review?: SavedDesignReview;
   last_ai_workflow?: { framework: string; stages: string[]; missing_requirements: string[]; status: string };
   source_changed?: boolean;
   requirements?: DeploymentRequirements;
@@ -123,7 +125,7 @@ export function ArchitectureCanvas() {
   const { graph, setGraph, resetGraph, beginEdit, endEdit, undo, redo, canUndo, canRedo } = useGraphHistory();
   const [arrangedView, setArrangedView] = useState(true);
   const [cloudFocus, setCloudFocus] = useState<string | null>(null);
-  const [view, setView] = useState<"cloud" | "code" | "inventory">(query.get("step") === "approval" ? "inventory" : "cloud");
+  const [view, setView] = useState<"cloud" | "code" | "inventory">(["approval", "review"].includes(query.get("step") || "") ? "inventory" : "cloud");
   const [codeMode, setCodeMode] = useState<"overview" | "files">("overview");
   const [codeFocus, setCodeFocus] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -141,7 +143,7 @@ export function ArchitectureCanvas() {
   useEffect(() => {
     if (query.get("step") === "targets") {
       setView("cloud"); setRequirementsVisible(true); setChatVisible(true);
-    } else if (query.get("step") === "approval") {
+    } else if (["approval", "review"].includes(query.get("step") || "")) {
       setView("inventory"); setRequirementsVisible(false);
     }
   }, [query]);
@@ -700,6 +702,7 @@ export function ArchitectureCanvas() {
                   unspecified unless documented in its requirements. A
                   dependency alone cannot establish production capacity.
                 </p>
+                <DesignReview review={draft.design_review} version={draft.version} saved={!dirty && !preview && !draft.proposal} assetId={appId} />
                 <div className="mt-5 overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 text-slate-500">
@@ -739,7 +742,7 @@ export function ArchitectureCanvas() {
                   </table>
                 </div>
                 <Link
-                  href="/dashboard/deployments"
+                  href={`/dashboard/deployments?application=${encodeURIComponent(appId)}`}
                   className="mt-5 inline-flex items-center gap-2 text-xs font-semibold text-cyan-700"
                 >
                   Review deployment requirements

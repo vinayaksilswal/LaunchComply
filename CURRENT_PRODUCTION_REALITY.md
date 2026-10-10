@@ -8,6 +8,8 @@ General enterprise production launch remains blocked. Stripe and Razorpay live s
 
 The first-business journey now includes public consultation intake, an operator inquiry inbox, and Home's recorded deployment preparation steps. Use [the current business operations procedure](docs/runbooks/FIRST_BUSINESS_OPERATIONS.md). Scope any early engagement around actual capabilities and delivery capacity before quoting or advertising it as an enterprise service.
 
+Saved architecture versions now receive a deterministic engineering planning checklist covering source coverage, traffic/availability, specific hosting choices, runtime connections, network access, build settings, recovery, identity/secrets and operating costs. The checklist is computed from saved metadata, binds to a graph fingerprint and source snapshot, and can be exported when no local edits or pending AI proposal exist. Future LangGraph proposals receive the same planning gaps. This is decision support, not cloud validation, capacity sizing, a security assessment or a production acceptance gate. Actual infrastructure planning and execution remain outstanding.
+
 ## Historical 2026-10-07 audit
 
 Updated: 2026-10-07. Target: Vercel frontend + Render API/PostgreSQL for private owner testing, followed by AWS and a controlled B2B beta.

@@ -48,8 +48,8 @@ async def preparation(application_id: str, membership=Depends(member), db: Async
          "detail": f"{arch.version} design approval recorded." if approved else "Review Services & sizing and approve the current version.", "href": design_url},
         {"id": "aws", "title": "Verify AWS role access", "complete": bool(verified),
          "detail": "Matching regional role access checked within 24 hours. Provisioning permissions are not verified." if verified else "Verify an AWS account in your chosen region. Verification expires after 24 hours.", "href": "#aws-account-connection"},
-        {"id": "plan", "title": "Review infrastructure and costs", "complete": False,
-         "detail": "The operations team must review the actual infrastructure plan, permissions, build settings and costs before deployment.", "href": "/dashboard/services"},
+        {"id": "plan", "title": "Review engineering decisions", "complete": False,
+         "detail": "Open the saved design's planning review, then agree the actual infrastructure plan, permissions, build settings and costs with operations.", "href": design_url + "&step=review"},
     ]
     return {"application_id": app.id, "application_name": app.name, "architecture_id": arch.id if arch else None,
         "version": arch.version if arch else None, "source_commit": evidence.get("commit"), "source_coverage": evidence.get("source_coverage"),
