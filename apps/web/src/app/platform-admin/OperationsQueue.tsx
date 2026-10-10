@@ -42,6 +42,7 @@ export function OperationsQueue() {
   const [note, setNote] = useState("");
   const [customerUpdate, setCustomerUpdate] = useState("");
   const [error, setError] = useState("");
+  const [managementError, setManagementError] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     let active = true;
@@ -140,6 +141,7 @@ export function OperationsQueue() {
                   setState(item.status);
                   setNote("");
                   setCustomerUpdate("");
+                  setManagementError("");
                 }}
                 className="w-full text-left p-5 border-b last:border-0 flex gap-4 items-center justify-between hover:bg-slate-50"
               >
@@ -194,7 +196,7 @@ export function OperationsQueue() {
               onSubmit={async (event) => {
                 event.preventDefault();
                 setBusy(true);
-                setError("");
+                setManagementError("");
                 try {
                   await apiClient(`/admin/operations-queue/${selected.id}`, {
                     method: "PATCH",
@@ -208,7 +210,7 @@ export function OperationsQueue() {
                   setSelected(null);
                   setRefresh((value) => value + 1);
                 } catch (failure) {
-                  setError(
+                  setManagementError(
                     failure instanceof Error
                       ? failure.message
                       : "Unable to update request.",
@@ -269,9 +271,9 @@ export function OperationsQueue() {
               <label className="block text-sm font-medium">Update visible to the customer
                 <textarea disabled={busy} maxLength={1000} rows={3} required={state === "WAITING_CUSTOMER"} value={customerUpdate} onChange={event => setCustomerUpdate(event.target.value)} placeholder="Explain progress or the information needed. This appears on the customer application." className="mt-2 block w-full resize-none rounded-lg border p-3" />
               </label>
-              {error && (
+              {managementError && (
                 <p role="alert" className="text-sm text-rose-700">
-                  {error}
+                  {managementError}
                 </p>
               )}
               <button

@@ -43,3 +43,23 @@ Before paid acquisition, establish actual delivery capability, reconciled live p
 - Statements that a merchant of record is universally required or that nearly every web deployment needs the same VPC were not adopted. Payment/tax obligations and workload architecture need separate reviewed decisions.
 - Never ask customers to send root credentials, administrative keys or passwords. Review scoped role access separately; observation does not authorize provisioning.
 - Existing production gates still apply. A new page, calculator or accepted internal report does not make the platform enterprise-ready.
+
+## Discovery notes for each real conversation
+
+Record the prospect's own words and evidence, not a guessed readiness score:
+
+1. Which client project is blocked, and what would a successful launch change for the agency?
+2. How do you deploy and hand over projects today? Where did the last launch lose time or need outside help?
+3. Who owns the repositories, cloud account, design approval and ongoing support?
+4. What runtime, data, region, availability and migration requirements are already known? What is still a decision?
+5. Which deliverables would make a scoped engagement worth paying for, and which alternatives are they considering?
+6. Who approves the scope and budget? Is there a current deadline or only general interest?
+7. Which access, confidentiality, billing or handover concerns would stop them proceeding?
+
+Classify an inquiry as qualified only after recording a current project, the responsible decision-maker and a scope the team can actually deliver. Qualification is not agreement or payment. Record a reason for declines; repeated objections should change the offer or workflow before increasing acquisition spend.
+
+## First engagement scorecard
+
+Keep one row per actual engagement using its inquiry and service-request references. Record the agreed deliverables, total quoted amount and currency, provider-confirmed payment reference, delivery start/end, operator hours, rework, support hours, refund amount, report ID and latest acceptance timestamp. Link the actual artifacts. Do not populate missing fields with estimates or use internal browser-review records.
+
+Measure conversion only between named stages over a defined date range. Report the numerator and denominator with every rate. Separate inquiry volume from qualified projects and paid, accepted deliveries. Compare estimated versus actual hours and contribution after each engagement. Increase capacity or advertising only when the owner approves the spend and the delivery evidence supports the next cohort.
