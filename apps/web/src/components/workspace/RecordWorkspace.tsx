@@ -461,6 +461,7 @@ export function RecordWorkspace({ module }: { module: string }) {
                   </div>
                 ))}
             </dl>
+            {module === "notifications" && typeof selected.fields.service_request_id === "string" && <Link href={`/dashboard/services/${selected.fields.service_request_id}`} className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-cyan-700">Open this service request<ArrowRight className="h-4 w-4" /></Link>}
           </section>
         </Dialog>
       )}

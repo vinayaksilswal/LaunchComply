@@ -76,21 +76,20 @@ export default function LandingPage() {
             to <span className="text-cyan-700">real business.</span>
           </h1>
           <p className="mt-6 max-w-lg text-lg leading-8 text-slate-600">
-            You built the app. Let&apos;s work through what it needs to reach your
-            customers.
+            Turn your code into a clear AWS launch plan.
           </p>
           <p className="mt-4 max-w-lg text-sm leading-7 text-slate-500">
             Connect your code, shape a cloud design, and request deployment,
-            security, or compliance help. One workspace keeps the next steps and
-            actual results clear.
+            security, or compliance help. Founders and agencies can review the
+            decisions and track an assisted delivery in one workspace.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/signup" className={primaryLink}>
-              Create your workspace
+            <Link href="/contact#consultation" className={primaryLink}>
+              Discuss your launch
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link href="/contact#consultation" className={secondaryLink}>
-              Discuss your business
+            <Link href="/signup" className={secondaryLink}>
+              Start with your code
             </Link>
           </div>
           <div className="mt-7 flex flex-wrap gap-5 text-xs text-slate-500">
@@ -129,7 +128,7 @@ export default function LandingPage() {
           className={`${container} flex flex-wrap items-center justify-between gap-5 py-6`}
         >
           <p className="text-sm font-medium text-slate-700">
-            Built for founders who want a clear next step.
+            A clear next step for founders and development agencies.
           </p>
           <p className="max-w-xl text-sm leading-6 text-slate-500">
             Whether you wrote the code yourself or built it with AI, start with

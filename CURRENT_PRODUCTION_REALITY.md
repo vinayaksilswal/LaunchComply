@@ -10,6 +10,8 @@ The first-business journey now includes public consultation intake, an operator 
 
 Saved architecture versions now receive a deterministic engineering planning checklist covering source coverage, traffic/availability, specific hosting choices, runtime connections, network access, build settings, recovery, identity/secrets and operating costs. The checklist is computed from saved metadata, binds to a graph fingerprint and source snapshot, and can be exported when no local edits or pending AI proposal exist. Future LangGraph proposals receive the same planning gaps. New deployment review requests capture this checklist in the submission audit record; customers and operators can view the same snapshot in request progress. Later edits do not update that snapshot and older requests are not backfilled. This is decision support, not cloud validation, capacity sizing, a security assessment or a production acceptance gate. Actual infrastructure planning and execution remain outstanding.
 
+The agency-focused public entry now scopes an assisted launch instead of promising automatic provisioning. Optional project context is recorded for operator qualification. The internal service economics page calculates only operator-entered assumptions, not observed revenue or margins. Permanent request pages and latest-report customer acceptance provide a traceable handover; acceptance is not proof of security, recovery, deployment or certification. See `docs/runbooks/AGENCY_MARKET_ENTRY.md`. Live browser acceptance of these changes must be recorded separately.
+
 ## Historical 2026-10-07 audit
 
 Updated: 2026-10-07. Target: Vercel frontend + Render API/PostgreSQL for private owner testing, followed by AWS and a controlled B2B beta.

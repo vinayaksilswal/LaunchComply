@@ -471,6 +471,10 @@ class ConsultationRequest(BaseModel):
     message: str = Field(min_length=10, max_length=1000)
     contact_permission: Literal[True]
     website: str = Field(default="", max_length=255)
+    source_page: Literal["CONTACT", "AGENCIES"] = "CONTACT"
+    business_type: Literal["UNSPECIFIED", "AGENCY", "FOUNDER", "TEAM"] = "UNSPECIFIED"
+    timeline: Literal["UNSPECIFIED", "WITHIN_30_DAYS", "WITHIN_60_DAYS", "LATER", "EXPLORING"] = "UNSPECIFIED"
+    aws_status: Literal["UNSPECIFIED", "EXISTING_ACCOUNT", "NO_ACCOUNT", "UNDECIDED"] = "UNSPECIFIED"
 
 
 @router.post("/consultations", status_code=201)
@@ -482,6 +486,11 @@ async def request_consultation(payload: ConsultationRequest, db: AsyncSession = 
         return {"status": "SAVED", "reference": str(payload.request_id)}
     email = str(payload.email).lower()
     notes = f"Interest: {payload.interest}\nPermission to contact about this inquiry: recorded\n{payload.message}"
+    qualification = []
+    if payload.source_page != "CONTACT": qualification.append(f"Source page: {payload.source_page}")
+    for label, value in (("Business type", payload.business_type), ("Timeline", payload.timeline), ("AWS account", payload.aws_status)):
+        if value != "UNSPECIFIED": qualification.append(f"{label}: {value}")
+    if qualification: notes += "\n\n" + "\n".join(qualification)
     async def existing_result():
         existing = await db.get(Lead, str(payload.request_id))
         if not existing:

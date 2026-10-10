@@ -93,6 +93,7 @@ export function OperationsQueue() {
             {error}
           </p>
         )}
+        <Link href="/platform-admin/service-economics" className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-700">Check service price & delivery capacity<ArrowRight className="h-4 w-4" /></Link>
         <section className="grid sm:grid-cols-3 gap-4">
           {["REQUESTED", "IN_PROGRESS", "WAITING_CUSTOMER"].map((item) => (
             <button
@@ -225,6 +226,7 @@ export function OperationsQueue() {
                   <h2 className="font-semibold text-lg mt-1">
                     {selected.title}
                   </h2>
+                  <p className="mt-2 break-all text-xs text-slate-500">Request reference: {selected.id}</p>
                 </div>
                 <button
                   type="button"

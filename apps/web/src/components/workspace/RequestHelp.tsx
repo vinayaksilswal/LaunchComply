@@ -88,11 +88,11 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
                   can track its status in Service requests.
                 </p>
                 <Link
-                  href="/dashboard/services"
+                  href={`/dashboard/services/${requestId}`}
                   onClick={() => setOpen(false)}
                   className="text-sm font-semibold text-cyan-700"
                 >
-                  View your requests
+                  Open this request
                 </Link>
               </div>
             ) : (

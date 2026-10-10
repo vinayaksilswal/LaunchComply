@@ -6,6 +6,7 @@ export const PUBLIC_NAV = [
   { label: "Compliance", href: "/compliance" },
   { label: "Services", href: "/services" },
   { label: "Pricing", href: "/pricing" },
+  { label: "For agencies", href: "/for-agencies" },
 ] as const;
 
 export interface FeatureContent {

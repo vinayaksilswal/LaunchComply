@@ -31,7 +31,7 @@ Updated 2026-10-10. This is an operating procedure for the current release, not 
 1. Use the business service queue for status, customer-visible updates and questions. Keep internal notes internal. Customer replies to a waiting request return it to review.
 2. Scope and authorize security testing separately. Compliance preparation is not certification or an independent audit.
 3. Publish a report of the work actually performed, its evidence, limitations and remaining actions. A checksum identifies content; it is not an assessor's digital signature. Do not mark deployment delivered merely because a design exists.
-4. Verify the customer can open progress, respond and download the report. Record explicit customer acceptance and support ownership outside any simulated legacy delivery flow.
+4. Verify the customer can open the permanent service request page, respond and download the report. An owner/admin records acceptance of the latest report there; the receipt binds to its ID and checksum. A new report needs new acceptance. Operations cannot close a request with a report before that acceptance. Agree support ownership separately; this does not prove cloud validation or certification.
 5. Before promising production service levels, complete a real recovery rehearsal, security/tenant-isolation acceptance, payment reconciliation and customer deployment handover. Marketing an architecture planning workflow does not establish enterprise production readiness.
 
 ## Public intake controls and limits

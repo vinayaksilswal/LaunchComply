@@ -14,7 +14,7 @@ from app.models.entities import ServiceRequest
 from app.models.audit import AuditEvent
 from app.models.service_delivery import ServiceDeliveryReport
 from app.models.service_payments import ServicePaymentQuote, ServiceCheckout
-from app.services.commercial.request_workflow import activity, TRANSITIONS, require_real_service_payment
+from app.services.commercial.request_workflow import activity, TRANSITIONS, require_real_service_payment, latest_report, delivery_acceptance
 
 router = APIRouter(tags=["Business Requests"])
 Code = Literal["DEPLOYMENT_HELP", "SECURITY_ASSESSMENT", "COMPLIANCE_HELP", "AWS_CONNECTION", "BACKUP_REVIEW", "COST_REVIEW", "SUPPORT", "VAPT_ASSESSMENT", "ISO27001_HELP", "SOC2_HELP", "PRIVACY_HELP"]
@@ -50,7 +50,7 @@ async def report(report_id: str, membership=Depends(member), db: AsyncSession = 
     item = (await db.execute(select(ServiceDeliveryReport).where(ServiceDeliveryReport.id == report_id,
         ServiceDeliveryReport.organization_id == membership.organization_id))).scalar_one_or_none()
     if not item: raise HTTPException(404, "Report not found in your business.")
-    return {"id": item.id, "title": item.title, "content": item.content, "created_at": item.created_at, "sha256": item.content_sha256}
+    return {"id": item.id, "request_id": item.request_id, "title": item.title, "content": item.content, "created_at": item.created_at, "sha256": item.content_sha256}
 
 class CreateRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -116,6 +116,41 @@ async def customer_activity(request_id: str, membership=Depends(member), db: Asy
     if not item: raise HTTPException(404, "Request not found in your business.")
     return await activity(db, item)
 
+@router.get("/business-requests/{request_id}")
+async def customer_request(request_id: str, membership=Depends(member), db: AsyncSession = Depends(get_db)):
+    item = (await db.execute(select(ServiceRequest).where(ServiceRequest.id == request_id,
+        ServiceRequest.organization_id == membership.organization_id))).scalar_one_or_none()
+    if not item: raise HTTPException(404, "Request not found in your business.")
+    return await activity(db, item)
+
+class AcceptDelivery(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+    report_id: uuid.UUID
+    content_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    reviewed_delivery: Literal[True]
+
+@router.post("/business-requests/{request_id}/acceptance")
+async def accept_delivery(request_id: str, payload: AcceptDelivery, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
+    item = (await db.execute(select(ServiceRequest).where(ServiceRequest.id == request_id,
+        ServiceRequest.organization_id == membership.organization_id).with_for_update())).scalar_one_or_none()
+    if not item: raise HTTPException(404, "Request not found in your business.")
+    report = await latest_report(db, item)
+    if not report or report.id != str(payload.report_id) or report.content_sha256 != payload.content_sha256:
+        raise HTTPException(409, "The latest report changed. Refresh and review the current delivery before accepting it.")
+    # The request lock serializes publication and acceptance. A retry creates no second receipt.
+    accepted = await delivery_acceptance(db, item, report)
+    if accepted:
+        return {"report_id": report.id, "sha256": report.content_sha256, "accepted_at": accepted.created_at}
+    if item.status != "DELIVERED":
+        raise HTTPException(409, "This request is not awaiting delivery acceptance. Review the team's progress before accepting it.")
+    user = await db.get(User, membership.user_id)
+    receipt = AuditEvent(organization_id=item.organization_id, actor_id=user.id, actor_email=user.email,
+        action="BUSINESS_REQUEST_DELIVERY_ACCEPTED", entity_type="service_request", entity_id=item.id,
+        details={"report_id": report.id, "content_sha256": report.content_sha256})
+    db.add(receipt)
+    await db.commit()
+    return {"report_id": report.id, "sha256": report.content_sha256, "accepted_at": receipt.created_at}
+
 class CustomerReply(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     reply_id: uuid.UUID
@@ -177,6 +212,10 @@ async def update(request_id: str, payload: UpdateRequest, admin=Depends(require_
     if payload.status in {"DELIVERED", "CLOSED"} and item.service_code in {"SECURITY_ASSESSMENT", "COMPLIANCE_HELP", "VAPT_ASSESSMENT", "ISO27001_HELP", "SOC2_HELP", "PRIVACY_HELP"}:
         count = (await db.execute(select(func.count()).select_from(ServiceDeliveryReport).where(ServiceDeliveryReport.request_id == item.id))).scalar_one()
         if not count: raise HTTPException(409, "Publish the assessment report before marking this service delivered.")
+    if payload.status == "CLOSED" and item.status != "CLOSED":
+        report = await latest_report(db, item)
+        if report and not await delivery_acceptance(db, item, report):
+            raise HTTPException(409, "The customer must accept the latest delivered report before this request can close.")
     before = item.status
     item.status = payload.status
     if payload.estimated_delivery: item.estimated_delivery = payload.estimated_delivery
