@@ -40,7 +40,7 @@ import { RequirementsForm } from "./RequirementsForm";
 import { AwsReferences, type AwsReferenceReview } from "./AwsReferences";
 
 import { useGraphHistory } from "./useGraphHistory";
-import { NetworkReview } from "./networkPlacement";
+import { NetworkReview, networkPlacement } from "./networkPlacement";
 import { DesignReview, type SavedDesignReview } from "./DesignReview";
 import { SecureTrafficDesign } from "./SecureTrafficDesign";
 import { AssistantWindow, type AssistantDock } from "./AssistantWindow";
@@ -160,6 +160,7 @@ export function ArchitectureCanvas() {
   const diagram = useRef<SVGSVGElement>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
   const componentDetails = useRef<HTMLElement>(null);
+  const requirementsPanel = useRef<HTMLDivElement>(null);
   const drag = useRef<{
     id: string;
     x: number;
@@ -282,6 +283,9 @@ export function ArchitectureCanvas() {
   useEffect(() => {
     if (selected && chatVisible) componentDetails.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [selected, chatVisible]);
+  useEffect(() => {
+    if (requirementsVisible && chatVisible && !assistantMinimized) requirementsPanel.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [requirementsVisible, chatVisible, assistantMinimized]);
 
   const operation = async (name: string, path: string, data?: object) => {
     if (!appId || busy) return;
@@ -443,7 +447,7 @@ export function ArchitectureCanvas() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {draft && <button disabled={!!busy} onClick={() => { setRequirementsVisible(value => !value); setChatVisible(true); setAssistantMinimized(false); }} className="rounded-lg border px-3 py-2 text-xs font-semibold">Traffic & availability</button>}
+          {draft && <button disabled={!!busy} onClick={() => { setRequirementsVisible(true); setChatVisible(true); setAssistantMinimized(false); requestAnimationFrame(() => requirementsPanel.current?.scrollIntoView({ block: "start", behavior: "smooth" })); }} className="rounded-lg border px-3 py-2 text-xs font-semibold">Traffic & availability</button>}
           <select
             aria-label="Business asset for architecture"
             disabled={loading || !!busy || dirty}
@@ -945,7 +949,7 @@ export function ArchitectureCanvas() {
               <button aria-label="Close architecture assistant" onClick={() => setChatVisible(false)} className="ml-2 rounded-lg p-2 hover:bg-slate-100"><X className="h-4 w-4" /></button>
             </div>
             <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-4">
-              {draft && (requirementsVisible || !draft.requirements) && <RequirementsForm key={appId} value={draft.requirements} disabled={!!busy || !canEdit} saveBlockedReason={dirty ? "Save your diagram changes before saving targets." : draft.proposal ? "Apply the pending AI proposal before saving targets." : undefined} saving={busy === "requirements"} onSave={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} />}
+              {draft && (requirementsVisible || !draft.requirements) && <div ref={requirementsPanel}><RequirementsForm key={appId} value={draft.requirements} disabled={!!busy || !canEdit} saveBlockedReason={dirty ? "Save your diagram changes before saving targets." : draft.proposal ? "Apply the pending AI proposal before saving targets." : undefined} saving={busy === "requirements"} onSave={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} /></div>}
               {draft && !requirementsVisible && draft.requirements && <div className="rounded-xl border p-3 text-xs leading-5 text-slate-600"><strong className="text-slate-900">Deployment targets</strong><br />{draft.requirements.region} · {draft.requirements.availability.replaceAll("_", " ").toLowerCase()}<br />{draft.requirements.peak_requests_per_minute.toLocaleString()} requests/min · {draft.requirements.concurrent_users.toLocaleString()} users</div>}
               {draft && view === "cloud" && <NetworkReview graph={fullDesign} />}
               {draft && (
@@ -1015,6 +1019,20 @@ export function ArchitectureCanvas() {
                           className="mt-1 w-full p-2 rounded border text-slate-900"
                         />
                       </label>
+                      <div className="rounded-lg border border-cyan-100 bg-cyan-50/40 p-3">
+                        <label className="block text-xs font-semibold text-slate-700">VPC placement
+                          <select aria-label="VPC placement" disabled={!!busy} value={networkPlacement(node)} onChange={event => {
+                            const publicFrontend = event.target.value === "PUBLIC_FRONTEND";
+                            const base = node.service.replace(/\s*·\s*(?:public frontend|private backend|private compute)/gi, "");
+                            updateNode({ service: publicFrontend ? "ECS Fargate · public frontend" : `${/static hosting\s*(?:\/|or)\s*container/i.test(base) ? "ECS Fargate" : base} · private compute`.slice(0, 100), description: `${node.description.slice(0, 300)} Customer-selected ${publicFrontend ? "public frontend subnet; web-ingress SG only; browser API via authenticated HTTPS ingress" : "private application subnet; no public IP; ingress SG only"}. Routes, TLS, ports and egress require review.`.slice(0, 500) });
+                          }} className="mt-1 w-full rounded border bg-white p-2 text-xs">
+                            <option value={networkPlacement(node)}>{networkPlacement(node) === "PUBLIC_FRONTEND" ? "Public frontend subnet · proposed" : networkPlacement(node) === "PRIVATE_COMPUTE" ? "Private application subnet · proposed" : networkPlacement(node) === "PRIVATE_DATA" ? "Isolated data subnet · proposed" : networkPlacement(node) === "PUBLIC_INGRESS" ? "Public HTTPS ingress subnet · proposed" : networkPlacement(node) === "OUTSIDE_VPC" ? "Managed/global service · outside VPC" : "Hosting decision required"}</option>
+                            {node.zone === "APPLICATION" && /web app|frontend/i.test(`${node.label} ${node.description}`) && networkPlacement(node) !== "PUBLIC_FRONTEND" && <option value="PUBLIC_FRONTEND">Public frontend container · ECS Fargate</option>}
+                            {node.zone === "APPLICATION" && /ecs|fargate|ec2|eks|container/i.test(node.service) && networkPlacement(node) !== "PRIVATE_COMPUTE" && <option value="PRIVATE_COMPUTE">Private application subnet</option>}
+                          </select>
+                        </label>
+                        <p className="mt-2 text-[10px] leading-4 text-slate-500">Public and private are subnet tiers inside a regional VPC. Managed services stay outside it. This edits the proposal; it does not change live access. Use Review secure traffic to route selected frontends through HTTPS API ingress.</p>
+                      </div>
                       <label className="block text-xs text-slate-500">
                         Architecture layer
                         <select
