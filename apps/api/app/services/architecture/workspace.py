@@ -252,8 +252,6 @@ def draft_graph(evidence):
     if kinds & {"api", "worker"}:
         add("registry", "Container images", "Amazon ECR", "SUPPORT", 1140, 60, "Proposed image registry for container packaging; no images have been built.")
         add("logs", "Application monitoring", "Amazon CloudWatch", "SUPPORT", 1140, 270, "Proposed logs and monitoring. Retention, alarms and data redaction require configuration.")
-        for source in ("api", "worker"):
-            if source in {item["id"] for item in nodes}: link(source, "logs", "Logs · proposed")
     return Graph(nodes=nodes, edges=edges).model_dump()
 
 async def refine(graph, evidence, message, history, aws_references=None, requirements=None):
@@ -274,10 +272,13 @@ async def provider_refine(graph, evidence, message, history, aws_references=None
         "Cross-repository API connections, database sharing and endpoints are unknown unless supported by evidence or confirmed by the customer. Ask for missing traffic, region, availability and integration requirements; never invent them. "
         "Use customer requirements for traffic, region and availability. Explain initial replica proposals, unknown CPU/memory needs, and load testing needed to size instances. Never guarantee production readiness. "
         "Review network_design_guidance separately from source evidence. Public/private subnets belong inside a regional VPC. Choose public ingress and private compute/data only for applicable services. Do not put static hosting, CloudFront, S3 or DynamoDB into customer subnets. Resolve ambiguous hosting choices. Discuss route tables, NAT versus endpoints, isolated data, security-group paths and multi-AZ/region tradeoffs. Never invent CIDRs, ports, endpoint usage or live resources. Preserve the graph when asked for explanation only. "
+        "When the customer selects public frontend containers, use service 'ECS Fargate · public frontend' and retain their separate source identities. Backend containers use 'ECS Fargate · private backend', no public task IP, and ingress-SG-only access. Browser JavaScript must call an authenticated public HTTPS entry, never a private backend IP. Draw frontend -> API ingress -> private backend; label customer-requested API links 'Browser HTTPS API · customer intent', not source-verified. Web ingress can serve frontend containers in public subnets with web-ingress-SG-only access. HTTPS target encryption needs actual target certificates/configuration; a drawn line does not enable TLS. Keep CloudFront and DNS outside VPC subnets. Do not connect unrelated frontends to each other. "
+        "CloudWatch, ECR and other SUPPORT services belong at the end, separate from application traffic. Do not draw application request edges to them; describe telemetry, image delivery and IAM configuration in their descriptions. Do not call intentionally separate support services a broken runtime connection. "
         "Documentation references are guidance, not validation. Refer to supplied source titles; do not invent citations. Explain uncertainties and tradeoffs. "
         "Address the supplied planning_review gaps. Route 53 and CloudFront are global: do not claim they require a deployment region, while their regional origins do. A valid graph is not engineering acceptance. Never say the deterministic review verifies security, runtime connections, costs or capacity. "
         "Never claim measured costs, security guarantees or successful cloud changes. Discuss the request and retain the graph when no change is warranted. "
         "Keep a readable layout: edge x70, application x420, data x790, support x1140, row spacing200. "
+        "Write a concise customer response in short paragraphs: changes, traffic path, remaining decisions. Avoid long repetition, invented counts, and claiming requests are integrated without source/runtime confirmation. "
         "No credentials, executable code or URLs. You have no deployment tools."
     )
     context = json.dumps({"draft": graph, "source_evidence": evidence, "recent_conversation": history[-6:],

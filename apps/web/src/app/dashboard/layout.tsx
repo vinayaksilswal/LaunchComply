@@ -33,7 +33,7 @@ export default function DashboardLayout({
       <CommandPalette />
 
       {/* Main Content Area */}
-      <div className="flex-1 lg:ml-64 flex flex-col min-w-0 min-h-0 bg-slate-50/40 pt-14 lg:pt-0">
+      <div className="flex-1 lg:ml-16 flex flex-col min-w-0 min-h-0 bg-slate-50/40 pt-14 lg:pt-0">
         {/* Top Header */}
         <header className="h-14 shrink-0 bg-white/95 border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md">
           {/* Breadcrumb / Context */}

@@ -42,6 +42,8 @@ import { AwsReferences, type AwsReferenceReview } from "./AwsReferences";
 import { useGraphHistory } from "./useGraphHistory";
 import { NetworkReview } from "./networkPlacement";
 import { DesignReview, type SavedDesignReview } from "./DesignReview";
+import { SecureTrafficDesign } from "./SecureTrafficDesign";
+import { AssistantWindow, type AssistantDock } from "./AssistantWindow";
 
 type Zone = "EDGE" | "APPLICATION" | "DATA" | "SUPPORT";
 interface Node {
@@ -138,6 +140,9 @@ export function ArchitectureCanvas() {
   const [preview, setPreview] = useState(false);
   const [newConnection, setNewConnection] = useState("");
   const [chatVisible, setChatVisible] = useState(true);
+  const [assistantDock, setAssistantDock] = useState<AssistantDock>("right");
+  const [assistantMinimized, setAssistantMinimized] = useState(false);
+  const [assistantMaximized, setAssistantMaximized] = useState(false);
   const [reviewApproval, setReviewApproval] = useState(false);
   const [requirementsVisible, setRequirementsVisible] = useState(query.get("step") === "targets");
   useEffect(() => {
@@ -382,13 +387,13 @@ export function ArchitectureCanvas() {
       if (canvas.current && autoFit.current)
         setZoom(
             Math.max(
-            view === "cloud" ? 0.6 : 0.08,
+            0.08,
             Math.min(1, (canvas.current.clientWidth - 32) / width, (canvas.current.clientHeight - 24) / height),
           ),
         );
     });
     const observer = new ResizeObserver(() => {
-      if (canvas.current && autoFit.current) setZoom(Math.max(view === "cloud" ? 0.6 : 0.08, Math.min(1, (canvas.current.clientWidth - 32) / width, (canvas.current.clientHeight - 24) / height)));
+      if (canvas.current && autoFit.current) setZoom(Math.max(0.08, Math.min(1, (canvas.current.clientWidth - 32) / width, (canvas.current.clientHeight - 24) / height)));
     });
     observer.observe(canvas.current);
     return () => { cancelAnimationFrame(frame); observer.disconnect(); };
@@ -438,7 +443,7 @@ export function ArchitectureCanvas() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {draft && <button disabled={!!busy || dirty || !canEdit} onClick={() => { setRequirementsVisible(value => !value); setChatVisible(true); }} className="rounded-lg border px-3 py-2 text-xs font-semibold">Traffic & availability</button>}
+          {draft && <button disabled={!!busy} onClick={() => { setRequirementsVisible(value => !value); setChatVisible(true); setAssistantMinimized(false); }} className="rounded-lg border px-3 py-2 text-xs font-semibold">Traffic & availability</button>}
           <select
             aria-label="Business asset for architecture"
             disabled={loading || !!busy || dirty}
@@ -524,7 +529,7 @@ export function ArchitectureCanvas() {
                   : "No analyzed architecture"}
           </span>
           <button
-            onClick={() => setChatVisible((value) => !value)}
+            onClick={() => { setChatVisible((value) => !value); setAssistantMinimized(false); }}
             className="inline-flex gap-1.5 text-cyan-700 font-semibold"
           >
             <Sparkles className="w-4 h-4" />
@@ -533,7 +538,7 @@ export function ArchitectureCanvas() {
         </div>
       </div>
       <div
-        className={`relative grid flex-1 min-h-0 overflow-hidden ${chatVisible ? "md:grid-cols-[minmax(0,1fr)_340px]" : "grid-cols-1"}`}
+        className={`relative grid flex-1 min-h-0 overflow-hidden ${chatVisible && !assistantMinimized && !assistantMaximized && assistantDock !== "floating" ? assistantDock === "left" ? "md:grid-cols-[340px_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,1fr)_340px]" : "grid-cols-1"}`}
       >
         <section className="min-w-0 min-h-0 flex flex-col border-r border-slate-200">
           <div className="flex flex-wrap justify-between gap-3 items-center px-4 py-2 shrink-0 border-b border-slate-100">
@@ -562,6 +567,7 @@ export function ArchitectureCanvas() {
                 if (!id) { fit(); return; }
                 autoFit.current = false;
                 setChatVisible(true);
+                setAssistantMinimized(false);
                 const instance = shown.nodes.find(item => item.id === id);
                 if (instance && canvas.current) {
                   const container = canvas.current; setZoom(0.95);
@@ -569,6 +575,7 @@ export function ArchitectureCanvas() {
                 }
               }} className="mr-2 max-w-48 border rounded-lg p-1.5 text-xs bg-white"><option value="">Find a component</option>{shown.nodes.map(item => <option key={item.id} value={item.id}>{view === "code" ? draft?.evidence.modules?.find(module => module.id === item.id)?.path || item.label : `${item.label} · ${item.service}`}</option>)}</select>}
               {view === "cloud" && <>
+                <SecureTrafficDesign graph={graph} disabled={!draft || !!busy || preview || !canEdit || !!draft.proposal} onApply={next => { setGraph(next); setArrangedView(false); setCloudFocus(null); setSelected(null); autoFit.current = true; }} />
                 <button aria-label="Undo architecture change" title="Undo · Ctrl+Z / Cmd+Z" disabled={!canUndo || !!busy || preview || !canEdit} onClick={() => restoreHistory("undo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Undo2 className="w-4 h-4" /></button>
                 <button aria-label="Redo architecture change" title="Redo · Ctrl+Shift+Z / Ctrl+Y" disabled={!canRedo || !!busy || preview || !canEdit} onClick={() => restoreHistory("redo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Redo2 className="w-4 h-4" /></button>
                 <button aria-pressed={arrangedView} onClick={() => { setArrangedView(value => !value); setCloudFocus(null); }} className="rounded-lg border px-2 py-1.5 text-xs">{arrangedView ? "Arranged view" : "Saved layout"}</button>
@@ -794,6 +801,7 @@ export function ArchitectureCanvas() {
                   onSelect={(id) => {
                     setSelected(id);
                     setChatVisible(true);
+                    setAssistantMinimized(false);
                     setNewConnection("");
                   }}
                   onNodePointerDown={
@@ -919,7 +927,7 @@ export function ArchitectureCanvas() {
           </div>
         </section>
         {chatVisible && (
-          <aside className="absolute inset-y-0 right-0 z-20 w-full md:static md:w-auto flex flex-col min-h-0 overflow-hidden bg-white border-l shadow-xl md:shadow-none">
+          <AssistantWindow dock={assistantDock} minimized={assistantMinimized} maximized={assistantMaximized} onDock={setAssistantDock} onMinimize={setAssistantMinimized} onMaximize={setAssistantMaximized} onClose={() => setChatVisible(false)}>
             <div className="px-4 py-3 shrink-0 border-b flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <span className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
@@ -937,7 +945,7 @@ export function ArchitectureCanvas() {
               <button aria-label="Close architecture assistant" onClick={() => setChatVisible(false)} className="ml-2 rounded-lg p-2 hover:bg-slate-100"><X className="h-4 w-4" /></button>
             </div>
             <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-4">
-              {draft && (requirementsVisible || !draft.requirements) && <RequirementsForm key={draft.id} value={draft.requirements} disabled={!!busy || dirty || !canEdit || !!draft.proposal} saving={busy === "requirements"} onSave={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} />}
+              {draft && (requirementsVisible || !draft.requirements) && <RequirementsForm key={appId} value={draft.requirements} disabled={!!busy || !canEdit} saveBlockedReason={dirty ? "Save your diagram changes before saving targets." : draft.proposal ? "Apply the pending AI proposal before saving targets." : undefined} saving={busy === "requirements"} onSave={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} />}
               {draft && !requirementsVisible && draft.requirements && <div className="rounded-xl border p-3 text-xs leading-5 text-slate-600"><strong className="text-slate-900">Deployment targets</strong><br />{draft.requirements.region} · {draft.requirements.availability.replaceAll("_", " ").toLowerCase()}<br />{draft.requirements.peak_requests_per_minute.toLocaleString()} requests/min · {draft.requirements.concurrent_users.toLocaleString()} users</div>}
               {draft && view === "cloud" && <NetworkReview graph={fullDesign} />}
               {draft && (
@@ -1204,12 +1212,12 @@ export function ArchitectureCanvas() {
               {draft?.messages.map((message, index) => (
                 <div
                   key={index}
-                  className={`rounded-xl p-3.5 text-sm leading-6 whitespace-pre-wrap break-words ${message.role === "user" ? "bg-slate-100 ml-5" : "border border-indigo-100 bg-indigo-50/40 mr-2"}`}
+                  className={`rounded-xl p-3 text-xs leading-5 break-words ${message.role === "user" ? "bg-slate-100 ml-5" : "border border-indigo-100 bg-indigo-50/30"}`}
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
-                    {message.role === "user" ? "You" : "Assistant"}
+                    {message.role === "user" ? "You" : "Architecture assistant"}
                   </p>
-                  {message.content}
+                  <div className="space-y-2">{message.content.split(/\n\s*\n/).filter(Boolean).map((paragraph, part) => <p key={part} className="whitespace-pre-wrap">{paragraph}</p>)}</div>
                 </div>
               ))}
               {draft?.proposal && (
@@ -1352,7 +1360,7 @@ export function ArchitectureCanvas() {
                     : "AI receives this draft and dependency findings. Review suggestions before applying."}
               </p>
             </form>
-          </aside>
+          </AssistantWindow>
         )}
       </div>
     </div>

@@ -6,6 +6,7 @@ NETWORK_GUIDANCE = {
         {"title": "VPC with private servers and NAT", "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-example-private-subnets-nat.html"},
         {"title": "Fargate task networking", "url": "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-task-networking.html"},
         {"title": "Application Load Balancers", "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html"},
+        {"title": "ECS network security and TLS", "url": "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security-network.html"},
     ],
     "design_checks": [
         "Public/private describes subnet routing inside a VPC, not two mandatory VPC types.",
@@ -18,5 +19,7 @@ NETWORK_GUIDANCE = {
         "A VPC is regional and a subnet belongs to one AZ. Multi-region recovery needs separate VPCs, replication, routing and failover decisions; do not promise automatic recovery.",
         "CIDRs must not overlap existing customer networks. DNS, TLS certificates, secrets injection, least privilege IAM, logging, backups, scaling and load tests remain explicit design decisions.",
         "An ambiguous static-hosting/container or CloudFront/ALB candidate must be resolved before choosing network placement. Dependency presence alone does not prove runtime usage.",
+        "Customer-selected public frontend containers can occupy public subnets while their SG permits only web ingress. The browser API destination remains a public authenticated HTTPS endpoint, which forwards to private backend tasks with no public IP and API-ingress-SG-only access. This is a topology proposal, not evidence that API URLs, CORS, auth or TLS are implemented.",
+        "Separate build and observability services from the application traffic diagram. Describe logs, alarms, image delivery, IAM and retention without request-flow arrows to CloudWatch or ECR. These integrations still need implementation.",
     ],
 }

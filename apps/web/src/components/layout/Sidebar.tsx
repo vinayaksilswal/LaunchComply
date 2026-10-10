@@ -70,6 +70,8 @@ export function Sidebar() {
     useAccount();
   const pathname = usePathname();
   const [mobile, setMobile] = useState(false);
+  const [railGroup, setRailGroup] = useState<string | null>(null);
+  useEffect(() => setRailGroup(null), [pathname]);
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
     const close = () => {
@@ -263,8 +265,32 @@ export function Sidebar() {
           <Menu className="w-5 h-5" />
         </button>
       </div>
-      <aside className="hidden lg:block fixed inset-y-0 left-0 w-64 border-r border-slate-200 z-40">
-        {content}
+      <aside aria-label="Workspace icon navigation" onKeyDown={event => { if (event.key === "Escape") setRailGroup(null); }} className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-16 border-r border-slate-200 z-40 bg-white">
+        <Link href="/dashboard" aria-label="LaunchComply home" title="LaunchComply" className="m-3 p-2 rounded-xl bg-slate-900 text-white"><ShieldCheck className="w-6 h-6" /></Link>
+        <nav aria-label="Main navigation" className="flex-1 min-h-0 py-2 space-y-2">
+          {MAIN_NAV.map(entry => {
+            const Icon = entry.icon, active = pathname === entry.href || (entry.href !== "/dashboard" && pathname.startsWith(`${entry.href}/`));
+            return <Link key={entry.href} href={entry.href} aria-label={entry.name} aria-current={active ? "page" : undefined} className={`group relative mx-2 flex h-11 items-center justify-center rounded-xl ${active ? "bg-cyan-50 text-cyan-800" : "text-slate-500 hover:bg-slate-50"}`}><Icon className="w-5 h-5" /><span className="pointer-events-none invisible group-hover:visible group-focus-visible:visible absolute left-full ml-2 rounded-lg border bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-lg whitespace-nowrap">{entry.name}</span></Link>;
+          })}
+          <div className="mx-3 border-t border-slate-100" />
+          {groups.map((group, index) => {
+            const Icon = [Activity, ShieldCheck, Settings][index];
+            return <div key={group.name} className="group relative px-2" onMouseEnter={() => setRailGroup(group.name)} onFocusCapture={() => setRailGroup(group.name)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setRailGroup(null); }} onMouseLeave={event => { if (!event.currentTarget.contains(document.activeElement)) setRailGroup(current => current === group.name ? null : current); }}>
+              <button aria-label={group.name} aria-expanded={railGroup === group.name} onClick={() => setRailGroup(current => current === group.name ? null : group.name)} className="flex w-full h-11 justify-center items-center rounded-xl text-slate-500 hover:bg-slate-50"><Icon className="w-5 h-5" /></button>
+              <div className={`${railGroup === group.name ? "block" : "hidden"} absolute left-full top-0 w-64 rounded-xl border bg-white p-3 shadow-xl`}>
+                <p className="px-3 pb-2 text-[10px] uppercase tracking-wide font-semibold text-slate-400">{group.name}</p>
+                {group.items.map(item)}
+                {index === 2 && user && user.organizations.length > 1 && <label className="mt-2 block px-3 text-xs text-slate-600">Active business<select aria-label="Active business" value={organization?.id || ""} onChange={event => chooseOrganization(event.target.value)} className="mt-1 w-full rounded border p-2 bg-white">{user.organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label>}
+              </div>
+            </div>;
+          })}
+          {user?.is_platform_admin && <Link href="/platform-admin" aria-label="Platform administration" title="Platform administration" className="mx-2 flex h-11 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50"><Settings className="w-5 h-5" /></Link>}
+        </nav>
+        <div className="border-t p-2 space-y-2">
+          <button aria-label="Find a page" title="Find a page · Ctrl+K" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))} className="w-full flex justify-center p-2 text-slate-500"><Search className="w-5 h-5" /></button>
+          <Link href="/dashboard/account" aria-label="Signed-in account" title={user?.full_name || "Business account"} className="mx-auto flex w-9 h-9 rounded-full bg-cyan-50 text-cyan-800 items-center justify-center text-xs font-semibold">{initials || <Users className="w-4 h-4" />}</Link>
+          <button aria-label="Sign out" title="Sign out" onClick={logout} className="w-full flex justify-center p-2 text-slate-400 hover:text-slate-900"><LogOut className="w-4 h-4" /></button>
+        </div>
       </aside>
       {mobile && (
         <Dialog

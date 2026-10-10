@@ -6,8 +6,10 @@ from app.services.architecture.knowledge import fingerprint
 
 def placement(service):
     """Match intended service placement, never observed subnet membership."""
-    if re.search(r"static hosting\s*/\s*container|cloudfront\s*/\s*alb|choose a cloud|candidate|review compatibility", service, re.I):
+    if re.search(r"static hosting\s*(?:/|or)\s*container|cloudfront\s*(?:/|or)\s*alb|choose a cloud|candidate|review compatibility", service, re.I):
         return "DECISION_REQUIRED"
+    if re.search(r"public frontend", service, re.I) and re.search(r"fargate|ecs|ec2|container", service, re.I):
+        return "PUBLIC_FRONTEND"
     if re.search(r"internal|private", service, re.I) and re.search(r"load balancer|\balb\b|\bnlb\b", service, re.I):
         return "DECISION_REQUIRED"
     for pattern, value in (
@@ -60,17 +62,36 @@ def build_review(graph, evidence=None, requirements=None, source_changed=False):
         [item["node_id"] for item in ambiguous])
 
     connected = {value for edge in edges for value in (edge["source"], edge["target"])}
-    disconnected = [node["id"] for node in nodes if node["id"] not in connected]
-    uncertain = sum(bool(re.search(r"inferred|proposed|candidate", edge.get("label", ""), re.I)) for edge in edges)
+    disconnected = [node["id"] for node in nodes if node["id"] not in connected and node.get("zone") != "SUPPORT"]
+    uncertain = sum(bool(re.search(r"inferred|proposed|candidate|customer intent", edge.get("label", ""), re.I)) for edge in edges)
     add("CONNECTIONS", "Confirm service connections", "REVIEW",
-        f"{len(edges)} diagram connections; {uncertain} explicitly labelled inferred or proposed. Services without drawn connections: {len(disconnected)}. Confirm frontend/API destinations, database consumers, queues and image delivery from source and runtime settings; drawing a line does not verify a connection.", disconnected)
+        f"{len(edges)} diagram connections; {uncertain} explicitly labelled inferred or proposed. Non-support services without drawn connections: {len(disconnected)}. Confirm frontend/API destinations, database consumers and queues from source and runtime settings. Build and observability services can be separate from traffic arrows; their configuration still needs review. Drawing a line does not verify a connection.", disconnected)
+
+    frontend_ids = {node["id"] for node in nodes if node.get("zone") == "APPLICATION" and re.search(r"frontend|web app", node.get("label", ""), re.I)}
+    backend_ids = {node["id"] for node in nodes if node.get("zone") == "APPLICATION" and re.search(r"\bapi\b|backend", node.get("label", ""), re.I) and node["id"] not in frontend_ids}
+    support_ids = {node["id"] for node in nodes if node.get("zone") == "SUPPORT" or re.search(r"cloudwatch|\becr\b", node.get("service", ""), re.I)}
+    direct_links = [edge for edge in edges if edge["source"] in frontend_ids and edge["target"] in backend_ids]
+    frontend_links = [edge for edge in edges if edge["source"] in frontend_ids and edge["target"] in frontend_ids]
+    support_links = [edge for edge in edges if edge["source"] in support_ids or edge["target"] in support_ids]
+    traffic_issues = []
+    if direct_links:
+        traffic_issues.append(f"{len(direct_links)} frontend-to-backend links omit the controlled HTTPS API entry; review the browser endpoint and ingress path")
+    if frontend_links:
+        traffic_issues.append(f"{len(frontend_links)} frontend-to-frontend links need runtime evidence")
+    if support_links:
+        traffic_issues.append(f"{len(support_links)} support-service links should be distinguished from request traffic; review telemetry/build configuration separately")
+    add("TRAFFIC", "Review browser-to-private-backend traffic", "REVIEW",
+        "; ".join(traffic_issues) + "." if traffic_issues else
+        "No direct frontend-to-backend or support request edges were detected by label checks. This does not verify API integration. Confirm browser HTTPS destination, authenticated ingress, private backend SG restrictions, TLS target configuration and CORS against source/runtime settings.",
+        sorted(frontend_ids | backend_ids))
 
     private_compute = [item["node_id"] for item in services if item["placement"] == "PRIVATE_COMPUTE"]
     private_data = [item["node_id"] for item in services if item["placement"] == "PRIVATE_DATA"]
     ingress = [item["node_id"] for item in services if item["placement"] == "PUBLIC_INGRESS"]
+    public_frontends = [item["node_id"] for item in services if item["placement"] == "PUBLIC_FRONTEND"]
     add("NETWORK", "Review network access", "REVIEW",
-        f"Proposed: {len(ingress)} ingress, {len(private_compute)} private compute and {len(private_data)} private data services. Confirm regional VPCs, non-overlapping CIDRs, routes, subnet/AZ allocation, NAT or endpoints, TLS, health checks and security-group paths. Route 53 and CloudFront are global services outside the VPC; regional origins still require a region.",
-        private_compute + private_data + ingress)
+        f"Proposed: {len(ingress)} ingress, {len(public_frontends)} public-tier frontends, {len(private_compute)} private compute and {len(private_data)} private data services. Public frontend containers should accept only web-ingress SG traffic. Browser API calls use authenticated HTTPS ingress; private backend tasks have no public IP and accept only API-ingress SG traffic. Confirm VPCs, CIDRs, routes, AZ allocation, NAT/endpoints, TLS target configuration, authentication, CORS and health checks. Route 53 and CloudFront are global services outside the VPC; regional origins still require a region.",
+        private_compute + private_data + ingress + public_frontends)
     workloads = [node["id"] for node in nodes if node.get("zone") == "APPLICATION"]
     add("RUNTIME", "Define build and runtime settings", "REVIEW",
         "Review each workload's build directory, runtime image, start command, listening port, health endpoint, environment-variable names and secret references. CPU, memory, replica limits and autoscaling need workload measurements; no sizes are inferred from traffic alone.", workloads)
