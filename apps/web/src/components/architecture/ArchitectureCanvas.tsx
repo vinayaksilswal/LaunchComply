@@ -28,14 +28,14 @@ import {
 } from "lucide-react";
 import {
   CloudDiagram,
-  arrangeArchitecture,
   diagramBounds,
   downloadArchitectureSvg,
 } from "./CloudDiagram";
 import { apiClient, ApiError } from "@/lib/api";
 import { codeArchitecture, sourceOverview, sourceAreas, type SourceModule } from "./codeArchitecture";
 import { useAccount } from "@/components/auth/AccountProvider";
-import { ProductionDiagram, productionLayout, type DeploymentRequirements } from "./ProductionDiagram";
+import type { DeploymentRequirements } from "./ProductionDiagram";
+import { arrangeBusinessArchitecture, businessBoundaries } from "./businessArchitecture";
 import { RequirementsForm } from "./RequirementsForm";
 import { AwsReferences, type AwsReferenceReview } from "./AwsReferences";
 
@@ -138,9 +138,9 @@ export function ArchitectureCanvas() {
   const [chatVisible, setChatVisible] = useState(true);
   const [reviewApproval, setReviewApproval] = useState(false);
   const [requirementsVisible, setRequirementsVisible] = useState(false);
-  const [networkView, setNetworkView] = useState(false);
   const canvas = useRef<HTMLDivElement>(null);
   const autoFit = useRef(true);
+  const keepEditZoom = useRef(false);
   const fitContext = useRef("");
   const diagram = useRef<SVGSVGElement>(null);
   const chatEnd = useRef<HTMLDivElement>(null);
@@ -151,6 +151,11 @@ export function ArchitectureCanvas() {
     y: number;
     startX: number;
     startY: number;
+    pointerId: number;
+    positions: Map<string, { x: number; y: number }>;
+    moved: boolean;
+    offsetX: number;
+    offsetY: number;
   } | null>(null);
   const draft = workspace?.architecture;
   const draftId = draft?.id;
@@ -161,11 +166,10 @@ export function ArchitectureCanvas() {
   const canEdit = canRefresh && !draft?.source_changed;
   const restoreHistory = (direction: "undo" | "redo") => {
     if (busy || preview || !canEdit || view !== "cloud" || (direction === "undo" ? !canUndo : !canRedo)) return;
-    setNetworkView(false);
-    setArrangedView(false);
     setCloudFocus(null);
     drag.current = null;
-    if (direction === "undo") undo(); else redo();
+    const restored = direction === "undo" ? undo() : redo();
+    if (restored) setArrangedView(JSON.stringify(restored) === JSON.stringify(draft?.graph));
   };
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -176,15 +180,14 @@ export function ArchitectureCanvas() {
       if (key !== "z" && key !== "y") return;
       event.preventDefault();
       if (key === "y" || event.shiftKey ? !canRedo : !canUndo) return;
-      setNetworkView(false);
-      setArrangedView(false);
       setCloudFocus(null);
       drag.current = null;
-      if (key === "y" || event.shiftKey) redo(); else undo();
+      const restored = key === "y" || event.shiftKey ? redo() : undo();
+      if (restored) setArrangedView(JSON.stringify(restored) === JSON.stringify(draft?.graph));
     };
     document.addEventListener("keydown", keydown);
     return () => document.removeEventListener("keydown", keydown);
-  }, [busy, preview, canEdit, view, undo, redo, canUndo, canRedo]);
+  }, [busy, preview, canEdit, view, undo, redo, canUndo, canRedo, draft?.graph]);
   const adopt = (result: Draft, operationName: string) => {
     endEdit();
     setWorkspace((current) =>
@@ -321,16 +324,23 @@ export function ArchitectureCanvas() {
     codeGraph.edges = sourceDesign.graph.edges;
   }
   const fullDesign = preview && draft?.proposal ? draft.proposal.graph : graph;
-  const production = view === "cloud" && networkView && fullDesign.nodes.length > 0;
   const neighborhood = new Set(fullDesign.edges.filter(edge => edge.source === cloudFocus || edge.target === cloudFocus).flatMap(edge => [edge.source, edge.target]));
   if (cloudFocus) neighborhood.add(cloudFocus);
-  const focusedDesign = cloudFocus && !production ? { nodes: fullDesign.nodes.filter(node => neighborhood.has(node.id)), edges: fullDesign.edges.filter(edge => neighborhood.has(edge.source) && neighborhood.has(edge.target)) } : fullDesign;
+  const focusedDesign = cloudFocus ? { nodes: fullDesign.nodes.filter(node => neighborhood.has(node.id)), edges: fullDesign.edges.filter(edge => neighborhood.has(edge.source) && neighborhood.has(edge.target)) } : fullDesign;
   const shown =
     view === "code"
       ? codeGraph
-      : !production && (arrangedView || cloudFocus) ? arrangeArchitecture(focusedDesign) : fullDesign;
+      : (arrangedView || cloudFocus) ? arrangeBusinessArchitecture(focusedDesign) : fullDesign;
   const node = shown.nodes.find((item) => item.id === selected);
-  const { width, height } = production ? productionLayout(shown, draft?.requirements) : diagramBounds(shown, view !== "code");
+  const editableLayout = () => {
+    const positions = new Map(shown.nodes.map(item => [item.id, { x: item.x, y: item.y }]));
+    return (current: Graph): Graph => ({
+      ...current,
+      nodes: current.nodes.map(item => ({ ...item, ...positions.get(item.id) })),
+    });
+  };
+  const boundaries = view === "code" ? sourceDesign.boundaries : businessBoundaries(shown, draft?.requirements);
+  const { width, height } = diagramBounds(shown, view !== "code", boundaries);
   const updateNode = (change: Partial<Node>) => {
     if (!node || !canEdit || busy || view === "code" || preview) return;
     setGraph((current) => ({
@@ -350,12 +360,13 @@ export function ArchitectureCanvas() {
       canvas.current.scrollTo({ top: 0, left: 0 });
     }
   };
-  const layoutKey = `${draftId}:${view}:${codeMode}:${codeFocus}:${cloudFocus}:${arrangedView}:${networkView}:${preview}`;
+  const layoutKey = `${draftId}:${view}:${codeMode}:${codeFocus}:${cloudFocus}:${arrangedView}:${preview}`;
   useEffect(() => {
     if (!draftId || !canvas.current) return;
     if (fitContext.current !== layoutKey) {
       fitContext.current = layoutKey;
-      autoFit.current = true;
+      if (!drag.current && !keepEditZoom.current) autoFit.current = true;
+      keepEditZoom.current = false;
     }
     const frame = requestAnimationFrame(() => {
       if (canvas.current && autoFit.current)
@@ -541,25 +552,24 @@ export function ArchitectureCanvas() {
                 if (!id) { fit(); return; }
                 autoFit.current = false;
                 setChatVisible(true);
-                const instance = production ? productionLayout(shown, draft?.requirements).instances.find(item => item.node.id === id) : shown.nodes.find(item => item.id === id);
+                const instance = shown.nodes.find(item => item.id === id);
                 if (instance && canvas.current) {
                   const container = canvas.current; setZoom(0.95);
                   requestAnimationFrame(() => container.scrollTo({ left: Math.max(0, instance.x * 0.95 - container.clientWidth / 2 + 90), top: Math.max(0, instance.y * 0.95 - container.clientHeight / 2 + 60), behavior: "smooth" }));
                 }
               }} className="mr-2 max-w-48 border rounded-lg p-1.5 text-xs bg-white"><option value="">Find a component</option>{shown.nodes.map(item => <option key={item.id} value={item.id}>{view === "code" ? draft?.evidence.modules?.find(module => module.id === item.id)?.path || item.label : `${item.label} · ${item.service}`}</option>)}</select>}
-              {view === "cloud" && draft && <button aria-pressed={networkView} onClick={() => setNetworkView(value => !value)} className="mr-2 rounded-lg border px-2 py-1.5 text-xs font-semibold">{networkView ? "Logical design" : draft.requirements ? "Network diagram" : "Preview network boundaries"}</button>}
               {view === "cloud" && <>
                 <button aria-label="Undo architecture change" title="Undo · Ctrl+Z / Cmd+Z" disabled={!canUndo || !!busy || preview || !canEdit} onClick={() => restoreHistory("undo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Undo2 className="w-4 h-4" /></button>
                 <button aria-label="Redo architecture change" title="Redo · Ctrl+Shift+Z / Ctrl+Y" disabled={!canRedo || !!busy || preview || !canEdit} onClick={() => restoreHistory("redo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Redo2 className="w-4 h-4" /></button>
-                {!production && <button aria-pressed={arrangedView} onClick={() => { setArrangedView(value => !value); setCloudFocus(null); }} className="rounded-lg border px-2 py-1.5 text-xs">{arrangedView ? "Arranged view" : "Saved layout"}</button>}
-                {!production && (cloudFocus ? <button onClick={() => setCloudFocus(null)} className="rounded-lg border px-2 py-1.5 text-xs">Show full design</button> : <button disabled={!selected} onClick={() => setCloudFocus(selected)} className="rounded-lg border px-2 py-1.5 text-xs disabled:opacity-40">Focus connections</button>)}
+                <button aria-pressed={arrangedView} onClick={() => { setArrangedView(value => !value); setCloudFocus(null); }} className="rounded-lg border px-2 py-1.5 text-xs">{arrangedView ? "Arranged view" : "Saved layout"}</button>
+                {(cloudFocus ? <button onClick={() => setCloudFocus(null)} className="rounded-lg border px-2 py-1.5 text-xs">Show full design</button> : <button disabled={!selected} onClick={() => setCloudFocus(selected)} className="rounded-lg border px-2 py-1.5 text-xs disabled:opacity-40">Focus connections</button>)}
               </>}
               <button
                 disabled={
-                  !draft || view === "code" || preview || !!busy || !canEdit || !!production
+                  !draft || view === "code" || preview || !!busy || !canEdit
                 }
                 onClick={() => {
-                  setGraph(arrangeArchitecture(graph));
+                  setGraph(arrangeBusinessArchitecture(graph));
                   setArrangedView(false);
                   setCloudFocus(null);
                   autoFit.current = true;
@@ -763,42 +773,55 @@ export function ArchitectureCanvas() {
               </div>
             ) : (
               <div className="mx-auto" style={{ width: width * zoom, height: height * zoom }}>
-                {production ? <ProductionDiagram ref={diagram} graph={shown} requirements={draft?.requirements} zoom={zoom} selected={selected} onSelect={id => { setSelected(id); setChatVisible(true); }} /> : <CloudDiagram
+                {<CloudDiagram
                   ref={diagram}
                   graph={shown}
                   zoom={zoom}
                   selected={selected}
                   code={view === "code"}
-                  boundaries={view === "code" && sourceDesign.boundaries.length ? sourceDesign.boundaries : undefined}
+                  boundaries={boundaries.length ? boundaries : undefined}
                   onSelect={(id) => {
                     setSelected(id);
                     setChatVisible(true);
                     setNewConnection("");
                   }}
                   onNodePointerDown={
-                    view === "cloud" && !preview && canEdit && !busy && !arrangedView && !cloudFocus
+                    view === "cloud" && !preview && canEdit && !busy
                       ? (event, item) => {
-                          event.currentTarget.setPointerCapture(
-                            event.pointerId,
-                          );
-                          beginEdit();
-                          autoFit.current = false;
+                          if (event.button !== 0 || !event.isPrimary || !diagram.current) return;
+                          const origin = diagram.current.getBoundingClientRect();
+                          event.currentTarget.setPointerCapture(event.pointerId);
                           drag.current = {
                             id: item.id,
                             x: item.x,
                             y: item.y,
                             startX: event.clientX,
                             startY: event.clientY,
+                            pointerId: event.pointerId,
+                            positions: new Map(shown.nodes.map(n => [n.id, { x: n.x, y: n.y }])),
+                            moved: false,
+                            offsetX: (event.clientX - origin.left) / zoom - item.x,
+                            offsetY: (event.clientY - origin.top) / zoom - item.y,
                           };
                         }
                       : undefined
                   }
                   onPointerMove={(event) => {
-                    if (!drag.current || busy) return;
+                    if (!drag.current || busy || event.pointerId !== drag.current.pointerId) return;
                     const item = drag.current;
-                    const dx = (event.clientX - item.startX) / zoom,
-                      dy = (event.clientY - item.startY) / zoom;
-                    if (Math.abs(dx) + Math.abs(dy) < 4) return;
+                    if (!item.moved && Math.abs(event.clientX - item.startX) + Math.abs(event.clientY - item.startY) < 4) return;
+                    const origin = diagram.current?.getBoundingClientRect();
+                    if (!origin) return;
+                    const x = (event.clientX - origin.left) / zoom - item.offsetX;
+                    const y = (event.clientY - origin.top) / zoom - item.offsetY;
+                    if (!item.moved) {
+                      beginEdit();
+                      item.moved = true;
+                      setSelected(item.id);
+                      autoFit.current = false;
+                      setArrangedView(false);
+                      setCloudFocus(null);
+                    }
                     setGraph((current) => ({
                       ...current,
                       nodes: current.nodes.map((n) =>
@@ -806,21 +829,37 @@ export function ArchitectureCanvas() {
                           ? {
                               ...n,
                               x: Math.round(
-                                Math.max(30, Math.min(6000, item.x + dx)),
+                                Math.max(80, Math.min(6000, x)),
                               ),
                               y: Math.round(
-                                Math.max(60, Math.min(6000, item.y + dy)),
+                                Math.max(150, Math.min(6000, y)),
                               ),
                             }
-                          : n,
+                          : { ...n, ...item.positions.get(n.id) },
                       ),
                     }));
 
                   }}
-                  onPointerUp={() => {
+                  onPointerUp={(event) => {
+                    if (drag.current?.pointerId !== event.pointerId) return;
                     drag.current = null;
                     endEdit();
                   }}
+                  onNodeMove={view === "cloud" && !preview && canEdit && !busy ? (item, dx, dy) => {
+                    autoFit.current = false;
+                    keepEditZoom.current = true;
+                    setArrangedView(false);
+                    setCloudFocus(null);
+                    const materialize = editableLayout();
+                    setGraph(current => ({
+                      ...current,
+                      nodes: materialize(current).nodes.map(n => n.id === item.id ? {
+                        ...n,
+                        x: Math.max(80, Math.min(6000, item.x + dx)),
+                        y: Math.max(150, Math.min(6000, item.y + dy)),
+                      } : n),
+                    }));
+                  } : undefined}
                 />}
               </div>
             )}
@@ -832,7 +871,7 @@ export function ArchitectureCanvas() {
             <span className="inline-flex gap-2 items-center">
               <MousePointer2 className="w-3.5 h-3.5" />
               Select a component to inspect
-              {view === "cloud" && canEdit ? production ? " · Network placement is proposed" : arrangedView || cloudFocus ? " · Use Arrange layers to edit placement" : " · Drag to arrange" : ""}
+              {view === "cloud" && canEdit ? " · Drag to arrange · Arrow keys to move · Ctrl+Z to undo" : ""}
             </span>
             {draft && view === "cloud" && (
               <button

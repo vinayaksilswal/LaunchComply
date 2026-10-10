@@ -44,6 +44,7 @@ export function useGraphHistory() {
     s.future = [...s.future, s.present].slice(-LIMIT);
     s.present = next;
     render(next);
+    return next;
   }, [endEdit]);
   const redo = useCallback(() => {
     endEdit();
@@ -53,6 +54,7 @@ export function useGraphHistory() {
     s.past = [...s.past, s.present].slice(-LIMIT);
     s.present = next;
     render(next);
+    return next;
   }, [endEdit]);
   return { graph, setGraph, resetGraph, beginEdit, endEdit, undo, redo,
     canUndo: state.current.past.length > 0 || !!(state.current.group && !same(state.current.group, graph)),

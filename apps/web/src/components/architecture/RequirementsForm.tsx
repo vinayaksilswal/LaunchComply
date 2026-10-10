@@ -28,7 +28,7 @@ export function RequirementsForm({ value, disabled, saving, onSave }: { value?: 
       <option value="SINGLE_AZ">One availability zone · lower redundancy</option><option value="MULTI_AZ">Multiple availability zones · one region</option><option value="MULTI_REGION">Multiple regions · recovery design required</option>
     </select></label>
     {availability === "MULTI_REGION" && <label className="block text-xs text-slate-600">Recovery AWS region<select required value={secondary === region ? "" : secondary} onChange={event => setSecondary(event.target.value)} disabled={disabled} className={control}><option value="">Choose a different region</option>{regions.filter(([id]) => id !== region).map(([id, label]) => <option key={id} value={id}>{label} · {id}</option>)}</select></label>}
-    <p className="text-[10px] leading-4 text-slate-500">Saving creates a new design version and clears its approval. Replica symbols show proposed placement. Failover, subnet allocation and scaling policies need review.</p>
+    <p className="text-[10px] leading-4 text-slate-500">Saving creates a new design version and clears its approval. Each card represents a service, not a measured instance count. Failover, subnet allocation and scaling policies need review.</p>
     <button disabled={disabled} className="w-full rounded-lg bg-cyan-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">{saving ? "Saving requirements…" : "Save deployment requirements"}</button>
   </form>;
 }

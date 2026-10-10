@@ -33,6 +33,11 @@ export interface DiagramBoundary {
   nodes: string[];
   color: string;
   padding?: number;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  note?: string;
 }
 export const architectureLayers = [
   { id: "EDGE", name: "Public entry", color: "#0891b2", icon: Globe },
@@ -46,10 +51,10 @@ export const architectureLayers = [
   { id: "SUPPORT", name: "Platform services", color: "#d97706", icon: Layers },
 ] as const;
 
-export function diagramBounds(graph: ArchitectureGraph, compact = false) {
+export function diagramBounds(graph: ArchitectureGraph, compact = false, boundaries?: DiagramBoundary[]) {
   return {
-    width: Math.max(540, ...graph.nodes.map((n) => n.x + (compact ? 260 : 320))),
-    height: Math.max(320, ...graph.nodes.map((n) => n.y + (compact ? 144 : 180))),
+    width: Math.max(540, ...graph.nodes.map((n) => n.x + (compact ? 260 : 320)), ...(boundaries || []).map(b => (b.x || 0) + (b.width || 0) + 24)),
+    height: Math.max(320, ...graph.nodes.map((n) => n.y + (compact ? 144 : 180)), ...(boundaries || []).map(b => (b.y || 0) + (b.height || 0) + 24)),
   };
 }
 
@@ -129,6 +134,7 @@ export const CloudDiagram = forwardRef<
     ) => void;
     onPointerMove?: React.PointerEventHandler<SVGSVGElement>;
     onPointerUp?: React.PointerEventHandler<SVGSVGElement>;
+    onNodeMove?: (node: ArchitectureNode, dx: number, dy: number) => void;
   }
 >(function CloudDiagram(
   {
@@ -141,13 +147,14 @@ export const CloudDiagram = forwardRef<
     onNodePointerDown,
     onPointerMove,
     onPointerUp,
+    onNodeMove,
   },
   ref,
 ) {
   const id = useId().replace(/:/g, "");
   const compact = !code;
   const cardWidth = compact ? 220 : 280, cardHeight = compact ? 104 : 136;
-  const { width, height } = diagramBounds(graph, compact);
+  const { width, height } = diagramBounds(graph, compact, boundaries);
   const related = new Set(
     graph.edges
       .filter((e) => e.source === selected || e.target === selected)
@@ -171,7 +178,7 @@ export const CloudDiagram = forwardRef<
           ? "Static repository code findings"
           : "Cloud architecture proposal — not deployed"}
       </title>
-      <desc>
+      <desc id={`${id}-help`}>
         {code ? "Arrows show resolved static imports in the inspected source sample. Groups describe file organization, not runtime connections. Select a group or file to review source paths." : "Arrow direction shows proposed data flow. Select a component to review its details. Layer placement does not verify network isolation or deployment."}
       </desc>
       <defs>
@@ -207,29 +214,30 @@ export const CloudDiagram = forwardRef<
         const nodes = graph.nodes.filter((n) => boundary.nodes.includes(n.id));
         if (!nodes.length) return null;
         const padding = boundary.padding || 20;
-        const x = Math.max(5, Math.min(...nodes.map((n) => n.x)) - padding),
-          y = Math.max(5, Math.min(...nodes.map((n) => n.y)) - padding - 30);
+        const x = boundary.x ?? Math.max(5, Math.min(...nodes.map((n) => n.x)) - padding),
+          y = boundary.y ?? Math.max(5, Math.min(...nodes.map((n) => n.y)) - padding - 30);
+        const boundaryWidth = boundary.width ?? Math.max(...nodes.map((n) => n.x + cardWidth)) - x + padding;
         return (
           <g key={boundary.id}>
             <rect
               x={x}
               y={y}
-              width={Math.max(...nodes.map((n) => n.x + cardWidth)) - x + padding}
-              height={Math.max(...nodes.map((n) => n.y + cardHeight)) - y + padding}
+              width={boundaryWidth}
+              height={boundary.height ?? Math.max(...nodes.map((n) => n.y + cardHeight)) - y + padding}
               rx="12"
               fill={boundary.color}
               fillOpacity="0.018"
               stroke={boundary.color}
               strokeOpacity="0.45"
               strokeDasharray={
-                boundary.id.includes("subnet") ? "5 4" : undefined
+                boundary.id.startsWith("network-") ? "5 4" : undefined
               }
             />
             <rect
               x={x + 12}
               y={y + 11}
-              width={Math.min(460, boundary.label.length * 6 + 20)}
-              height="24"
+              width={Math.min(boundaryWidth - 24, boundary.label.length * 6 + 20)}
+              height="30"
               rx="6"
               fill="white"
             />
@@ -240,8 +248,9 @@ export const CloudDiagram = forwardRef<
               fontWeight="600"
               fill={boundary.color}
             >
-              {boundary.label}
+              {lines(boundary.label, Math.max(24, Math.floor((boundaryWidth - 44) / 6))).map((line, i) => <tspan key={i} x={x + 22} dy={i ? 13 : 0}>{line}</tspan>)}
             </text>
+            {boundary.note && <text x={x + 16} y={y + (boundary.height || 0) - 25} fontSize="10" fill="#64748b">{lines(boundary.note, Math.max(24, Math.floor((boundaryWidth - 32) / 5.4))).map((line, i) => <tspan key={i} x={x + 16} dy={i ? 13 : 0}>{line}</tspan>)}</text>}
           </g>
         );
       })}
@@ -368,8 +377,16 @@ export const CloudDiagram = forwardRef<
             role="button"
             tabIndex={0}
             aria-label={`Inspect ${node.label}${code ? "" : ` (${node.service})`}`}
+            aria-describedby={onNodeMove ? `${id}-help` : undefined}
             onClick={() => onSelect(node.id)}
             onKeyDown={(e) => {
+              const direction = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+              if (direction && onNodeMove && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                e.preventDefault();
+                const step = e.shiftKey ? 40 : 10;
+                onNodeMove(node, direction[0] * step, direction[1] * step);
+                return;
+              }
               if (e.key === "Enter" || e.key === " ") {
                 e.preventDefault();
                 onSelect(node.id);
