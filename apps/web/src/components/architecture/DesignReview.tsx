@@ -35,7 +35,7 @@ export function DesignReview({ review, version, saved, assetId, actionable = tru
         <h3 className="flex items-center gap-2 text-sm font-semibold"><ClipboardList className="h-4 w-4 text-cyan-700" />Engineering planning review</h3>
         <p className="mt-1 text-xs text-slate-500">Saved design {version} · {missing.length ? `${missing.length} planning areas need decisions` : "Engineering review required"}</p>
       </div>
-      <button onClick={download} disabled={!saved} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold disabled:opacity-40"><Download className="h-4 w-4" />Download checklist</button>
+      <button type="button" onClick={download} disabled={!saved} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold disabled:opacity-40"><Download className="h-4 w-4" />Download checklist</button>
     </div>
     <p className="mt-3 text-xs leading-5 text-slate-500">{review.scope}</p>
     {!saved && <p role="status" className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800">This review describes the saved version. Save your changes or finish reviewing the AI proposal to refresh it. Download is available when the current design matches the saved version.</p>}
