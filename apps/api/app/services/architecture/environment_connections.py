@@ -21,9 +21,14 @@ def map_connections(graph, evidence, bindings):
     previous = evidence.get("environment_connections", [])
     # Remove only labelled env edges from the previous receipt, preserving manual routes.
     def label(name, execution="browser"):
+        prefix = "Server HTTPS proxy · Env " if execution == "server-proxy" else "Env "
+        limit = 80 - len(prefix) - len(" · declared")
+        display = name if len(name) <= limit else name[:limit - 9] + "-" + hashlib.sha256(name.encode()).hexdigest()[:8]
+        return f"{prefix}{display} · declared"
+    def legacy_label(name):
         display = name if len(name) <= 60 else name[:45] + "-" + hashlib.sha256(name.encode()).hexdigest()[:8]
-        return f"Server HTTPS proxy · Env {display} · declared" if execution == "server-proxy" else f"Env {display} · declared"
-    old = {(item["source"], item.get("route_target") or item.get("target"), item.get("edge_label") or label(item['name'])) for item in previous}
+        return f"Env {display} · declared"
+    old = {(item["source"], item.get("route_target") or item.get("target"), item.get("edge_label") or legacy_label(item['name'])) for item in previous}
     old.update(tuple(edge) for item in previous for edge in item.get("owned_route_edges", []))
     edges = [edge for edge in graph["edges"] if (edge["source"], edge["target"], edge["label"]) not in old]
     records, seen = [], set()
