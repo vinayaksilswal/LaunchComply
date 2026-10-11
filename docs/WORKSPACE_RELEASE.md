@@ -136,3 +136,8 @@ The requested server-proxy plan was applied and saved as v12 with 15 nodes and 1
 
 
 The first v12 AI explanation returned an incomplete provider proposal; the graph remained unchanged. Explicit explain-and-preserve requests now use a bounded text/question schema and keep the exact graph on the server, avoiding output tokens spent reproducing every node and position. Obsolete chat history is omitted for this read-only mode. Topology edits continue to require the full validated graph and request-path policy. Server-proxy environment labels also respect the existing 80-character edge bound while retaining legacy receipt removal. Changed Python syntax and whitespace checks passed. Live follow-up is recorded after the backend release.
+
+
+Follow-up provider diagnostics recorded preferred-model privacy-filter, rate-limit and access-denied failures; the final general free router returned HTTP 200 but failed response validation twice. Saved v12 remained unchanged. The general free router now requests the actual JSON schema with require_parameters so it selects endpoints supporting structured outputs, as documented by OpenRouter. Preferred-model compatibility, zero-price limits, data_collection=deny, request deadlines and server validation remain in place. The system prompt no longer conflicts with the read-only response schema. Python syntax and whitespace checks passed. This is a routing correction, not proof of successful live AI acceptance.
+
+The service catalog passed signed-in mobile review at 390 by 844 and desktop review at 1440 by 1000: all 11 choices were present, no horizontal clipping was observed, and the history anchor reached the existing records. No service application was submitted during verification.
