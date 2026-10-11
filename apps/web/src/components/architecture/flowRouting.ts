@@ -39,6 +39,20 @@ export function routeFlow(from: ArchitectureNode, to: ArchitectureNode, nodes: A
     if (y < 20 || (downward ? y < startV.y || y > endV.y : y > startV.y || y < endV.y)) continue;
     candidates.push([startV, { x: startV.x, y }, { x: endV.x, y }, endV]);
   }
+  // An aligned pair can have a third card between them. A single elbow cannot
+  // avoid that card; depart into the gap, detour above/below, then approach.
+  const direction = rightward ? 1 : -1;
+  const departureX = startH.x + direction * 24;
+  const arrivalX = endH.x - direction * 24;
+  const outerTop = Math.max(20, Math.min(...nodes.map(node => node.y)) - 38 - offset);
+  const outerBottom = Math.max(...nodes.map(node => node.y + height)) + 38 + offset;
+  const lanes = [...new Set([...ys.filter(y => y >= 20).sort((a, b) => Math.abs(a - startH.y) + Math.abs(a - endH.y) - Math.abs(b - startH.y) - Math.abs(b - endH.y)).slice(0, 12), outerTop, outerBottom])];
+  if (rightward ? departureX <= arrivalX : departureX >= arrivalX) {
+    for (const y of lanes) candidates.push([
+      startH, { x: departureX, y: startH.y }, { x: departureX, y },
+      { x: arrivalX, y }, { x: arrivalX, y: endH.y }, endH,
+    ]);
+  }
   // Side corridor for same-column resources and return paths.
   for (const right of [true, false]) {
     const a = { x: from.x + (right ? width : 0), y: from.y + height / 2 }, b = { x: to.x + (right ? width : 0), y: to.y + height / 2 };
