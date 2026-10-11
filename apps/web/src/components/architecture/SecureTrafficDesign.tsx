@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import type { ArchitectureGraph, ArchitectureNode } from "./CloudDiagram";
 import { arrangeBusinessArchitecture, isPlatformService } from "./businessArchitecture";
 import { networkPlacement } from "./networkPlacement";
-import { privateStorageProposal } from "./privateStorage";
+import { privateStorageProposal, isS3Storage } from "./privateStorage";
 import { isFrontendWorkload } from "./workloadRole";
 
 const frontendCandidate = isFrontendWorkload;
@@ -41,7 +41,7 @@ function secureTrafficProposal(graph: ArchitectureGraph, frontendIds: string[], 
   }
   link(apiId, backendId, "HTTPS private target · proposed");
   if (nodes.length > 80 || edges.length > 160) throw new Error("This change exceeds the workspace diagram limit. Reduce the selection first.");
-  return arrangeBusinessArchitecture(privateStorageProposal({ nodes, edges }, nodes.filter(node => /\bs3\b/i.test(node.service) && !/endpoint/i.test(node.service)).map(node => node.id)));
+  return arrangeBusinessArchitecture(privateStorageProposal({ nodes, edges }, nodes.filter(node => isS3Storage(node)).map(node => node.id)));
 }
 
 export function SecureTrafficDesign({ graph, disabled, onApply }: { graph: ArchitectureGraph; disabled: boolean; onApply: (graph: ArchitectureGraph) => void }) {

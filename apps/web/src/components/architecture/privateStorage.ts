@@ -1,9 +1,12 @@
-import type { ArchitectureGraph } from "./CloudDiagram";
+import type { ArchitectureGraph, ArchitectureNode } from "./CloudDiagram";
+
+export const isS3Storage = (node: ArchitectureNode) => /\bs3\b/i.test(node.service) &&
+  !/s3\s+(?:(?:gateway|interface)\s+)?(?:vpc\s+)?endpoint\b/i.test(node.service);
 
 /** Customer-requested access pattern; source dependencies and bucket usage stay unverified. */
 export function privateStorageProposal(graph: ArchitectureGraph, storageIds: string[]): ArchitectureGraph {
   const selected = new Set(storageIds);
-  const storage = graph.nodes.filter(node => selected.has(node.id) && /\bs3\b/i.test(node.service) && !/endpoint/i.test(node.service));
+  const storage = graph.nodes.filter(node => selected.has(node.id) && isS3Storage(node));
   if (!storage.length) return graph;
   const nodes = graph.nodes.map(node => storage.some(bucket => bucket.id === node.id) ? { ...node, service: "S3 · private access", description: `${node.description.slice(0, 260)} Customer-selected proposal: Block Public Access; workload IAM, bucket/endpoint policies and encryption to review. S3 is managed outside the VPC; same-region gateway endpoint routes need configuration. Runtime bucket use is unverified.`.slice(0, 500) } : { ...node });
   const consumers = graph.edges.filter(edge => selected.has(edge.target) && nodes.some(node => node.id === edge.source && node.zone === "APPLICATION"));

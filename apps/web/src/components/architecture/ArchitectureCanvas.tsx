@@ -45,7 +45,7 @@ import { DesignReview, type SavedDesignReview } from "./DesignReview";
 import { SecureTrafficDesign } from "./SecureTrafficDesign";
 import { AssistantWindow } from "./AssistantWindow";
 import { ArchitectureSettings, type EnvironmentConnection } from "./ArchitectureSettings";
-import { privateStorageProposal } from "./privateStorage";
+import { privateStorageProposal, isS3Storage } from "./privateStorage";
 import { AwsServiceCatalog } from "./AwsServiceCatalog";
 import { ArchitectQuestions, type ArchitectQuestion } from "./ArchitectQuestions";
 import { ArchitectureHistory } from "./ArchitectureHistory";
@@ -1052,7 +1052,7 @@ export function ArchitectureCanvas() {
                             updateNode({ service: publicFrontend ? "ECS Fargate · public frontend" : `${/static hosting\s*(?:\/|or)\s*container/i.test(base) ? "ECS Fargate" : base} · private compute`.slice(0, 100), description: `${node.description.slice(0, 300)} Customer-selected ${publicFrontend ? "public frontend subnet; web-ingress SG only; browser API via authenticated HTTPS ingress" : "private application subnet; no public IP; ingress SG only"}. Routes, TLS, ports and egress require review.`.slice(0, 500) });
                           }} className="mt-1 w-full rounded border bg-white p-2 text-xs">
                             <option value={networkPlacement(node)}>{networkPlacement(node) === "PUBLIC_FRONTEND" ? "Public frontend subnet · proposed" : networkPlacement(node) === "PRIVATE_COMPUTE" ? "Private application subnet · proposed" : networkPlacement(node) === "PRIVATE_DATA" ? "Isolated data subnet · proposed" : networkPlacement(node) === "PUBLIC_INGRESS" ? "Public HTTPS ingress subnet · proposed" : networkPlacement(node) === "PRIVATE_MANAGED_STORAGE" ? "Private S3 · gateway access proposed" : networkPlacement(node) === "VPC_ENDPOINT" ? "VPC endpoint · route association proposed" : networkPlacement(node) === "OUTSIDE_VPC" ? "Managed/global service · outside VPC" : "Hosting decision required"}</option>
-                            {/\bs3\b/i.test(node.service) && !/endpoint/i.test(node.service) && networkPlacement(node) !== "PRIVATE_MANAGED_STORAGE" && <option value="PRIVATE_MANAGED_STORAGE">Private S3 · Block Public Access + VPC endpoint</option>}
+                            {isS3Storage(node) && networkPlacement(node) !== "PRIVATE_MANAGED_STORAGE" && <option value="PRIVATE_MANAGED_STORAGE">Private S3 · Block Public Access + VPC endpoint</option>}
                             {node.zone === "APPLICATION" && /web app|frontend/i.test(`${node.label} ${node.description}`) && networkPlacement(node) !== "PUBLIC_FRONTEND" && <option value="PUBLIC_FRONTEND">Public frontend container · ECS Fargate</option>}
                             {node.zone === "APPLICATION" && /ecs|fargate|ec2|eks|container/i.test(node.service) && networkPlacement(node) !== "PRIVATE_COMPUTE" && <option value="PRIVATE_COMPUTE">Private application subnet</option>}
                           </select>
