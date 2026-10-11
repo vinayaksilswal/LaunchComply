@@ -1,13 +1,15 @@
 "use client";
 import { Dialog } from "@/components/ui/Dialog";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ArrowRight, X, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api";
 import { useAccount } from "@/components/auth/AccountProvider";
-export function RequestHelp({ code, label, applicationId, architectureId, architectureVersion, compliancePicker = false, readinessFramework, disabled = false }: { code: string; label: string; applicationId?: string; architectureId?: string; architectureVersion?: string; compliancePicker?: boolean; readinessFramework?: { code: string; name: string }; disabled?: boolean }) {
+export function RequestHelp({ code, label, applicationId, architectureId, architectureVersion, compliancePicker = false, readinessFramework, disabled = false, details, trigger, triggerClassName }: { code: string; label: string; applicationId?: string; architectureId?: string; architectureVersion?: string; compliancePicker?: boolean; readinessFramework?: { code: string; name: string }; disabled?: boolean; details?: { title: string; description: string; includes: readonly string[]; requirements: string }; trigger?: ReactNode; triggerClassName?: string }) {
   const { organization } = useAccount();
   const [open, setOpen] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const hasDetails = !!details;
   const [apps, setApps] = useState<{ id: string; name: string; repo_url?: string }[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(true);
   const [assetsError, setAssetsError] = useState(false);
@@ -28,7 +30,7 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
     organization?.role.toUpperCase() || "",
   );
   useEffect(() => {
-    if (!open || submitted) return;
+    if (!open || (hasDetails && !showForm) || submitted) return;
     let active = true;
     setError("");
     setAssetsLoading(true);
@@ -37,7 +39,7 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
       .then((items) => {
         if (active) {
           setApps(items);
-          setAppId(applicationId ? items.some(item => item.id === applicationId) ? applicationId : "" : items[0]?.id || "");
+          setAppId(current => applicationId ? items.some(item => item.id === applicationId) ? applicationId : "" : items.some(item => item.id === current) ? current : items[0]?.id || "");
           if (applicationId && !items.some(item => item.id === applicationId)) { setAssetsError(true); setError("This business asset is no longer available. Close this form and refresh preparation."); }
         }
       })
@@ -47,7 +49,7 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
     return () => {
       active = false;
     };
-  }, [open, submitted, applicationId, assetRefresh]);
+  }, [open, showForm, hasDetails, submitted, applicationId, assetRefresh]);
   useEffect(() => {
     setDesign(null); setDesignError("");
     if (!open || submitted || code !== "DEPLOYMENT_HELP" || !appId || architectureId || assetsLoading || assetsError) { setDesignLoading(false); return; }
@@ -65,6 +67,7 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
   const awaitingDesign = code === "DEPLOYMENT_HELP" && !!appId && !architectureId && !currentDesign;
   useEffect(() => {
     setOpen(false);
+    setShowForm(false);
     setSubmitted(false);
     setNotes("");
     setFramework(""); setCustomFramework("");
@@ -73,26 +76,28 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
   return (
     <>
       <button
-        disabled={!allowed || disabled}
+        type="button"
+        aria-label={details ? `View ${details.title} details` : label}
+        disabled={details ? false : !allowed || disabled}
         onClick={() => {
           setOpen(true);
+          setShowForm(!details);
           if (submitted) {
             setSubmitted(false);
             setNotes("");
             setRequestId(crypto.randomUUID());
           } else if (!requestId) setRequestId(crypto.randomUUID());
         }}
-        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-cyan-700 text-white text-sm font-semibold disabled:opacity-40"
+        className={triggerClassName || "inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-cyan-700 text-white text-sm font-semibold disabled:opacity-40"}
       >
-        {label}
-        <ArrowRight className="w-4 h-4" />
+        {trigger || <>{label}<ArrowRight className="w-4 h-4" /></>}
       </button>
       {open && (
-        <Dialog label={label} busy={busy} onDismiss={() => setOpen(false)}>
-          <section className="bg-white w-full max-w-lg rounded-2xl p-6 shadow-xl">
+        <Dialog label={details && !showForm ? details.title : label} busy={busy} onDismiss={() => setOpen(false)}>
+          <section className="bg-white w-full rounded-2xl p-6 shadow-xl">
             <header className="flex gap-3 justify-between items-center">
               <h2 className="text-lg font-semibold">
-                {submitted ? "Request submitted" : label}
+                {submitted ? "Request submitted" : details && !showForm ? details.title : label}
               </h2>
               <button
                 disabled={busy}
@@ -116,6 +121,15 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
                 >
                   Open this request
                 </Link>
+              </div>
+            ) : details && !showForm ? (
+              <div className="mt-5 space-y-5">
+                <p className="text-sm leading-6 text-slate-600">{details.description}</p>
+                <div><h3 className="text-sm font-semibold">What this request covers</h3><ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-600">{details.includes.map(item => <li key={item}>{item}</li>)}</ul></div>
+                <div className="rounded-xl bg-slate-50 p-4"><h3 className="text-sm font-semibold">What to provide</h3><p className="mt-1 text-sm leading-6 text-slate-600">{details.requirements}</p></div>
+                <p className="text-sm leading-6 text-slate-500">The team reviews your scope before agreeing on service work. Status, replies and delivered reports stay in your request history.</p>
+                {!allowed && <p className="text-sm text-slate-600">A business owner or administrator can apply for this service.</p>}
+                <button type="button" disabled={!allowed || disabled} onClick={() => setShowForm(true)} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-700 px-4 py-3 text-sm font-semibold text-white disabled:opacity-40">Apply for this service<ArrowRight className="h-4 w-4" /></button>
               </div>
             ) : (
               <form
@@ -153,6 +167,7 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
                   }
                 }}
               >
+                {details && <button type="button" disabled={busy} onClick={() => setShowForm(false)} className="text-sm font-semibold text-cyan-700">Back to service details</button>}
                 <p className="text-sm text-slate-500 leading-6">
                   Submit the scope for review. Track progress and reports in this workspace.
                 </p>

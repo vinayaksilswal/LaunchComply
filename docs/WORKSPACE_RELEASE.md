@@ -141,3 +141,10 @@ The first v12 AI explanation returned an incomplete provider proposal; the graph
 Follow-up provider diagnostics recorded preferred-model privacy-filter, rate-limit and access-denied failures; the final general free router returned HTTP 200 but failed response validation twice. Saved v12 remained unchanged. The general free router now requests the actual JSON schema with require_parameters so it selects endpoints supporting structured outputs, as documented by OpenRouter. Preferred-model compatibility, zero-price limits, data_collection=deny, request deadlines and server validation remain in place. The system prompt no longer conflicts with the read-only response schema. Python syntax and whitespace checks passed. This is a routing correction, not proof of successful live AI acceptance.
 
 The service catalog passed signed-in mobile review at 390 by 844 and desktop review at 1440 by 1000: all 11 choices were present, no horizontal clipping was observed, and the history anchor reached the existing records. No service application was submitted during verification.
+
+
+## 2026-10-11 - service cards and detail windows
+
+The central Service requests catalog now presents all 11 supported services as responsive cards. Each card opens a service-specific detail dialog with scope and required input guidance, then an Apply action opens the existing application form in the same dialog. Back to details preserves typed requirements and selected assets. Members may read service details; application submission remains limited to owners/admins. Existing history, report links, deployment snapshot lookup and final compliance readiness gates are retained. No application forms were added elsewhere.
+
+Validation: production build generated 105 routes and passed lint/types; TypeScript and whitespace checks passed. No automated test suite run. Signed-in production interaction and responsive review follow deployment.
