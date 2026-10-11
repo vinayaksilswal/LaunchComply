@@ -9,6 +9,7 @@ import { SecureTrafficDesign } from "./SecureTrafficDesign";
 import { NetworkReview, networkPlacement } from "./networkPlacement";
 import { privateStorageProposal } from "./privateStorage";
 import { arrangeBusinessArchitecture } from "./businessArchitecture";
+import { isFrontendWorkload } from "./workloadRole";
 
 type Protocol = "https" | "http" | "postgresql" | "mysql" | "redis" | "rediss" | "mongodb" | "mongodb+srv" | "s3" | "unknown";
 export interface EnvironmentConnection { name: string; source: string; target: string | null; protocol: Protocol; references?: { path: string; line: number }[]; }
@@ -46,6 +47,12 @@ export function ArchitectureSettings({ graph, requirements, connections, modules
   const [error, setError] = useState("");
   const [receipt, setReceipt] = useState("");
   const workloads = graph.nodes.filter(node => node.zone === "APPLICATION");
+  const allowedDestination = (sourceId: string, node: ArchitectureGraph["nodes"][number]) => {
+    const workload = workloads.find(item => item.id === sourceId);
+    return node.id !== sourceId && node.zone !== "SUPPORT" &&
+      (!workload || !isFrontendWorkload(workload) ||
+        (node.zone === "EDGE" && /application load balancer|api gateway|cloudfront/i.test(node.service)));
+  };
   useEffect(() => { setBindings(connections); }, [version, connections]);
   const close = () => { if (saving) return; setRaw(""); modal.current?.close(); };
   const refs = (name: string) => modules.flatMap(module => (module.environment_keys || []).filter(key => key.name === name).map(key => `${module.path}:${key.line}`));
@@ -61,7 +68,7 @@ export function ArchitectureSettings({ graph, requirements, connections, modules
         : /redis|cache/i.test(entry.name) || /redis/.test(entry.protocol) ? /redis/i
         : /s3|bucket/i.test(entry.name) ? /\bs3\b(?!.*endpoint)/i
         : /api.*(?:url|endpoint)|backend.*url/i.test(entry.name) ? /application load balancer|api gateway/i : null;
-      const candidates = pattern ? graph.nodes.filter(node => node.id !== source && node.zone !== "SUPPORT" && pattern.test(node.service) && (!/load balancer/i.test(node.service) || /api/i.test(node.label))) : [];
+      const candidates = pattern ? graph.nodes.filter(node => allowedDestination(source, node) && pattern.test(node.service) && (!/load balancer/i.test(node.service) || /api/i.test(node.label))) : [];
       next.push({ ...entry, source, target: candidates.length === 1 ? candidates[0].id : null });
     }
     if (next.length > 60) { setError("Map up to 60 keys per business asset."); return; }
@@ -83,7 +90,7 @@ export function ArchitectureSettings({ graph, requirements, connections, modules
         <div className="space-y-3">{bindings.map((entry, index) => <article key={`${entry.source}-${entry.name}`} className="rounded-xl border p-3 space-y-2">
           <div className="flex items-center justify-between gap-2"><strong className="break-all font-mono text-xs">{entry.name}</strong><button disabled={disabled || saving} aria-label={`Remove environment key ${entry.name} from ${entry.source}`} onClick={() => setBindings(current => current.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4 text-slate-500" /></button></div>
           <div className="grid gap-3 sm:grid-cols-3"><label className="text-xs text-slate-500">Source<select aria-label={`Source for ${entry.name}`} value={entry.source} disabled={disabled || saving} onChange={event => update(index, { source: event.target.value, target: null })} className="mt-1 w-full rounded-lg border bg-white p-2 text-slate-900">{workloads.map(node => <option key={node.id} value={node.id}>{node.label}</option>)}</select></label>
-            <label className="text-xs text-slate-500">Destination<select aria-label={`Destination for ${entry.name}`} value={entry.target || ""} disabled={disabled || saving} onChange={event => update(index, { target: event.target.value || null })} className="mt-1 w-full rounded-lg border bg-white p-2 text-slate-900"><option value="">Key only · connection unresolved</option>{graph.nodes.filter(node => node.id !== entry.source && node.zone !== "SUPPORT" && !((/web app|frontend/i.test(workloads.find(workload => workload.id === entry.source)?.label || "")) && node.zone === "APPLICATION")).map(node => <option key={node.id} value={node.id}>{node.label} · {node.service}</option>)}</select></label>
+            <label className="text-xs text-slate-500">Destination<select aria-label={`Destination for ${entry.name}`} value={entry.target || ""} disabled={disabled || saving} onChange={event => update(index, { target: event.target.value || null })} className="mt-1 w-full rounded-lg border bg-white p-2 text-slate-900"><option value="">Key only · connection unresolved</option>{graph.nodes.filter(node => allowedDestination(entry.source, node)).map(node => <option key={node.id} value={node.id}>{node.label} · {node.service}</option>)}</select></label>
             <label className="text-xs text-slate-500">Protocol<select aria-label={`Protocol for ${entry.name}`} disabled={disabled || saving} value={entry.protocol} onChange={event => update(index, { protocol: event.target.value as Protocol })} className="mt-1 w-full rounded-lg border bg-white p-2 text-slate-900">{protocols.map(protocol => <option key={protocol} value={protocol}>{protocol}</option>)}</select></label></div>
           <details className="text-xs text-slate-500"><summary className="cursor-pointer">Source references · {refs(entry.name).length}</summary>{refs(entry.name).length ? <ul className="mt-2 space-y-1 break-all">{refs(entry.name).map(ref => <li key={ref}>{ref}</li>)}</ul> : <p className="mt-2">No reference found in the inspected sample. Refresh source findings to inspect current code.</p>}</details>
         </article>)}</div>

@@ -3,8 +3,10 @@ export type Point = { x: number; y: number };
 const width = 280, height = 136;
 /** Metadata classification is intentionally conservative: a drawn arrow is never runtime proof. */
 export function flowEvidence(label: string) {
-  if (/inferred|dependency|static|manifest|source signal/i.test(label)) return "Source signal · runtime unverified";
+  if (/inferred|manifest|source signal/i.test(label)) return "Source signal · runtime unverified";
   if (/customer|declared|environment|\benv\b/i.test(label)) return "Customer-declared connection";
+  if (/proposed|proposal/i.test(label)) return "Proposed connection";
+  if (/dependency/i.test(label)) return "Source signal · runtime unverified";
   return "Proposed connection";
 }
 export function flowProtocol(label: string) {

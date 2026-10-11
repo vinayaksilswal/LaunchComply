@@ -3,7 +3,7 @@ import re
 
 
 def frontend(node):
-    return node.get("zone") == "APPLICATION" and bool(re.search(r"frontend|web app|web application", node.get("label", "") + " " + node.get("description", ""), re.I)) and not re.search(r"\bapi\b|backend|worker", node.get("label", ""), re.I)
+    return node.get("zone") == "APPLICATION" and bool(re.search(r"frontend|web app|web application|\bspa\b|static hosting", " ".join(node.get(key, "") for key in ("label", "service", "description")), re.I)) and not re.search(r"\bapi\b|backend|worker", node.get("label", ""), re.I)
 
 
 def ingress(node):
@@ -24,7 +24,7 @@ def check_transition(original, proposed, request):
         if any(node.get("zone") == "APPLICATION" and key not in nodes for key, node in old.items()):
             raise ValueError("WORKLOAD_IDENTITY_LOST")
     for node in proposed["nodes"]:
-        if frontend(node) and re.search(r"fargate|ecs|ec2|eks|container", node.get("service", ""), re.I) and not re.search(r"public frontend", node.get("service", ""), re.I):
+        if frontend(node) and (not re.search(r"fargate|ecs|ec2|eks|container", node.get("service", ""), re.I) or not re.search(r"public frontend", node.get("service", ""), re.I)):
             raise ValueError("FRONTEND_PLACEMENT_UNRESOLVED")
         if node.get("zone") == "APPLICATION" and not frontend(node) and re.search(r"public frontend|public backend|public api|public ip", node.get("service", ""), re.I):
             raise ValueError("BACKEND_PUBLIC_EXPOSURE")

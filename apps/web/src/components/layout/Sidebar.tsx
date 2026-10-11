@@ -95,7 +95,7 @@ export function Sidebar() {
         aria-label={entry.name}
         aria-current={active ? "page" : undefined}
         onClick={() => setMobile(false)}
-        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${rail ? "whitespace-nowrap" : ""} ${active ? "bg-cyan-50 text-cyan-900 font-semibold" : "text-slate-600 hover:bg-slate-50"}`}
+        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${rail ? "h-9 whitespace-nowrap" : ""} ${active ? "bg-cyan-50 text-cyan-900 font-semibold" : "text-slate-600 hover:bg-slate-50"}`}
       >
         <Icon
           className={`w-[18px] h-[18px] shrink-0 ${active ? "text-cyan-700" : "text-slate-400"}`}
@@ -262,7 +262,7 @@ export function Sidebar() {
       </div>
       <aside aria-label="Workspace navigation" className="group/sidebar hidden lg:flex flex-col fixed inset-y-0 left-0 w-16 hover:w-72 focus-within:w-72 transition-[width] duration-200 motion-reduce:transition-none overflow-hidden border-r border-slate-200 z-40 bg-white hover:shadow-xl focus-within:shadow-xl">
         <Link href="/dashboard" aria-label="LaunchComply home" className="m-3 flex items-center gap-3 whitespace-nowrap font-bold text-lg"><span className="p-2 rounded-xl bg-slate-900 text-white shrink-0"><ShieldCheck className="w-6 h-6" /></span><span className="hidden group-hover/sidebar:inline group-focus-within/sidebar:inline">LaunchComply</span></Link>
-        <div className="hidden group-hover/sidebar:block group-focus-within/sidebar:block mx-3 mb-3 rounded-lg border px-3 py-2">
+        <div className="invisible group-hover/sidebar:visible group-focus-within/sidebar:visible h-16 shrink-0 mx-3 mb-3 rounded-lg border px-3 py-2">
           <p className="uppercase text-[9px] tracking-wider text-slate-400">Your business</p>
           {user && user.organizations.length > 1 ? <select aria-label="Active business" value={organization?.id || ""} onChange={event => chooseOrganization(event.target.value)} className="mt-1 w-full bg-white text-sm font-semibold">{user.organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select> : <p className="mt-1 text-sm font-semibold truncate">{organization?.name || "Your business"}</p>}
         </div>

@@ -4,6 +4,7 @@ import hashlib
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from app.services.architecture.workspace import Graph
+from app.services.architecture.proposal_policy import frontend
 
 
 class Connection(BaseModel):
@@ -40,10 +41,9 @@ def map_connections(graph, evidence, bindings):
         records.append(record)
         if target:
             # A browser must target HTTPS ingress, never a private backend address.
-            frontend = "public frontend" in source["service"].lower() or "web app" in source["label"].lower() or "frontend" in source["label"].lower()
-            if frontend and (target["zone"] != "EDGE" or not any(name in target["service"].lower() for name in ("application load balancer", "api gateway", "cloudfront"))):
+            if frontend(source) and (target["zone"] != "EDGE" or not any(name in target["service"].lower() for name in ("application load balancer", "api gateway", "cloudfront"))):
                 raise HTTPException(422, "Map frontend API keys to the secured HTTPS entry, not directly to private backend tasks, databases or storage.")
-            if frontend and binding.protocol != "https":
+            if frontend(source) and binding.protocol != "https":
                 raise HTTPException(422, "Choose HTTPS for a frontend connection. Unresolved protocols may be saved as keys without a destination.")
             endpoint = next((node for node in nodes.values() if node["service"].lower() == "s3 gateway vpc endpoint"), None)
             route_target = endpoint["id"] if endpoint and "s3" in target["service"].lower() and "private access" in target["service"].lower() else target["id"]

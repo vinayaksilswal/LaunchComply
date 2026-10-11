@@ -219,6 +219,14 @@ export function ArchitectureCanvas() {
     if (["analyze", "requirements", "restore"].includes(operationName)) resetGraph(result.graph);
     else setGraph(result.graph);
 
+    if (operationName === "restore") {
+      setArrangedView(false);
+      setView("cloud");
+      setSelected(null);
+      setCloudFocus(null);
+      autoFit.current = true;
+    }
+
     setPreview(false);
     setReviewApproval(false);
   };

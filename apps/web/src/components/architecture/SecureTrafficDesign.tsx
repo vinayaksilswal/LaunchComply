@@ -4,8 +4,9 @@ import type { ArchitectureGraph, ArchitectureNode } from "./CloudDiagram";
 import { arrangeBusinessArchitecture, isPlatformService } from "./businessArchitecture";
 import { networkPlacement } from "./networkPlacement";
 import { privateStorageProposal } from "./privateStorage";
+import { isFrontendWorkload } from "./workloadRole";
 
-const frontendCandidate = (node: ArchitectureNode) => node.zone === "APPLICATION" && /frontend|web app|web application/i.test(`${node.label} ${node.description}`) && !/\bapi\b|backend|worker/i.test(node.label);
+const frontendCandidate = isFrontendWorkload;
 const backendCandidate = (node: ArchitectureNode) => node.zone === "APPLICATION" && !frontendCandidate(node) && !isPlatformService(node);
 
 /** Explicit customer-selected planning change, never a claim about source calls or deployed routes. */
