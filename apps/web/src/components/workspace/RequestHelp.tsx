@@ -1,6 +1,6 @@
 "use client";
 import { Dialog } from "@/components/ui/Dialog";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowRight, X, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api";
@@ -15,6 +15,7 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
   const [assetsError, setAssetsError] = useState(false);
   const [assetRefresh, setAssetRefresh] = useState(0);
   const [appId, setAppId] = useState("");
+  const pickedAsset = useRef(false);
   const [notes, setNotes] = useState("");
   const [framework, setFramework] = useState("");
   const [customFramework, setCustomFramework] = useState("");
@@ -39,7 +40,7 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
       .then((items) => {
         if (active) {
           setApps(items);
-          setAppId(current => applicationId ? items.some(item => item.id === applicationId) ? applicationId : "" : items.some(item => item.id === current) ? current : items[0]?.id || "");
+          setAppId(current => applicationId ? items.some(item => item.id === applicationId) ? applicationId : "" : items.some(item => item.id === current) || (!current && pickedAsset.current) ? current : items[0]?.id || "");
           if (applicationId && !items.some(item => item.id === applicationId)) { setAssetsError(true); setError("This business asset is no longer available. Close this form and refresh preparation."); }
         }
       })
@@ -72,6 +73,7 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
     setNotes("");
     setFramework(""); setCustomFramework("");
     setRequestId("");
+    pickedAsset.current = false;
   }, [organization]);
   return (
     <>
@@ -188,6 +190,7 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
                     value={appId}
                     disabled={busy || assetsLoading || !!applicationId}
                     onChange={(event) => {
+                      pickedAsset.current = true;
                       setAppId(event.target.value);
                       setRequestId(crypto.randomUUID());
                     }}
