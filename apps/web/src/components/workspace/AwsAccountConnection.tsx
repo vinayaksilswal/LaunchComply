@@ -54,7 +54,7 @@ export function AwsAccountConnection() {
     </header>
     {error && !open && !disconnect && <p role="alert" className="m-5 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
     {!data && !error ? <p role="status" className="p-6 text-sm text-slate-500">Loading account records…</p> : data && <div className="p-5 space-y-4">
-      {!data.available && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">AWS verification is awaiting platform configuration. Apply for connection help to continue.</p>}
+      {!data.available && <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">AWS verification is awaiting platform configuration. Connection help is available in Service requests.</p>}
       {!data.accounts.length && <p className="text-sm text-slate-500">No AWS account is connected to this business.</p>}
       {data.accounts.map((account) => <article key={account.id} className="rounded-xl border border-slate-200 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold text-sm">{account.account_id} <span className="font-normal text-slate-500">· {account.region}</span></h3>

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { CheckCircle2, Circle, RefreshCw, ArrowRight } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { useAccount } from "@/components/auth/AccountProvider";
-import { RequestHelp } from "./RequestHelp";
 
 interface Asset { id: string; name: string; repo_url?: string }
 interface Preparation {
@@ -77,8 +76,8 @@ export function DeploymentPreparation({ home = false }: { home?: boolean }) {
         {!!data.accounts.length && <p className="text-xs text-slate-500">Verified account records: {data.accounts.map(account => `${account.account_id} · ${account.region}`).join(", ")}</p>}
         <div className="flex flex-wrap gap-3 items-center">
           {next && <Link href={next.id === "aws" && home ? `/dashboard/deployments?application=${encodeURIComponent(assetId)}#aws-account-connection` : next.id === "targets" ? `/dashboard/architecture?application=${encodeURIComponent(assetId)}&step=targets` : next.id === "approval" ? `/dashboard/architecture?application=${encodeURIComponent(assetId)}&step=approval` : next.href} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 text-white px-4 py-2.5 text-sm font-semibold">{next.title} <ArrowRight className="w-4 h-4" /></Link>}
-          <RequestHelp key={`${assetId}:${data.architecture_id}`} code="DEPLOYMENT_HELP" label="Request deployment review" applicationId={assetId} architectureId={data.architecture_id || undefined} architectureVersion={data.version || undefined} />
-          {home && <Link href="/dashboard/services" className="text-sm font-semibold text-cyan-700">Follow requests & reports</Link>}
+          <Link href={`/dashboard/services?service=DEPLOYMENT_HELP&application=${encodeURIComponent(assetId)}`} className="text-sm font-semibold text-cyan-700">Service requests <ArrowRight className="inline h-4 w-4" /></Link>
+
         </div>
       </>}
       <p className="text-xs leading-5 text-slate-500">Automatic provisioning is not available. Design approval and payment do not create AWS resources. The operations team reviews the deployment plan and scope with you.</p>

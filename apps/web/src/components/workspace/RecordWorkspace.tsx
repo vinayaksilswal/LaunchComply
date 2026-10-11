@@ -16,7 +16,7 @@ import {
 import { apiClient } from "@/lib/api";
 import { useAccount } from "@/components/auth/AccountProvider";
 import { MODULES, modulePath } from "@/lib/workspaces";
-import { RequestHelp } from "./RequestHelp";
+import { ServiceRequestCatalog } from "./ServiceRequestCatalog";
 import { ServiceRequests } from "./ServiceRequests";
 import { ServiceQuotes } from "./ServiceQuotes";
 import { AwsAccountConnection } from "./AwsAccountConnection";
@@ -158,21 +158,7 @@ export function RecordWorkspace({ module }: { module: string }) {
             services: "SUPPORT",
           } as Record<string, string>
         )[module],
-        label: (
-          {
-            deployments: "Help me deploy",
-            operations: "Request monitoring setup",
-            incidents: "Get incident help",
-            backups: "Review my backups",
-            cost: "Connect cost reporting",
-            security: "Apply for security review",
-            vapt: "Apply for assessment",
-            compliance: "Apply for compliance help",
 
-            support: "Get help",
-            services: "Apply for support",
-          } as Record<string, string>
-        )[module],
       }
     : null;
   return (
@@ -194,7 +180,7 @@ export function RecordWorkspace({ module }: { module: string }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {request && !["services", "deployments", "compliance"].includes(module) && <RequestHelp {...request} applicationId={applicationId} />}
+
           <button
             onClick={() => setRefresh((value) => value + 1)}
             className="inline-flex gap-2 items-center px-4 py-2.5 border border-slate-200 rounded-lg text-sm hover:bg-slate-50"
@@ -233,6 +219,7 @@ export function RecordWorkspace({ module }: { module: string }) {
           </button>
         </div>
       )}
+      {module === "services" && <ServiceRequestCatalog applicationId={applicationId} refresh={refresh} />}
       {module === "deployments" && <DeploymentPreparation />}
       {["operations", "deployments"].includes(module) && <AwsAccountConnection />}
       {module === "billing" && <ServiceQuotes />}
@@ -257,13 +244,14 @@ export function RecordWorkspace({ module }: { module: string }) {
           ))}
         </div>
       )}
-      {request && module !== "compliance" && (
+      {request && module !== "compliance" && <div id={module === "services" ? "request-history" : undefined} className="scroll-mt-16">
         <ServiceRequests
+          refreshToken={refresh}
           code={["services", "compliance", "security"].includes(module) ? undefined : request.code}
           applicationId={applicationId}
           family={module === "compliance" ? "compliance" : module === "security" ? "security" : undefined}
         />
-      )}
+      </div>}
       {module !== "services" &&
         (!request || (data?.total || 0) > 0 || data?.available === false || !!error) && (
           <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">

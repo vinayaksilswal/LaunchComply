@@ -9,6 +9,8 @@ NETWORK_GUIDANCE = {
         {"title": "Fargate task networking", "url": "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-task-networking.html"},
         {"title": "Application Load Balancers", "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html"},
         {"title": "ECS network security and TLS", "url": "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security-network.html"},
+        {"title": "Internal and internet-facing load balancers", "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/userguide/how-elastic-load-balancing-works.html"},
+        {"title": "Frontend server API integration", "url": "https://docs.aws.amazon.com/prescriptive-guidance/latest/micro-frontends-aws/api-integration-data-fetching.html"},
     ],
     "design_checks": [
         "Private S3 is a managed bucket outside a VPC, with Block Public Access, workload IAM and reviewed bucket/endpoint policies. A same-region S3 gateway endpoint uses workload route tables; do not place a bucket in a subnet or assume gateway access from transit/on-premises networks.",
@@ -23,7 +25,8 @@ NETWORK_GUIDANCE = {
         "A VPC is regional and a subnet belongs to one AZ. Multi-region recovery needs separate VPCs, replication, routing and failover decisions; do not promise automatic recovery.",
         "CIDRs must not overlap existing customer networks. DNS, TLS certificates, secrets injection, least privilege IAM, logging, backups, scaling and load tests remain explicit design decisions.",
         "An ambiguous static-hosting/container or CloudFront/ALB candidate must be resolved before choosing network placement. Dependency presence alone does not prove runtime usage.",
-        "Customer-selected public frontend containers can occupy public subnets while their SG permits only web ingress. The browser API destination remains a public authenticated HTTPS endpoint, which forwards to private backend tasks with no public IP and API-ingress-SG-only access. This is a topology proposal, not evidence that API URLs, CORS, auth or TLS are implemented.",
+        "Customer-selected public frontend containers can occupy public subnets while their SG permits only web ingress. For a private-only API, browser requests use same-origin /api; a server-side frontend proxy/BFF forwards over HTTPS to an internal ALB with private IPs and frontend-server-SG-only access. Backend tasks accept only internal ALB SG traffic. Static SPAs need proxy code or hosting configuration implemented; never claim browser JavaScript can reach a private IP. An explicitly selected alternative is browser -> authenticated public API ALB -> private backend. Preserve the selected pattern and verify source/runtime implementation.",
+        "WAF filters requests at an associated supported public ingress. It is not a VPC connection, TLS mechanism, or authentication substitute. Internal HTTPS requires configured certificates/validation and application authorization; avoid arbitrary proxy targets and unsafe identity-header forwarding.",
         "Separate build and observability services from the application traffic diagram. Describe logs, alarms, image delivery, IAM and retention without request-flow arrows to CloudWatch or ECR. These integrations still need implementation.",
     ],
 }

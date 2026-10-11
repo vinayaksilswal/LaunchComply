@@ -1,11 +1,11 @@
 "use client";
-import { RequestHelp } from "./RequestHelp";
+import Link from "next/link";
 import { ServiceRequests } from "./ServiceRequests";
 import { ComplianceReadiness } from "./ComplianceReadiness";
 export function ComplianceApplications({ applicationId }: { applicationId?: string }) {
   return <section aria-label="Compliance applications" className="space-y-4">
     <ComplianceReadiness applicationId={applicationId} />
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Scope & preparation</h2><p className="mt-1 text-sm text-slate-500">Need another framework or help completing requirements? Submit the scope for your team to review.</p></div><RequestHelp code="COMPLIANCE_HELP" label="Request preparation help" compliancePicker applicationId={applicationId} /></div>
+    <Link href={`/dashboard/services?service=COMPLIANCE_HELP${applicationId ? `&application=${encodeURIComponent(applicationId)}` : ""}`} className="text-sm font-semibold text-cyan-700">Service requests</Link>
     <ServiceRequests family="compliance" applicationId={applicationId} />
   </section>;
 }

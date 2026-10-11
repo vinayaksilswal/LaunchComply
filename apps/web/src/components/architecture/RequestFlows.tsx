@@ -4,8 +4,47 @@ import { ListOrdered, X, ArrowRight } from "lucide-react";
 import { Dialog } from "@/components/ui/Dialog";
 import type { ArchitectureGraph } from "./CloudDiagram";
 import { flowEvidence, flowProtocol } from "./flowRouting";
+import { networkPlacement } from "./networkPlacement";
+
 export function RequestFlows({ graph, onFocus }: { graph: ArchitectureGraph; onFocus: (id: string) => void }) {
   const [open, setOpen] = useState(false), [query, setQuery] = useState("");
-  const rows = graph.edges.map((edge, index) => ({ ...edge, number: index + 1, from: graph.nodes.find(n => n.id === edge.source), to: graph.nodes.find(n => n.id === edge.target) })).filter(row => row.from && row.to && `${row.from.label} ${row.to.label} ${row.label}`.toLowerCase().includes(query.toLowerCase()));
-  return <><button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs"><ListOrdered className="h-3.5 w-3.5" />Request flows</button>{open && <Dialog label="Architecture request flows" onDismiss={() => setOpen(false)} className="max-w-4xl"><div className="space-y-4 p-5"><header className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">Request flows</h2><p className="mt-1 text-sm text-slate-500">Numbers match diagram arrows. Connections describe the saved plan, with their source or declared intent.</p></div><button aria-label="Close request flows" onClick={() => setOpen(false)}><X className="h-5 w-5" /></button></header><input aria-label="Find a request flow" placeholder="Find a service or connection" value={query} onChange={event => setQuery(event.target.value)} className="w-full rounded-lg border p-2.5 text-sm" /><div className="max-h-[60vh] space-y-3 overflow-auto">{rows.map(row => <article key={row.number} className="rounded-lg border p-3"><div className="flex items-start gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan-50 text-sm font-semibold text-cyan-800">{row.number}</span><div className="min-w-0 flex-1"><p className="flex flex-wrap items-center gap-2 text-sm font-semibold">{row.from?.label}<ArrowRight className="h-4 w-4" />{row.to?.label}</p><p className="mt-1 text-sm text-slate-600">{row.label || "Connection purpose needs confirmation"}</p><p className="mt-1 text-xs text-slate-500">{flowEvidence(row.label)} · {flowProtocol(row.label)}</p><details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer">Component context & source notes</summary><p className="mt-2 leading-5">{row.from?.service}: {row.from?.description}</p><p className="mt-2 leading-5">{row.to?.service}: {row.to?.description}</p></details></div><button onClick={() => { onFocus(row.source); setOpen(false); }} className="rounded-lg border px-2 py-1.5 text-xs">Inspect source</button></div></article>)}{!rows.length && <p className="p-4 text-sm text-slate-500">{graph.edges.length ? "No matching connections." : "No connections are saved. Select a component to add a reviewed connection, or ask the architect to propose one."}</p>}</div><p className="text-xs text-slate-500">Dashed arrows are inferred from source signals. HTTPS labels describe intended encryption; certificates, authentication, routing and runtime traffic need verification.</p></div></Dialog>}</>;
+  const internalApi = graph.nodes.some(node => networkPlacement(node) === "PRIVATE_INGRESS");
+  const rows = graph.edges.map((edge, index) => ({ ...edge, number: index + 1,
+    from: graph.nodes.find(n => n.id === edge.source), to: graph.nodes.find(n => n.id === edge.target),
+  })).filter(row => row.from && row.to && `${row.from.label} ${row.to.label} ${row.label}`.toLowerCase().includes(query.toLowerCase()));
+  return <>
+    <button onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs"><ListOrdered className="h-3.5 w-3.5" />Request flows</button>
+    {open && <Dialog label="Architecture request flows" onDismiss={() => setOpen(false)} className="max-w-4xl">
+      <div className="space-y-4 p-5">
+        <header className="flex items-start justify-between gap-3">
+          <div><h2 className="text-lg font-semibold">Request flows</h2><p className="mt-1 text-sm text-slate-500">Numbers match diagram arrows. Connections describe the current plan, with their source or declared intent.</p></div>
+          <button aria-label="Close request flows" onClick={() => setOpen(false)}><X className="h-5 w-5" /></button>
+        </header>
+        {internalApi && <section aria-label="Private API request pattern" className="rounded-xl border border-cyan-200 bg-cyan-50 p-4">
+          <h3 className="text-sm font-semibold text-cyan-900">Frontend server proxy · internal API pattern</h3>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-semibold text-cyan-900">
+            {["Browser", "Public HTTPS web entry", "Frontend server /api proxy", "Internal HTTPS ALB", "Private backend", "Private data"].map((step, index) => <span key={step} className="inline-flex items-center gap-2">{index > 0 && <ArrowRight className="h-4 w-4" />}<span className="rounded-lg border border-cyan-200 bg-white px-2 py-1.5">{step}</span></span>)}
+          </div>
+          <p className="mt-3 text-xs leading-5 text-cyan-900">This is the intended pattern; verify its actual edges below. The browser uses the public frontend origin. Only the frontend hosting server can proxy into the private network. Static SPAs require proxy code or web-server configuration; a drawn route does not implement it.</p>
+        </section>}
+        <input aria-label="Find a request flow" placeholder="Find a service or connection" value={query} onChange={event => setQuery(event.target.value)} className="w-full rounded-lg border p-2.5 text-sm" />
+        <div className="max-h-[50vh] space-y-3 overflow-auto">
+          {rows.map(row => <article key={row.number} className="rounded-lg border p-3">
+            <div className="flex items-start gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cyan-50 text-sm font-semibold text-cyan-800">{row.number}</span>
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">{row.from?.label}<ArrowRight className="h-4 w-4" />{row.to?.label}</p>
+                <p className="mt-1 text-sm text-slate-600">{row.label || "Connection purpose needs confirmation"}</p>
+                <p className="mt-1 text-xs text-slate-500">{flowEvidence(row.label)} · {flowProtocol(row.label)}</p>
+                <details className="mt-2 text-xs text-slate-600"><summary className="cursor-pointer">Component context & source notes</summary><p className="mt-2 leading-5">{row.from?.service}: {row.from?.description}</p><p className="mt-2 leading-5">{row.to?.service}: {row.to?.description}</p></details>
+              </div>
+              <button onClick={() => { onFocus(row.source); setOpen(false); }} className="rounded-lg border px-2 py-1.5 text-xs">Inspect source</button>
+            </div>
+          </article>)}
+          {!rows.length && <p className="p-4 text-sm text-slate-500">{graph.edges.length ? "No matching connections." : "No connections are saved. Select a component to add a reviewed connection, or ask the architect to propose one."}</p>}
+        </div>
+        <p className="text-xs text-slate-500">Dashed arrows are inferred from source signals. HTTPS labels describe intended encryption; certificates, authentication, routing and runtime traffic need verification. DNS resolution is separate from request forwarding; operations services are outside the request path.</p>
+      </div>
+    </Dialog>}
+  </>;
 }

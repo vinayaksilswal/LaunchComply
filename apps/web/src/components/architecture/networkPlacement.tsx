@@ -1,6 +1,6 @@
 import type { ArchitectureGraph, ArchitectureNode } from "./CloudDiagram";
 
-export type NetworkPlacement = "PUBLIC_INGRESS" | "PUBLIC_FRONTEND" | "PRIVATE_COMPUTE" | "PRIVATE_DATA" | "VPC_ENDPOINT" | "PRIVATE_MANAGED_STORAGE" | "OUTSIDE_VPC" | "REVIEW";
+export type NetworkPlacement = "PUBLIC_INGRESS" | "PUBLIC_FRONTEND" | "PRIVATE_INGRESS" | "PRIVATE_COMPUTE" | "PRIVATE_DATA" | "VPC_ENDPOINT" | "PRIVATE_MANAGED_STORAGE" | "OUTSIDE_VPC" | "REVIEW";
 
 /** Service names describe intended placement, not observed AWS resources. */
 export function networkPlacement(node: ArchitectureNode): NetworkPlacement {
@@ -10,7 +10,7 @@ export function networkPlacement(node: ArchitectureNode): NetworkPlacement {
   // Ambiguous candidates must not be drawn as confirmed private workloads.
   if (/static hosting\s*(?:\/|or)\s*container|cloudfront\s*(?:\/|or)\s*alb|choose a cloud|candidate|review compatibility/i.test(service)) return "REVIEW";
   if (/public frontend/i.test(service) && /fargate|ecs|ec2|container/i.test(service)) return "PUBLIC_FRONTEND";
-  if (/internal|private/i.test(service) && /load balancer|\balb\b|\bnlb\b/i.test(service)) return "REVIEW";
+  if (/internal|private/i.test(service) && /load balancer|\balb\b|\bnlb\b/i.test(service)) return "PRIVATE_INGRESS";
   if (/application load balancer|\balb\b|network load balancer|\bnlb\b/i.test(service)) return "PUBLIC_INGRESS";
   if (/\brds\b|\baurora\b|elasticache|\bredis\b|\bdocumentdb\b/i.test(service)) return "PRIVATE_DATA";
   if (/\bfargate\b|\becs\b|\bec2\b|\beks\b|container|virtual machine/i.test(service)) return "PRIVATE_COMPUTE";
@@ -27,11 +27,12 @@ export function NetworkReview({ graph }: { graph: ArchitectureGraph }) {
     <h3 className="text-sm font-semibold">Public & private network design</h3>
     <p className="text-xs leading-5 text-slate-600">A VPC can contain public, private application and isolated data subnets. Placement below is a proposal based on service names; it does not verify routes or access.</p>
     <ul className="text-xs leading-5 text-slate-600 space-y-2">
-      <li>{counts("PUBLIC_FRONTEND").length} public-tier frontends · {counts("PRIVATE_COMPUTE").length} private compute services · {counts("PRIVATE_DATA").length} private data services · {counts("PUBLIC_INGRESS").length} proposed ingress services.</li>
-      {!!counts("PUBLIC_FRONTEND").length && <li>Public-tier frontend containers accept traffic only from their web ingress security group. Browser API requests use an authenticated HTTPS entry point; backend tasks have no public IP and accept only the API ingress security group. Configure TLS to targets, CORS, authentication and health checks before deployment.</li>}
+      <li>{counts("PUBLIC_FRONTEND").length} public-tier frontends · {counts("PRIVATE_COMPUTE").length} private compute services · {counts("PRIVATE_DATA").length} private data services · {counts("PUBLIC_INGRESS").length} public ingress · {counts("PRIVATE_INGRESS").length} internal ingress.</li>
+      {!!counts("PUBLIC_FRONTEND").length && <li>Frontend containers accept only their web ingress security group. Backend tasks have no public IP and accept only the API ingress security group. Configure TLS to targets, authentication, authorization and health checks before deployment.</li>}
+      {!!counts("PRIVATE_INGRESS").length && <li>Browser → public frontend server → internal HTTPS load balancer → private API. The browser uses same-origin /api; a server-side proxy forwards allowed requests. A static SPA needs this proxy implemented in its hosting container. Internal ingress accepts only the frontend server security groups; it is unreachable from the public internet.</li>}
       {!!counts("PRIVATE_MANAGED_STORAGE").length && <li>Private S3 buckets remain outside the VPC. Block public access; review workload IAM, bucket and endpoint policies, encryption, region and route-table associations. A gateway endpoint provides the proposed private access path, not a bucket inside a subnet.</li>}
       {!!privateWorkloads && <li>Decide outbound access: NAT per availability zone when internet access is needed, or supported VPC endpoints. Isolated data subnets should have no direct internet route.</li>}
-      {!!counts("PRIVATE_COMPUTE").length && !counts("PUBLIC_INGRESS").length && <li className="text-amber-800">Private compute is proposed, but no explicit load balancer is selected. Confirm whether it serves public traffic or only background jobs.</li>}
+      {!!counts("PRIVATE_COMPUTE").length && !counts("PUBLIC_INGRESS").length && !counts("PRIVATE_INGRESS").length && <li className="text-amber-800">Private compute is proposed, but no explicit load balancer is selected. Confirm whether it serves public traffic or only background jobs.</li>}
       <li>Confirm non-overlapping CIDRs, route tables, TLS termination, health checks, task ports and security groups. Permit application traffic from the ingress security group; restrict data access to its consumers.</li>
       {graph.nodes.some(node => /application load balancer|\balb\b/i.test(node.service)) && <li>For a regional Application Load Balancer, plan subnets in at least two availability zones, even when application capacity is requested in a single zone.</li>}
       <li>Static sites and managed service APIs are outside subnet boundaries. Private access may require endpoints. Multi-region recovery needs separate VPCs and a tested replication and failover plan.</li>

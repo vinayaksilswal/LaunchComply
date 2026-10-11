@@ -10,6 +10,10 @@ def ingress(node):
     return bool(re.search(r"application load balancer|\balb\b|api gateway", node.get("service", ""), re.I))
 
 
+def internal_ingress(node):
+    return ingress(node) and bool(re.search(r"internal|private", node.get("service", ""), re.I))
+
+
 def operations(node):
     return node.get("zone") == "SUPPORT" or bool(re.search(r"cloudwatch|\becr\b|secrets manager|\biam\b", node.get("service", ""), re.I))
 
@@ -30,6 +34,11 @@ def check_transition(original, proposed, request):
             raise ValueError("BACKEND_PUBLIC_EXPOSURE")
     for edge in proposed["edges"]:
         source, target = nodes[edge["source"]], nodes[edge["target"]]
+        if internal_ingress(target):
+            if source.get("zone") != "APPLICATION":
+                raise ValueError("PUBLIC_INTERNAL_API_ROUTE")
+            if frontend(source) and (not re.search(r"server.*https.*proxy|https.*server.*proxy", edge.get("label", ""), re.I) or not re.search(r"proxy", source.get("service", ""), re.I)):
+                raise ValueError("BROWSER_PRIVATE_API_ROUTE")
         if operations(source) or operations(target):
             raise ValueError("OPERATIONS_IN_REQUEST_PATH")
         if frontend(source) and frontend(target):

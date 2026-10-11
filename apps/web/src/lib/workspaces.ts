@@ -35,7 +35,7 @@ export const MODULES: WorkspaceModule[] = [
   { key: "team", title: "Your team", description: "People with active membership in this business.", empty: "No active team members are available.", group: "Business" },
   { key: "billing", title: "Billing", description: "Review invoices recorded for your business.", empty: "No invoices have been recorded. Online payment collection is not enabled in this workspace.", group: "Business" },
   { key: "usage", title: "Usage records", description: "Review recorded product usage events.", empty: "No product usage events have been recorded.", group: "Business" },
-  { key: "services", title: "Service requests", description: "Review business service requests and their recorded status.", empty: "No service requests have been recorded.", group: "Business" },
+  { key: "services", title: "Service requests", description: "Request a service and track its status, replies and delivered reports.", empty: "No service requests have been recorded.", group: "Business" },
   { key: "support", title: "Support requests", description: "Review support tickets recorded for your business.", empty: "No support tickets have been recorded.", group: "Business" },
   { key: "business-units", title: "Business units", description: "Review organizational groups recorded for your business.", empty: "No business units have been recorded.", group: "Business" },
   { key: "sso", title: "Single sign-on", description: "Review business identity provider configurations.", empty: "No identity provider configuration has been recorded. Single sign-on is not enabled.", group: "Business" },

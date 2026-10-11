@@ -2,6 +2,7 @@
 import re
 from datetime import datetime, timezone
 from app.services.architecture.knowledge import fingerprint
+from app.services.architecture.proposal_policy import frontend, internal_ingress
 
 
 def placement(service):
@@ -13,7 +14,7 @@ def placement(service):
     if re.search(r"public frontend", service, re.I) and re.search(r"fargate|ecs|ec2|container", service, re.I):
         return "PUBLIC_FRONTEND"
     if re.search(r"internal|private", service, re.I) and re.search(r"load balancer|\balb\b|\bnlb\b", service, re.I):
-        return "DECISION_REQUIRED"
+        return "PRIVATE_INGRESS"
     for pattern, value in (
         (r"application load balancer|\balb\b|network load balancer|\bnlb\b", "PUBLIC_INGRESS"),
         (r"\brds\b|\baurora\b|elasticache|\bredis\b|\bdocumentdb\b", "PRIVATE_DATA"),
@@ -69,12 +70,16 @@ def build_review(graph, evidence=None, requirements=None, source_changed=False):
     add("CONNECTIONS", "Confirm service connections", "REVIEW",
         f"{len(edges)} diagram connections; {uncertain} explicitly labelled inferred or proposed. Non-support services without drawn connections: {len(disconnected)}. Confirm frontend/API destinations, database consumers and queues from source and runtime settings. Build and observability services can be separate from traffic arrows; their configuration still needs review. Drawing a line does not verify a connection.", disconnected)
 
-    frontend_ids = {node["id"] for node in nodes if node.get("zone") == "APPLICATION" and re.search(r"frontend|web app", node.get("label", ""), re.I)}
+    frontend_ids = {node["id"] for node in nodes if frontend(node)}
     backend_ids = {node["id"] for node in nodes if node.get("zone") == "APPLICATION" and re.search(r"\bapi\b|backend", node.get("label", ""), re.I) and node["id"] not in frontend_ids}
     support_ids = {node["id"] for node in nodes if node.get("zone") == "SUPPORT" or re.search(r"cloudwatch|\becr\b", node.get("service", ""), re.I)}
     direct_links = [edge for edge in edges if edge["source"] in frontend_ids and edge["target"] in backend_ids]
     frontend_links = [edge for edge in edges if edge["source"] in frontend_ids and edge["target"] in frontend_ids]
     support_links = [edge for edge in edges if edge["source"] in support_ids or edge["target"] in support_ids]
+    internal_ids = {node["id"] for node in nodes if internal_ingress(node)}
+    invalid_internal = [edge for edge in edges if edge["target"] in internal_ids and (
+        edge["source"] not in {node["id"] for node in nodes if node.get("zone") == "APPLICATION"}
+        or (edge["source"] in frontend_ids and not re.search(r"server.*https.*proxy|https.*server.*proxy", edge.get("label", ""), re.I)))]
     traffic_issues = []
     if direct_links:
         traffic_issues.append(f"{len(direct_links)} frontend-to-backend links omit the controlled HTTPS API entry; review the browser endpoint and ingress path")
@@ -82,18 +87,23 @@ def build_review(graph, evidence=None, requirements=None, source_changed=False):
         traffic_issues.append(f"{len(frontend_links)} frontend-to-frontend links need runtime evidence")
     if support_links:
         traffic_issues.append(f"{len(support_links)} support-service links should be distinguished from request traffic; review telemetry/build configuration separately")
-    add("TRAFFIC", "Review browser-to-private-backend traffic", "REVIEW",
+    if invalid_internal:
+        traffic_issues.append(f"{len(invalid_internal)} routes to internal API ingress bypass an explicitly server-side HTTPS proxy; browser/global services cannot reach private ingress directly")
+    add("TRAFFIC", "Review browser-to-private-backend traffic", "MISSING" if traffic_issues else "REVIEW",
         "; ".join(traffic_issues) + "." if traffic_issues else
-        "No direct frontend-to-backend or support request edges were detected by label checks. This does not verify API integration. Confirm browser HTTPS destination, authenticated ingress, private backend SG restrictions, TLS target configuration and CORS against source/runtime settings.",
+        "No direct frontend-to-backend, public-to-internal-ingress or support request edges were detected by planning checks. This does not verify API integration. Confirm browser HTTPS origin, frontend server proxy where selected, authenticated ingress, private backend SG restrictions, target TLS and source/runtime settings.",
         sorted(frontend_ids | backend_ids))
+    if internal_ids and frontend_ids:
+        add("FRONTEND_PROXY", "Implement and verify frontend server proxy", "REVIEW",
+            "Selected path: browser uses same-origin /api on public frontend; frontend hosting server proxies over HTTPS to internal ALB; private backend accepts only ALB SG. A static SPA cannot reach private ingress. Verify proxy code/container configuration, path and method allowlists, identity forwarding, authorization, CSRF protections where needed, TLS validation, timeout/size limits, and private DNS reachability. This diagram does not establish that a proxy exists or is deployed.", sorted(frontend_ids | internal_ids | backend_ids))
 
     private_compute = [item["node_id"] for item in services if item["placement"] == "PRIVATE_COMPUTE"]
     private_data = [item["node_id"] for item in services if item["placement"] == "PRIVATE_DATA"]
     ingress = [item["node_id"] for item in services if item["placement"] == "PUBLIC_INGRESS"]
     public_frontends = [item["node_id"] for item in services if item["placement"] == "PUBLIC_FRONTEND"]
     add("NETWORK", "Review network access", "REVIEW",
-        f"Proposed: {len(ingress)} ingress, {len(public_frontends)} public-tier frontends, {len(private_compute)} private compute and {len(private_data)} private data services. Public frontend containers should accept only web-ingress SG traffic. Browser API calls use authenticated HTTPS ingress; private backend tasks have no public IP and accept only API-ingress SG traffic. Confirm VPCs, CIDRs, routes, AZ allocation, NAT/endpoints, TLS target configuration, authentication, CORS and health checks. Route 53 and CloudFront are global services outside the VPC; regional origins still require a region.",
-        private_compute + private_data + ingress + public_frontends)
+        f"Proposed: {len(ingress)} public ingress, {len(internal_ids)} internal ingress, {len(public_frontends)} public-tier frontends, {len(private_compute)} private compute and {len(private_data)} private data services. Public frontends accept only web-ingress SG traffic; internal API ALB accepts only frontend server SGs; backend tasks have no public IP and accept only API-ingress SG traffic. Confirm VPCs, CIDRs, routes, AZ allocation, NAT/endpoints, TLS certificates/validation, authentication, authorization and health checks. WAF associates with supported public ingress; it does not connect VPC tiers. Route 53 and CloudFront are outside the VPC.",
+        private_compute + private_data + ingress + public_frontends + sorted(internal_ids))
     workloads = [node["id"] for node in nodes if node.get("zone") == "APPLICATION"]
     private_storage = [item["node_id"] for item in services if item["placement"] == "PRIVATE_MANAGED_STORAGE"]
     if private_storage:
@@ -115,6 +125,10 @@ def build_review(graph, evidence=None, requirements=None, source_changed=False):
         "Review workload-specific IAM roles, customer provisioning permissions, secrets injection, audit logging and sensitive-data handling. An observation-role identity check is not provisioning permission or a security assessment.")
     add("OPERATIONS", "Agree costs and operating ownership", "REVIEW",
         "Review a real infrastructure plan, service and data-transfer costs, deployment/rollback process, alarms, support ownership and acceptance evidence before execution. This checklist records planning gaps; it cannot approve or deploy infrastructure.")
+    add("OBSERVABILITY", "Configure monitoring and response", "REVIEW",
+        "Define service health, request latency/error rates, saturation, database/queue metrics, security and audit logs, retention/redaction, alert thresholds, recipients and incident runbooks. Verify telemetry delivery and an alert drill. A CloudWatch card is not an active monitor or alarm.", sorted(support_ids))
+    add("COMPLIANCE", "Map controls to deployment evidence", "REVIEW",
+        "Choose the applicable framework in Compliance; record control owners and evidence for identity, access reviews, change approvals, backups, incident response and logging. Keep evidence versioned against the implemented environment. Diagram checks and tracked readiness percentages do not establish full framework coverage or certification.")
 
     return {"format": "architecture-review-v1", "graph_fingerprint": fingerprint(graph),
             "source_snapshot": evidence.get("commit"), "evaluated_at": datetime.now(timezone.utc).isoformat(),
@@ -123,4 +137,6 @@ def build_review(graph, evidence=None, requirements=None, source_changed=False):
             "items": items, "services": services, "references": [
                 {"title": "AWS operational readiness review", "url": "https://docs.aws.amazon.com/wellarchitected/latest/framework/ops_ready_to_support_const_orr.html"},
                 {"title": "AWS private workloads and public ingress", "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-example-private-subnets-nat.html"},
+                {"title": "AWS internal load balancer access", "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/userguide/how-elastic-load-balancing-works.html"},
+                {"title": "AWS frontend server API integration", "url": "https://docs.aws.amazon.com/prescriptive-guidance/latest/micro-frontends-aws/api-integration-data-fetching.html"},
             ]}

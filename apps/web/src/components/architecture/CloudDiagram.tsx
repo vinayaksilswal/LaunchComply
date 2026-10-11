@@ -473,7 +473,7 @@ export const CloudDiagram = forwardRef<
               fontWeight="600"
               fill={layer.color}
             >
-              {code ? "STATIC SOURCE" : /Proposed (\d+) replicas/i.test(node.description) ? `${/Proposed (\d+) replicas/i.exec(node.description)?.[1]} REPLICAS · PLAN` : ({ PUBLIC_FRONTEND: "PUBLIC FRONTEND", PUBLIC_INGRESS: "HTTPS INGRESS", PRIVATE_COMPUTE: "PRIVATE COMPUTE", PRIVATE_DATA: "ISOLATED DATA", VPC_ENDPOINT: "PRIVATE SERVICE ROUTE", PRIVATE_MANAGED_STORAGE: "PRIVATE MANAGED STORAGE", OUTSIDE_VPC: "MANAGED / GLOBAL", REVIEW: "PLACEMENT TO CONFIRM" }[networkPlacement(node)])}
+              {code ? "STATIC SOURCE" : /Proposed (\d+) replicas/i.test(node.description) ? `${/Proposed (\d+) replicas/i.exec(node.description)?.[1]} REPLICAS · PLAN` : ({ PUBLIC_FRONTEND: "PUBLIC FRONTEND", PUBLIC_INGRESS: "HTTPS INGRESS", PRIVATE_INGRESS: "INTERNAL HTTPS INGRESS", PRIVATE_COMPUTE: "PRIVATE COMPUTE", PRIVATE_DATA: "ISOLATED DATA", VPC_ENDPOINT: "PRIVATE SERVICE ROUTE", PRIVATE_MANAGED_STORAGE: "PRIVATE MANAGED STORAGE", OUTSIDE_VPC: "MANAGED / GLOBAL", REVIEW: "PLACEMENT TO CONFIRM" }[networkPlacement(node)])}
             </text>
             <text
               x={node.x + cardWidth - 16}

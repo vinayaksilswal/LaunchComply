@@ -21,6 +21,9 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [requestId, setRequestId] = useState("");
+  const [design, setDesign] = useState<{ application_id: string; architecture_id: string | null; version: string | null } | null>(null);
+  const [designLoading, setDesignLoading] = useState(false);
+  const [designError, setDesignError] = useState("");
   const allowed = ["OWNER", "ADMIN"].includes(
     organization?.role.toUpperCase() || "",
   );
@@ -45,6 +48,21 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
       active = false;
     };
   }, [open, submitted, applicationId, assetRefresh]);
+  useEffect(() => {
+    setDesign(null); setDesignError("");
+    if (!open || submitted || code !== "DEPLOYMENT_HELP" || !appId || architectureId || assetsLoading || assetsError) { setDesignLoading(false); return; }
+    let active = true;
+    setDesignLoading(true);
+    apiClient<{ architecture_id: string | null; version: string | null }>(`/deployments/preparation/${appId}`)
+      .then(result => { if (active) setDesign({ ...result, application_id: appId }); })
+      .catch(failure => { if (active) setDesignError(failure instanceof Error ? failure.message : "Unable to load the saved design."); })
+      .finally(() => { if (active) setDesignLoading(false); });
+    return () => { active = false; };
+  }, [open, submitted, code, appId, architectureId, assetsLoading, assetsError, assetRefresh]);
+  const currentDesign = design?.application_id === appId ? design : null;
+  const selectedArchitectureId = architectureId || currentDesign?.architecture_id;
+  const selectedArchitectureVersion = architectureVersion || currentDesign?.version;
+  const awaitingDesign = code === "DEPLOYMENT_HELP" && !!appId && !architectureId && !currentDesign;
   useEffect(() => {
     setOpen(false);
     setSubmitted(false);
@@ -104,7 +122,7 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
                 className="mt-5 space-y-4"
                 onSubmit={async (event) => {
                   event.preventDefault();
-                  if (disabled || assetsLoading || assetsError || (applicationId && appId !== applicationId) || (compliancePicker && !selectedFramework)) return;
+                  if (disabled || assetsLoading || assetsError || designLoading || designError || awaitingDesign || (applicationId && appId !== applicationId) || (compliancePicker && !selectedFramework)) return;
                   setBusy(true);
                   setError("");
                   try {
@@ -116,7 +134,7 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
                         ...(compliancePicker || readinessFramework ? { compliance_framework: selectedFramework } : {}),
                         ...(readinessFramework ? { readiness_framework_code: readinessFramework.code } : {}),
                         application_id: appId || null,
-                        ...(architectureId ? { architecture_id: architectureId } : {}),
+                        ...(selectedArchitectureId ? { architecture_id: selectedArchitectureId } : {}),
                         notes,
                       }),
                     });
@@ -142,7 +160,11 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
                 {compliancePicker && <><label className="block text-sm font-medium">Compliance framework<select required aria-label="Compliance framework" disabled={busy} value={framework} onChange={event => { setFramework(event.target.value); setRequestId(crypto.randomUUID()); }} className="block w-full mt-2 border rounded-lg px-3 py-2.5 bg-white"><option value="">Choose a framework</option>{["ISO 27001", "SOC 2 Type I", "SOC 2 Type II", "PCI DSS", "HIPAA", "GDPR", "ISO 27701", "ISO 22301", "FedRAMP"].map(name => <option key={name}>{name}</option>)}<option value="other">Other framework or requirement</option></select></label>{framework === "other" && <label className="block text-sm font-medium">Framework or requirement name<input required maxLength={100} value={customFramework} disabled={busy} onChange={event => { setCustomFramework(event.target.value); setRequestId(crypto.randomUUID()); }} className="block w-full mt-2 border rounded-lg px-3 py-2.5" placeholder="Type the framework you need" /></label>}</>}
                 {["VAPT_ASSESSMENT", "SECURITY_ASSESSMENT"].includes(code) && <p className="rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">This applies for a scope review. It does not authorize testing. The team will agree on targets, ownership, permitted methods and written authorization before an assessment begins.</p>}
                 {["COMPLIANCE_HELP", "ISO27001_HELP", "SOC2_HELP", "PRIVACY_HELP"].includes(code) && <p className="rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-600">Describe the business processes and systems you want reviewed. Preparation and delivered reports do not by themselves certify or attest your business.</p>}
-                {architectureVersion && <p className="rounded-lg bg-cyan-50 p-3 text-xs leading-5 text-cyan-800">Saved design {architectureVersion}, its source snapshot, planning targets and engineering checklist will be captured for review. You and the operations team can view this snapshot in request progress.</p>}
+                {selectedArchitectureVersion && <p className="rounded-lg bg-cyan-50 p-3 text-xs leading-5 text-cyan-800">Saved design {selectedArchitectureVersion}, its source snapshot, planning targets and engineering checklist will be captured for review. You and the operations team can view this snapshot in request progress.</p>}
+                {designLoading && <p role="status" className="text-xs text-slate-500">Loading the current saved design…</p>}
+                {code === "DEPLOYMENT_HELP" && currentDesign && !currentDesign.architecture_id && <p className="text-xs text-slate-500">This asset has no saved architecture. Submit a scope request or save a design before requesting its review.</p>}
+                {code === "DEPLOYMENT_HELP" && currentDesign && <button type="button" disabled={busy || designLoading} onClick={() => setAssetRefresh(value => value + 1)} className="text-xs font-semibold text-cyan-700">Refresh saved design</button>}
+                {designError && <p role="alert" className="text-sm text-rose-700">{designError} <button type="button" disabled={busy} onClick={() => setAssetRefresh(value => value + 1)} className="font-semibold underline">Reload saved design</button></p>}
                 {assetsLoading && <p role="status" className="text-xs text-slate-500">Loading your business assets…</p>}
                 {assetsError && <button type="button" disabled={busy || assetsLoading} onClick={() => setAssetRefresh(value => value + 1)} className="text-xs font-semibold text-cyan-700">Reload business assets</button>}
                 <label className="block text-sm font-medium">
@@ -186,7 +208,7 @@ export function RequestHelp({ code, label, applicationId, architectureId, archit
                   </p>
                 )}
                 <button
-                  disabled={disabled || busy || assetsLoading || assetsError || (!!applicationId && appId !== applicationId)}
+                  disabled={disabled || busy || assetsLoading || assetsError || designLoading || !!designError || awaitingDesign || (!!applicationId && appId !== applicationId) || (compliancePicker && !selectedFramework)}
                   type="submit"
                   className="w-full rounded-lg bg-slate-900 text-white px-4 py-3 text-sm font-semibold disabled:opacity-40"
                 >

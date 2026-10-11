@@ -6,6 +6,7 @@ const groups: { placement: NetworkPlacement; label: string; color: string }[] = 
   { placement: "OUTSIDE_VPC", label: "Managed & global services · outside subnet boundaries", color: "#0891b2" },
   { placement: "PUBLIC_INGRESS", label: "Public ingress subnets · internet gateway route proposed", color: "#65a30d" },
   { placement: "PUBLIC_FRONTEND", label: "Public frontend subnets · web ingress security group only", color: "#0891b2" },
+  { placement: "PRIVATE_INGRESS", label: "Internal API ingress · frontend servers only", color: "#6366f1" },
   { placement: "PRIVATE_COMPUTE", label: "Private application subnets · no direct internet ingress", color: "#6366f1" },
   { placement: "PRIVATE_DATA", label: "Isolated data subnets · consumer security groups only", color: "#059669" },
   { placement: "VPC_ENDPOINT", label: "VPC route endpoints · private service access proposed", color: "#059669" },
@@ -53,7 +54,8 @@ export function businessBoundaries(graph: ArchitectureGraph, requirements?: Depl
   const subnets = groups.flatMap(group => {
     const ids = graph.nodes.filter(node => !isPlatformService(node) && networkPlacement(node) === group.placement).map(node => node.id);
     const box = ids.length ? bounds(ids, 24, 52) : null;
-    const note = group.placement === "PRIVATE_COMPUTE" ? "Egress: NAT or VPC endpoints · decide before deploy"
+    const note = group.placement === "PRIVATE_INGRESS" ? "Private IPs only · HTTPS, frontend SG & target certificates to configure"
+      : group.placement === "PRIVATE_COMPUTE" ? "Egress: NAT or VPC endpoints · decide before deploy"
       : group.placement === "PRIVATE_DATA" ? "No direct internet route · backup & failover to confirm"
       : group.placement === "PUBLIC_INGRESS" ? "TLS, listener / health-check ports & AZ subnets to confirm"
       : group.placement === "PUBLIC_FRONTEND" ? "HTTPS ingress only · no direct public task access proposed"

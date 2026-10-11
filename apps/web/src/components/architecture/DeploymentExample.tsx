@@ -548,10 +548,10 @@ export function DeploymentExample() {
               </p>
             )}
             <Link
-              href="/dashboard/deployments"
+              href="/dashboard/services?service=DEPLOYMENT_HELP"
               className="mt-4 inline-flex gap-2 text-xs font-semibold text-cyan-700"
             >
-              Request deployment help
+              Service requests
               <ArrowRight size={14} />
             </Link>
           </section>

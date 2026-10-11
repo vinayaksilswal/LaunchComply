@@ -12,7 +12,7 @@ import { arrangeBusinessArchitecture } from "./businessArchitecture";
 import { isFrontendWorkload } from "./workloadRole";
 
 type Protocol = "https" | "http" | "postgresql" | "mysql" | "redis" | "rediss" | "mongodb" | "mongodb+srv" | "s3" | "unknown";
-export interface EnvironmentConnection { name: string; source: string; target: string | null; protocol: Protocol; references?: { path: string; line: number }[]; }
+export interface EnvironmentConnection { name: string; source: string; target: string | null; protocol: Protocol; execution?: "browser" | "server"; references?: { path: string; line: number }[]; }
 const protocols: Protocol[] = ["unknown", "https", "http", "postgresql", "mysql", "redis", "rediss", "mongodb", "mongodb+srv", "s3"];
 
 // Values never leave the browser: extract only a key and allowlisted protocol.
@@ -47,11 +47,13 @@ export function ArchitectureSettings({ graph, requirements, connections, modules
   const [error, setError] = useState("");
   const [receipt, setReceipt] = useState("");
   const workloads = graph.nodes.filter(node => node.zone === "APPLICATION");
-  const allowedDestination = (sourceId: string, node: ArchitectureGraph["nodes"][number]) => {
-    const workload = workloads.find(item => item.id === sourceId);
-    return node.id !== sourceId && node.zone !== "SUPPORT" &&
+  const allowedDestination = (entry: Pick<EnvironmentConnection, "source" | "execution" | "name">, node: ArchitectureGraph["nodes"][number]) => {
+    const workload = workloads.find(item => item.id === entry.source);
+    const internal = networkPlacement(node) === "PRIVATE_INGRESS";
+    const serverProxy = entry.execution === "server" && !!workload && /proxy/i.test(workload.service) && !/^(?:NEXT_PUBLIC_|VITE_|REACT_APP_|PUBLIC_)/i.test(entry.name);
+    return node.id !== entry.source && node.zone !== "SUPPORT" &&
       (!workload || !isFrontendWorkload(workload) ||
-        (node.zone === "EDGE" && /application load balancer|api gateway|cloudfront/i.test(node.service)));
+        (node.zone === "EDGE" && /application load balancer|api gateway|cloudfront/i.test(node.service) && (!internal || serverProxy)));
   };
   useEffect(() => { setBindings(connections); }, [version, connections]);
   const close = () => { if (saving) return; setRaw(""); modal.current?.close(); };
@@ -68,8 +70,10 @@ export function ArchitectureSettings({ graph, requirements, connections, modules
         : /redis|cache/i.test(entry.name) || /redis/.test(entry.protocol) ? /redis/i
         : /s3|bucket/i.test(entry.name) ? /\bs3\b(?!.*endpoint)/i
         : /api.*(?:url|endpoint)|backend.*url/i.test(entry.name) ? /application load balancer|api gateway/i : null;
-      const candidates = pattern ? graph.nodes.filter(node => allowedDestination(source, node) && pattern.test(node.service) && (!/load balancer/i.test(node.service) || /api/i.test(node.label))) : [];
-      next.push({ ...entry, source, target: candidates.length === 1 ? candidates[0].id : null });
+      const sourceNode = workloads.find(node => node.id === source);
+      const execution = sourceNode && isFrontendWorkload(sourceNode) ? "browser" : "server";
+      const candidates = pattern ? graph.nodes.filter(node => allowedDestination({ ...entry, source, execution }, node) && pattern.test(node.service) && (!/load balancer/i.test(node.service) || /api/i.test(node.label))) : [];
+      next.push({ ...entry, source, execution, target: candidates.length === 1 ? candidates[0].id : null });
     }
     if (next.length > 60) { setError("Map up to 60 keys per business asset."); return; }
     setBindings(next); setRaw(""); setError(""); setReceipt("Names extracted. Review suggested destinations before saving. Values were discarded.");
@@ -87,16 +91,18 @@ export function ArchitectureSettings({ graph, requirements, connections, modules
         <label className="block text-xs font-semibold">Environment keys<textarea aria-label="Environment keys" autoComplete="off" spellCheck={false} value={raw} maxLength={64000} disabled={disabled || saving} onChange={event => setRaw(event.target.value)} placeholder={"DATABASE_URL\nREDIS_URL\nNEXT_PUBLIC_API_URL"} rows={4} className="mt-1 w-full rounded-lg border p-3 font-mono text-xs" style={{ WebkitTextSecurity: "disc" } as React.CSSProperties} /></label>
         <div className="flex flex-wrap gap-2"><button disabled={!raw.trim() || !source || disabled || saving} onClick={() => { try { add(namesFromEnvironment(raw)); } catch (failure) { setError(failure instanceof Error ? failure.message : "Unable to read keys."); } }} className="rounded-lg bg-cyan-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">Extract names & suggest connections</button><button disabled={!source || disabled || saving} onClick={() => add([...new Map(modules.flatMap(module => (module.environment_keys || []).map(key => [key.name, { name: key.name, protocol: "unknown" as Protocol }] as const))).values()])} className="rounded-lg border px-3 py-2 text-xs">Use keys found in source</button></div>
         <p className="text-xs leading-5 text-slate-500">Detected references come from a bounded static source sample. They can include inactive code. The workload association and destination are your declaration; neither proves a live connection.</p>
+        <p className="text-xs leading-5 text-slate-500">Browser keys cannot point to private API ingress. For a frontend server proxy, explicitly select Server only and a server-only key. NEXT_PUBLIC_, VITE_, REACT_APP_ and PUBLIC_ keys stay browser-visible; use a same-origin /api path, not a private address.</p>
         <div className="space-y-3">{bindings.map((entry, index) => <article key={`${entry.source}-${entry.name}`} className="rounded-xl border p-3 space-y-2">
           <div className="flex items-center justify-between gap-2"><strong className="break-all font-mono text-xs">{entry.name}</strong><button disabled={disabled || saving} aria-label={`Remove environment key ${entry.name} from ${entry.source}`} onClick={() => setBindings(current => current.filter((_, i) => i !== index))}><Trash2 className="h-4 w-4 text-slate-500" /></button></div>
-          <div className="grid gap-3 sm:grid-cols-3"><label className="text-xs text-slate-500">Source<select aria-label={`Source for ${entry.name}`} value={entry.source} disabled={disabled || saving} onChange={event => update(index, { source: event.target.value, target: null })} className="mt-1 w-full rounded-lg border bg-white p-2 text-slate-900">{workloads.map(node => <option key={node.id} value={node.id}>{node.label}</option>)}</select></label>
-            <label className="text-xs text-slate-500">Destination<select aria-label={`Destination for ${entry.name}`} value={entry.target || ""} disabled={disabled || saving} onChange={event => update(index, { target: event.target.value || null })} className="mt-1 w-full rounded-lg border bg-white p-2 text-slate-900"><option value="">Key only · connection unresolved</option>{graph.nodes.filter(node => allowedDestination(entry.source, node)).map(node => <option key={node.id} value={node.id}>{node.label} · {node.service}</option>)}</select></label>
+          <div className="grid gap-3 sm:grid-cols-2"><label className="text-xs text-slate-500">Source<select aria-label={`Source for ${entry.name}`} value={entry.source} disabled={disabled || saving} onChange={event => update(index, { source: event.target.value, target: null, execution: "browser" })} className="mt-1 w-full rounded-lg border bg-white p-2 text-slate-900">{workloads.map(node => <option key={node.id} value={node.id}>{node.label}</option>)}</select></label>
+            <label className="text-xs text-slate-500">Execution<select aria-label={`Execution for ${entry.name}`} value={entry.execution || "browser"} disabled={disabled || saving} onChange={event => update(index, { execution: event.target.value as "browser" | "server", target: null })} className="mt-1 w-full rounded-lg border bg-white p-2 text-slate-900"><option value="browser">Browser visible</option><option value="server">Server only · implementation required</option></select></label>
+            <label className="text-xs text-slate-500">Destination<select aria-label={`Destination for ${entry.name}`} value={entry.target || ""} disabled={disabled || saving} onChange={event => update(index, { target: event.target.value || null })} className="mt-1 w-full rounded-lg border bg-white p-2 text-slate-900"><option value="">Key only · connection unresolved</option>{graph.nodes.filter(node => allowedDestination(entry, node)).map(node => <option key={node.id} value={node.id}>{node.label} · {node.service}</option>)}</select></label>
             <label className="text-xs text-slate-500">Protocol<select aria-label={`Protocol for ${entry.name}`} disabled={disabled || saving} value={entry.protocol} onChange={event => update(index, { protocol: event.target.value as Protocol })} className="mt-1 w-full rounded-lg border bg-white p-2 text-slate-900">{protocols.map(protocol => <option key={protocol} value={protocol}>{protocol}</option>)}</select></label></div>
           <details className="text-xs text-slate-500"><summary className="cursor-pointer">Source references · {refs(entry.name).length}</summary>{refs(entry.name).length ? <ul className="mt-2 space-y-1 break-all">{refs(entry.name).map(ref => <li key={ref}>{ref}</li>)}</ul> : <p className="mt-2">No reference found in the inspected sample. Refresh source findings to inspect current code.</p>}</details>
         </article>)}</div>
         {!bindings.length && <p className="rounded-xl border border-dashed p-4 text-sm text-slate-500"><Plus className="mb-2 h-5 w-5" />Add keys to map dependencies. Unknown connections stay unresolved until you choose a destination.</p>}
         {blockedReason && <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-900">{blockedReason}</p>}
-        <button disabled={disabled || saving || !!blockedReason} onClick={() => { setError(""); void onConnections(bindings.map(({ name, source, target, protocol }) => ({ name, source, target, protocol }))).then(ok => { if (ok) setReceipt("Environment connection metadata saved. Declared edges are mapped in the architecture; secret values were not stored."); }); }} className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40">{saving ? "Saving…" : "Save connection mapping"}</button>
+        <button disabled={disabled || saving || !!blockedReason} onClick={() => { setError(""); void onConnections(bindings.map(({ name, source, target, protocol, execution }) => ({ name, source, target, protocol, execution: execution || "browser" }))).then(ok => { if (ok) setReceipt("Environment connection metadata saved. Declared edges are mapped in the architecture; secret values were not stored."); }); }} className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40">{saving ? "Saving…" : "Save connection mapping"}</button>
       </div>
       {(error || errorMessage) && <p role="alert" className="mt-4 text-sm text-rose-700">{error || errorMessage}</p>}{receipt && <p role="status" className="mt-4 rounded-lg bg-cyan-50 p-3 text-xs leading-5 text-cyan-800">{receipt}</p>}
       <div className="mt-5 border-t pt-3 text-xs text-slate-500">Saving creates a version and clears its design approval. Mapping changes do not configure runtime credentials or deploy infrastructure.</div>

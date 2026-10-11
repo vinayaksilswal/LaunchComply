@@ -10,8 +10,8 @@ interface RequestItem {
   quote?: { id: string; amount_minor: number; currency: string; is_real_payment_verified: boolean } | null;
   reports: { id: string; title: string; created_at: string }[];
 }
-export function ServiceRequests({ code, family, compact = false, applicationId }: {
-  code?: string; family?: "security" | "compliance"; compact?: boolean; applicationId?: string;
+export function ServiceRequests({ code, family, compact = false, applicationId, refreshToken = 0 }: {
+  code?: string; family?: "security" | "compliance"; compact?: boolean; applicationId?: string; refreshToken?: number;
 }) {
   const { organization } = useAccount();
   const [items, setItems] = useState<RequestItem[] | null>(null);
@@ -28,7 +28,7 @@ export function ServiceRequests({ code, family, compact = false, applicationId }
       if (active) { setItems(result.requests); setTruncated(!!result.truncated); }
     }).catch(failure => { if (active) setError(failure.message); });
     return () => { active = false; };
-  }, [organization, code, family, applicationId, refresh]);
+  }, [organization, code, family, applicationId, refresh, refreshToken]);
   useEffect(() => {
     const update = () => setRefresh(value => value + 1);
     window.addEventListener("launchcomply:service-request-submitted", update);
