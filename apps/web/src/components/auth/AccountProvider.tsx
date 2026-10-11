@@ -38,6 +38,7 @@ interface AccountContextValue {
   error: string | null;
   chooseOrganization: (id: string) => void;
   logout: () => void;
+  refreshAccount: () => void;
 }
 const Context = createContext<AccountContextValue>({
   user: null,
@@ -46,6 +47,7 @@ const Context = createContext<AccountContextValue>({
   error: null,
   chooseOrganization: () => {},
   logout: () => {},
+  refreshAccount: () => {},
 });
 export const useAccount = () => useContext(Context);
 
@@ -63,6 +65,8 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+  const refreshAccount = () => setRevision(value => value + 1);
   const logout = useCallback(() => {
     setAuthToken(null);
     setActiveOrganizationId(null);
@@ -71,7 +75,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setOrganization(null);
     setLoading(false);
-    router.replace("/login");
+    router.replace("/");
   }, [router]);
   useEffect(() => {
     if (!protectedPage) {
@@ -128,7 +132,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener("launchcomply:unauthorized", expired);
       window.removeEventListener("storage", storageChanged);
     };
-  }, [protectedPage, logout, router]);
+  }, [protectedPage, logout, router, revision]);
   const chooseOrganization = (id: string) => {
     const selected = user?.organizations.find((item) => item.id === id);
     if (selected) {
@@ -138,7 +142,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
   };
   return (
     <Context.Provider
-      value={{ user, organization, loading, error, chooseOrganization, logout }}
+      value={{ user, organization, loading, error, chooseOrganization, logout, refreshAccount }}
     >
       {children}
     </Context.Provider>

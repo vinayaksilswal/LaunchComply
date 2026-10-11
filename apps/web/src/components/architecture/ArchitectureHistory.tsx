@@ -1,0 +1,32 @@
+"use client";
+import { useEffect, useState } from "react";
+import { History, X } from "lucide-react";
+import { Dialog } from "@/components/ui/Dialog";
+import { apiClient } from "@/lib/api";
+import { CloudDiagram, type ArchitectureGraph, diagramBounds } from "./CloudDiagram";
+import { businessBoundaries } from "./businessArchitecture";
+import type { DeploymentRequirements } from "./ProductionDiagram";
+interface Version { id: string; version: string; created_at: string; components: number; source_commit?: string; restored_from?: { version: string } }
+interface Preview { id: string; version: string; graph: ArchitectureGraph; requirements?: DeploymentRequirements; source_changed?: boolean }
+export function ArchitectureHistory({ applicationId, currentId, dirty, disabled, canRestore, onRestore }: { applicationId: string; currentId: string; dirty: boolean; disabled: boolean; canRestore: boolean; onRestore: (versionId: string) => Promise<boolean> }) {
+  const [open, setOpen] = useState(false), [items, setItems] = useState<Version[]>([]), [offset, setOffset] = useState(0), [hasMore, setHasMore] = useState(false);
+  const [previewId, setPreviewId] = useState(""), [preview, setPreview] = useState<Preview | null>(null), [error, setError] = useState(""), [loading, setLoading] = useState(false), [restoring, setRestoring] = useState(false);
+  useEffect(() => { setOpen(false); setOffset(0); setPreview(null); setPreviewId(""); }, [applicationId]);
+  useEffect(() => {
+    if (!open) return; let active = true; setLoading(true); setError("");
+    apiClient<{ versions: Version[]; has_more: boolean }>(`/architecture/workspace/${applicationId}/versions`, { params: { offset } }).then(result => { if (active) { setItems(result.versions); setHasMore(result.has_more); setPreviewId(result.versions[0]?.id || ""); } }).catch(failure => { if (active) setError(failure.message); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [open, applicationId, currentId, offset]);
+  useEffect(() => {
+    if (!open || !previewId) return; let active = true; setPreview(null); setError("");
+    apiClient<Preview>(`/architecture/workspace/${applicationId}/versions/${previewId}`).then(result => { if (active) setPreview(result); }).catch(failure => { if (active) setError(failure.message); });
+    return () => { active = false; };
+  }, [open, applicationId, previewId]);
+  const graph = preview?.graph || null;
+  const boundaries = graph ? businessBoundaries(graph, preview?.requirements) : [];
+  const bounds = graph ? diagramBounds(graph, true, boundaries) : { width: 720, height: 400 };
+  return <><button disabled={disabled} onClick={() => { setOffset(0); setOpen(true); }} className="inline-flex items-center gap-1.5 rounded-lg border px-2 py-1.5 text-xs disabled:opacity-40"><History className="h-3.5 w-3.5" />History</button>{open && <Dialog label="Saved architecture history" busy={restoring} onDismiss={() => setOpen(false)} className="max-w-5xl"><div className="space-y-4 p-5"><header className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">Saved architectures</h2><p className="mt-1 text-sm text-slate-500">Preview an earlier design. Restoring creates a new version; all saved versions remain available.</p></div><button aria-label="Close architecture history" disabled={restoring} onClick={() => setOpen(false)}><X className="h-5 w-5" /></button></header>{error && <p role="alert" className="text-sm text-rose-700">{error}</p>}
+      <div className="grid gap-4 md:grid-cols-[240px_1fr]"><div className="max-h-[55vh] space-y-2 overflow-auto">{loading && <p role="status" className="text-sm text-slate-500">Loading saved versions…</p>}{items.map(item => <button key={item.id} disabled={restoring} aria-pressed={previewId === item.id} onClick={() => setPreviewId(item.id)} className={`w-full rounded-lg border p-3 text-left text-sm ${previewId === item.id ? "border-cyan-500 bg-cyan-50" : "hover:bg-slate-50"}`}><strong>{item.version}{item.id === currentId ? " · Current" : ""}</strong><span className="mt-1 block text-xs text-slate-500">{new Date(item.created_at).toLocaleString()} · {item.components} components</span>{item.restored_from && <span className="mt-1 block text-xs text-slate-500">Restored from {item.restored_from.version}</span>}</button>)}<div className="flex justify-between gap-2 pt-2 text-xs"><button disabled={!offset || loading || restoring} onClick={() => setOffset(value => Math.max(0, value - 20))} className="rounded-lg border p-2 disabled:opacity-40">Newer</button><button disabled={!hasMore || loading || restoring} onClick={() => setOffset(value => value + 20)} className="rounded-lg border p-2 disabled:opacity-40">Older</button></div></div>
+      <div className="space-y-3 overflow-hidden"><h3 className="font-semibold">{preview?.version || "Version preview"}</h3><div className="max-h-[48vh] overflow-auto rounded-lg border bg-slate-50 p-3">{graph ? <CloudDiagram graph={graph} boundaries={boundaries} zoom={Math.min(1, 620 / bounds.width, 400 / bounds.height)} onSelect={() => {}} /> : <p role="status" className="text-sm text-slate-500">Loading the saved design…</p>}</div>{preview?.source_changed && <p className="text-xs text-amber-800">This version has older source findings. Refresh code findings before editing or approving the restored design.</p>}<p className="text-xs text-slate-500">{dirty ? "Save or undo your unsaved changes before restoring." : "Restored designs require a new approval. No cloud resources are changed."}</p><button disabled={!preview || preview.id === currentId || dirty || disabled || !canRestore || restoring} onClick={async () => { if (!preview) return; setError(""); setRestoring(true); try { if (await onRestore(preview.id)) setOpen(false); else setError("This version could not be restored. Close history to review the workspace error, then refresh and try again."); } catch (failure) { setError(failure instanceof Error ? failure.message : "Unable to restore this version."); } finally { setRestoring(false); } }} className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40">{restoring ? "Restoring…" : "Restore this architecture"}</button></div></div>
+    </div></Dialog>}</>;
+}

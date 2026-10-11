@@ -10,6 +10,8 @@ export interface DeploymentRequirements {
   region: string;
   availability: "SINGLE_AZ" | "MULTI_AZ" | "MULTI_REGION";
   secondary_region: string | null;
+  sizing_workload_id?: string | null;
+  requests_per_second_per_replica?: number | null;
 }
 interface Instance { key: string; node: ArchitectureNode; x: number; y: number; region: number; az: number; role: string; }
 interface Boundary { label: string; x: number; y: number; width: number; height: number; kind: "region" | "vpc" | "az" | "subnet"; }

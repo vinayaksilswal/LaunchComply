@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import type { ArchitectureGraph, ArchitectureNode } from "./CloudDiagram";
 import { arrangeBusinessArchitecture, isPlatformService } from "./businessArchitecture";
 import { networkPlacement } from "./networkPlacement";
+import { privateStorageProposal } from "./privateStorage";
 
 const frontendCandidate = (node: ArchitectureNode) => node.zone === "APPLICATION" && /frontend|web app|web application/i.test(`${node.label} ${node.description}`) && !/\bapi\b|backend|worker/i.test(node.label);
 const backendCandidate = (node: ArchitectureNode) => node.zone === "APPLICATION" && !frontendCandidate(node) && !isPlatformService(node);
@@ -39,7 +40,7 @@ function secureTrafficProposal(graph: ArchitectureGraph, frontendIds: string[], 
   }
   link(apiId, backendId, "HTTPS private target · proposed");
   if (nodes.length > 80 || edges.length > 160) throw new Error("This change exceeds the workspace diagram limit. Reduce the selection first.");
-  return arrangeBusinessArchitecture({ nodes, edges });
+  return arrangeBusinessArchitecture(privateStorageProposal({ nodes, edges }, nodes.filter(node => /\bs3\b/i.test(node.service) && !/endpoint/i.test(node.service)).map(node => node.id)));
 }
 
 export function SecureTrafficDesign({ graph, disabled, onApply }: { graph: ArchitectureGraph; disabled: boolean; onApply: (graph: ArchitectureGraph) => void }) {
@@ -55,7 +56,7 @@ export function SecureTrafficDesign({ graph, disabled, onApply }: { graph: Archi
       <p className="mt-2 text-sm leading-6 text-slate-600">Choose the frontends that should call this backend. This records your intended connection; source endpoints and live access remain unverified.</p>
       <fieldset className="my-4 space-y-2"><legend className="mb-2 text-xs font-semibold">Public-tier frontend containers</legend>{candidates.map(node => <label key={node.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={frontends.includes(node.id)} onChange={event => setFrontends(current => event.target.checked ? [...current, node.id] : current.filter(id => id !== node.id))} />{node.label}</label>)}</fieldset>
       <label className="block text-xs font-semibold">Private backend<select value={backend} onChange={event => setBackend(event.target.value)} className="mt-1 w-full rounded-lg border bg-white p-2 text-sm">{backends.map(node => <option key={node.id} value={node.id}>{node.label} · {node.service}</option>)}</select></label>
-      <ul className="my-4 space-y-2 text-xs leading-5 text-slate-600"><li>Browser → HTTPS API ingress → private backend. No public backend IP; ingress security group only.</li><li>Frontend containers sit in public subnets behind separate web HTTPS ingress. Existing CDN remains outside the VPC.</li><li>Selected frontend routes are replaced. Existing backend data dependencies stay labelled as inferred. CloudWatch and build services stay separate, with no traffic arrows.</li><li>Containers, routing, authentication, TLS certificates, CORS, ports and health checks need implementation review. No AWS changes are executed.</li></ul>
+      <ul className="my-4 space-y-2 text-xs leading-5 text-slate-600"><li>Browser → HTTPS API ingress → private backend. No public backend IP; ingress security group only.</li><li>Frontend containers sit in public subnets behind separate web HTTPS ingress. Existing CDN remains outside the VPC.</li><li>Databases/cache stay private. S3 is proposed as private managed storage outside the VPC, with Block Public Access and a gateway endpoint path from existing workload consumers. Bucket usage, IAM, policies, routes and region need review.</li><li>Selected frontend routes are replaced. Existing backend data dependencies stay labelled as inferred. CloudWatch and build services stay separate, with no traffic arrows.</li><li>Containers, routing, authentication, TLS certificates, CORS, ports and health checks need implementation review. No AWS changes are executed.</li></ul>
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       <div className="mt-4 flex justify-end gap-2"><button onClick={() => modal.current?.close()} className="rounded-lg border px-3 py-2 text-sm">Cancel</button><button disabled={disabled || !frontends.length || !backend} onClick={() => { try { onApply(secureTrafficProposal(graph, frontends, backend)); modal.current?.close(); } catch (failure) { setError(failure instanceof Error ? failure.message : "Unable to prepare this design."); } }} className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40">Apply to local draft</button></div>
     </dialog>

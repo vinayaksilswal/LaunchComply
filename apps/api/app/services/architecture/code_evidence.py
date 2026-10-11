@@ -57,10 +57,21 @@ def eligible(path):
 def inspect_sources(sources, total_candidates):
     modules = []
     for path, raw in sorted(sources.items()):
-        imports, entries = set(), set()
+        imports, entries, environment_keys = set(), set(), []
         language, status = ("Python" if path.endswith(".py") else "JavaScript / TypeScript"), "INSPECTED"
         try:
             text = raw.decode("utf-8")
+            # Names and line numbers only. Never retain literals or environment values.
+            patterns = [r"\b(?:os\.)?(?:getenv|environ\.get)\(\s*['\"]([A-Za-z_][A-Za-z0-9_]{0,79})['\"]",
+                        r"\b(?:os\.)?environ\[\s*['\"]([A-Za-z_][A-Za-z0-9_]{0,79})['\"]",
+                        r"\b(?:process\.env|import\.meta\.env)\.([A-Za-z_][A-Za-z0-9_]{0,79})\b",
+                        r"\bprocess\.env\[\s*['\"]([A-Za-z_][A-Za-z0-9_]{0,79})['\"]"]
+            for number, line in enumerate(text.splitlines(), 1):
+                if line.lstrip().startswith(("#", "//", "*")): continue
+                for pattern in patterns:
+                    for key in re.findall(pattern, line):
+                        if len(environment_keys) < 60 and {"name": key, "line": number} not in environment_keys:
+                            environment_keys.append({"name": key, "line": number})
             if language == "Python":
                 tree = ast.parse(text)
                 for node in ast.walk(tree):
@@ -82,7 +93,7 @@ def inspect_sources(sources, total_candidates):
             status = "UNPARSED"
         imports = sorted(value for value in imports if re.fullmatch(r"[@a-zA-Z0-9_./-]{1,200}", value))[:60]
         modules.append({"id": "src-" + hashlib.sha256(path.encode()).hexdigest()[:16], "path": path,
-            "language": language, "area": source_area(path), "status": status, "imports": imports, "entry_points": sorted(entries)[:20]})
+            "language": language, "area": source_area(path), "status": status, "imports": imports, "entry_points": sorted(entries)[:20], "environment_keys": environment_keys})
     lookup = {item["path"]: item["id"] for item in modules}
     links = set()
     for module in modules:

@@ -31,6 +31,12 @@ export const MAIN_NAV = [
   { name: "Business architecture", href: "/dashboard/architecture", icon: Network },
   { name: "Deployments", href: "/dashboard/deployments", icon: Rocket },
   { name: "Service requests", href: "/dashboard/services", icon: LifeBuoy },
+  { name: "Security", href: "/dashboard/security", icon: ShieldCheck },
+  { name: "Compliance", href: "/dashboard/compliance", icon: FileCheck2 },
+  { name: "Team", href: "/dashboard/team", icon: Users },
+  { name: "Billing", href: "/dashboard/billing", icon: DollarSign },
+  { name: "Support", href: "/dashboard/support", icon: LifeBuoy },
+  { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 const groups = [
   {
@@ -46,8 +52,6 @@ const groups = [
   {
     name: "Protect your business",
     items: [
-      { name: "Security", href: "/dashboard/security", icon: ShieldCheck },
-      { name: "Compliance", href: "/dashboard/compliance", icon: FileCheck2 },
       {
         name: "Evidence & controls",
         href: "/dashboard/assurance",
@@ -55,23 +59,13 @@ const groups = [
       },
     ],
   },
-  {
-    name: "Business settings",
-    items: [
-      { name: "Team", href: "/dashboard/team", icon: Users },
-      { name: "Business account", href: "/dashboard/account", icon: Settings },
-      { name: "Billing", href: "/dashboard/billing", icon: DollarSign },
-      { name: "Support", href: "/dashboard/support", icon: LifeBuoy },
-    ],
-  },
+
 ];
 export function Sidebar() {
   const { user, organization, loading, error, chooseOrganization, logout } =
     useAccount();
   const pathname = usePathname();
   const [mobile, setMobile] = useState(false);
-  const [railGroup, setRailGroup] = useState<string | null>(null);
-  useEffect(() => setRailGroup(null), [pathname]);
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
     const close = () => {
@@ -88,7 +82,7 @@ export function Sidebar() {
       .map((part) => part[0])
       .join("")
       .toUpperCase() || "";
-  const item = (entry: { name: string; href: string; icon: typeof Boxes }) => {
+  const item = (entry: { name: string; href: string; icon: typeof Boxes }, rail = false) => {
     const active =
       entry.href === "/dashboard"
         ? pathname === entry.href
@@ -98,14 +92,15 @@ export function Sidebar() {
       <Link
         key={entry.href}
         href={entry.href}
+        aria-label={entry.name}
         aria-current={active ? "page" : undefined}
         onClick={() => setMobile(false)}
-        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${active ? "bg-cyan-50 text-cyan-900 font-semibold" : "text-slate-600 hover:bg-slate-50"}`}
+        className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${rail ? "whitespace-nowrap" : ""} ${active ? "bg-cyan-50 text-cyan-900 font-semibold" : "text-slate-600 hover:bg-slate-50"}`}
       >
         <Icon
           className={`w-[18px] h-[18px] shrink-0 ${active ? "text-cyan-700" : "text-slate-400"}`}
         />
-        {entry.name}
+        <span className={rail ? "hidden group-hover/sidebar:inline group-focus-within/sidebar:inline" : ""}>{entry.name}</span>
       </Link>
     );
   };
@@ -162,7 +157,7 @@ export function Sidebar() {
         aria-label="Main navigation"
         className="flex-1 min-h-0 overflow-auto p-3 space-y-5"
       >
-        <div className="space-y-1">{MAIN_NAV.map(item)}</div>
+        <div className="space-y-1">{MAIN_NAV.map(entry => item(entry))}</div>
         {groups.map((group) => (
           <details
             key={group.name}
@@ -181,7 +176,7 @@ export function Sidebar() {
               <span>{group.name}</span>
               <ChevronDown className="w-3.5 h-3.5 group-open:rotate-180" />
             </summary>
-            <div className="space-y-0.5 mt-2">{group.items.map(item)}</div>
+            <div className="space-y-0.5 mt-2">{group.items.map(entry => item(entry))}</div>
           </details>
         ))}
         {user?.is_platform_admin && (
@@ -211,7 +206,7 @@ export function Sidebar() {
           {user ? (
             <>
               <Link
-                href="/dashboard/account"
+                href="/dashboard/settings"
                 className="flex items-center gap-2 min-w-0 flex-1"
               >
                 <span className="w-9 h-9 rounded-full bg-cyan-50 text-cyan-800 flex justify-center items-center text-xs font-semibold shrink-0">
@@ -265,31 +260,30 @@ export function Sidebar() {
           <Menu className="w-5 h-5" />
         </button>
       </div>
-      <aside aria-label="Workspace icon navigation" onKeyDown={event => { if (event.key === "Escape") setRailGroup(null); }} className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-16 border-r border-slate-200 z-40 bg-white">
-        <Link href="/dashboard" aria-label="LaunchComply home" title="LaunchComply" className="m-3 p-2 rounded-xl bg-slate-900 text-white"><ShieldCheck className="w-6 h-6" /></Link>
-        <nav aria-label="Main navigation" className="flex-1 min-h-0 py-2 space-y-2">
-          {MAIN_NAV.map(entry => {
-            const Icon = entry.icon, active = pathname === entry.href || (entry.href !== "/dashboard" && pathname.startsWith(`${entry.href}/`));
-            return <Link key={entry.href} href={entry.href} aria-label={entry.name} aria-current={active ? "page" : undefined} className={`group relative mx-2 flex h-11 items-center justify-center rounded-xl ${active ? "bg-cyan-50 text-cyan-800" : "text-slate-500 hover:bg-slate-50"}`}><Icon className="w-5 h-5" /><span className="pointer-events-none invisible group-hover:visible group-focus-visible:visible absolute left-full ml-2 rounded-lg border bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-lg whitespace-nowrap">{entry.name}</span></Link>;
-          })}
+      <aside aria-label="Workspace navigation" className="group/sidebar hidden lg:flex flex-col fixed inset-y-0 left-0 w-16 hover:w-72 focus-within:w-72 transition-[width] duration-200 motion-reduce:transition-none overflow-hidden border-r border-slate-200 z-40 bg-white hover:shadow-xl focus-within:shadow-xl">
+        <Link href="/dashboard" aria-label="LaunchComply home" className="m-3 flex items-center gap-3 whitespace-nowrap font-bold text-lg"><span className="p-2 rounded-xl bg-slate-900 text-white shrink-0"><ShieldCheck className="w-6 h-6" /></span><span className="hidden group-hover/sidebar:inline group-focus-within/sidebar:inline">LaunchComply</span></Link>
+        <div className="hidden group-hover/sidebar:block group-focus-within/sidebar:block mx-3 mb-3 rounded-lg border px-3 py-2">
+          <p className="uppercase text-[9px] tracking-wider text-slate-400">Your business</p>
+          {user && user.organizations.length > 1 ? <select aria-label="Active business" value={organization?.id || ""} onChange={event => chooseOrganization(event.target.value)} className="mt-1 w-full bg-white text-sm font-semibold">{user.organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select> : <p className="mt-1 text-sm font-semibold truncate">{organization?.name || "Your business"}</p>}
+        </div>
+        <nav aria-label="Main navigation" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 py-2 space-y-3">
+          <div className="space-y-1">{MAIN_NAV.map(entry => item(entry, true))}</div>
           <div className="mx-3 border-t border-slate-100" />
           {groups.map((group, index) => {
             const Icon = [Activity, ShieldCheck, Settings][index];
-            return <div key={group.name} className="group relative px-2" onMouseEnter={() => setRailGroup(group.name)} onFocusCapture={() => setRailGroup(group.name)} onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setRailGroup(null); }} onMouseLeave={event => { if (!event.currentTarget.contains(document.activeElement)) setRailGroup(current => current === group.name ? null : current); }}>
-              <button aria-label={group.name} aria-expanded={railGroup === group.name} onClick={() => setRailGroup(current => current === group.name ? null : group.name)} className="flex w-full h-11 justify-center items-center rounded-xl text-slate-500 hover:bg-slate-50"><Icon className="w-5 h-5" /></button>
-              <div className={`${railGroup === group.name ? "block" : "hidden"} absolute left-full top-0 w-64 rounded-xl border bg-white p-3 shadow-xl`}>
-                <p className="px-3 pb-2 text-[10px] uppercase tracking-wide font-semibold text-slate-400">{group.name}</p>
-                {group.items.map(item)}
-                {index === 2 && user && user.organizations.length > 1 && <label className="mt-2 block px-3 text-xs text-slate-600">Active business<select aria-label="Active business" value={organization?.id || ""} onChange={event => chooseOrganization(event.target.value)} className="mt-1 w-full rounded border p-2 bg-white">{user.organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></label>}
-              </div>
-            </div>;
+            return <details key={group.name} className="group/section" open={group.items.some(entry => pathname === entry.href || pathname.startsWith(`${entry.href}/`)) ? true : undefined}>
+              <summary aria-label={group.name} className="list-none cursor-pointer flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-500 hover:bg-slate-50 whitespace-nowrap"><Icon className="w-[18px] h-[18px] shrink-0" /><span className="hidden group-hover/sidebar:inline group-focus-within/sidebar:inline text-[11px] font-semibold uppercase tracking-wide">{group.name}</span><ChevronDown className="hidden group-hover/sidebar:block group-focus-within/sidebar:block ml-auto w-3.5 h-3.5 group-open/section:rotate-180" /></summary>
+              <div className="hidden group-hover/sidebar:block group-focus-within/sidebar:block space-y-0.5 mt-1">{group.items.map(entry => item(entry, true))}</div>
+            </details>;
           })}
-          {user?.is_platform_admin && <Link href="/platform-admin" aria-label="Platform administration" title="Platform administration" className="mx-2 flex h-11 items-center justify-center rounded-xl text-slate-500 hover:bg-slate-50"><Settings className="w-5 h-5" /></Link>}
+          {user?.is_platform_admin && <div className="border-t pt-2">{item({name:"Platform administration",href:"/platform-admin",icon:Settings},true)}</div>}
         </nav>
         <div className="border-t p-2 space-y-2">
-          <button aria-label="Find a page" title="Find a page · Ctrl+K" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))} className="w-full flex justify-center p-2 text-slate-500"><Search className="w-5 h-5" /></button>
-          <Link href="/dashboard/account" aria-label="Signed-in account" title={user?.full_name || "Business account"} className="mx-auto flex w-9 h-9 rounded-full bg-cyan-50 text-cyan-800 items-center justify-center text-xs font-semibold">{initials || <Users className="w-4 h-4" />}</Link>
-          <button aria-label="Sign out" title="Sign out" onClick={logout} className="w-full flex justify-center p-2 text-slate-400 hover:text-slate-900"><LogOut className="w-4 h-4" /></button>
+          <button aria-label="Find a page" onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true }))} className="w-full flex items-center gap-3 px-3 py-2 text-slate-500 whitespace-nowrap"><Search className="w-[18px] h-[18px] shrink-0" /><span className="hidden group-hover/sidebar:inline group-focus-within/sidebar:inline text-xs">Find a page · Ctrl+K</span></button>
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard/settings" aria-label="Signed-in account" className="flex items-center gap-2 min-w-0 flex-1"><span className="ml-1 flex w-9 h-9 shrink-0 rounded-full bg-cyan-50 text-cyan-800 items-center justify-center text-xs font-semibold">{initials || <Users className="w-4 h-4" />}</span><span className="hidden group-hover/sidebar:block group-focus-within/sidebar:block min-w-0"><strong className="block text-xs truncate">{user?.full_name || "Business account"}</strong><span className="block text-[11px] truncate text-slate-500">{user?.email}</span></span></Link>
+            <button aria-label="Sign out" onClick={logout} className="hidden group-hover/sidebar:block group-focus-within/sidebar:block p-2 text-slate-400 hover:text-slate-900"><LogOut className="w-4 h-4" /></button>
+          </div>
         </div>
       </aside>
       {mobile && (

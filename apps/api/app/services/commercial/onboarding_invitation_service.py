@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func
 
 from app.models.auth import User, Organization, OrganizationMembership, MembershipRole
 from app.models.auth_commercial import (
@@ -35,6 +36,28 @@ class OnboardingInvitationService:
         invited_by_user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Creates a cryptographically secure one-time team invitation."""
+        # Serialize membership mutations for a business, including invitation acceptance.
+        org = (await db.execute(select(Organization).where(Organization.id == organization_id).with_for_update())).scalar_one_or_none()
+        actor = (await db.execute(select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.user_id == invited_by_user_id,
+            OrganizationMembership.is_active == True))).scalars().first()
+        if not org or not org.is_active or not actor or actor.role not in {MembershipRole.OWNER, MembershipRole.ADMIN}:
+            raise ValueError("Business owner or administrator access is required.")
+        if role == MembershipRole.OWNER or (role == MembershipRole.ADMIN and actor.role != MembershipRole.OWNER):
+            raise ValueError("Only the business owner can invite administrators. Ownership cannot be assigned by invitation.")
+        email = email.strip().lower()
+        existing = (await db.execute(select(OrganizationMembership).join(User, User.id == OrganizationMembership.user_id).where(
+            OrganizationMembership.organization_id == organization_id, OrganizationMembership.is_active == True,
+            func.lower(User.email) == email))).scalars().first()
+        if existing:
+            raise ValueError("This person is already an active team member.")
+        pending = (await db.execute(select(Invitation).where(Invitation.organization_id == organization_id,
+            func.lower(Invitation.email) == email, Invitation.status == InvitationStatus.PENDING))).scalars().all()
+        if any(item.expires_at > datetime.utcnow() for item in pending):
+            raise ValueError("A pending invitation already exists. Revoke it before issuing a replacement.")
+        for item in pending:
+            item.status = InvitationStatus.EXPIRED
         raw_token = secrets.token_urlsafe(32)
         token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
         expires_at = datetime.utcnow() + timedelta(days=7)
@@ -78,6 +101,18 @@ class OnboardingInvitationService:
         if not invite:
             raise ValueError("Invitation not found or already used.")
 
+        org = (await db.execute(select(Organization).where(Organization.id == invite.organization_id).with_for_update())).scalar_one_or_none()
+        invite = (await db.execute(select(Invitation).where(Invitation.id == invite.id).with_for_update()
+            .execution_options(populate_existing=True))).scalar_one()
+        if not org or not org.is_active or invite.status != InvitationStatus.PENDING or invite.role == MembershipRole.OWNER:
+            raise ValueError("Invitation is no longer available.")
+        issuer = (await db.execute(select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == invite.organization_id,
+            OrganizationMembership.user_id == invite.invited_by_user_id,
+            OrganizationMembership.is_active == True))).scalars().first()
+        if not issuer or issuer.role not in {MembershipRole.OWNER, MembershipRole.ADMIN} or (invite.role == MembershipRole.ADMIN and issuer.role != MembershipRole.OWNER):
+            raise ValueError("The inviting administrator no longer has permission. Ask for a new invitation.")
+
         if invite.email.strip().casefold() != user.email.strip().casefold():
             raise ValueError("Sign in with the email address this invitation was sent to.")
 
@@ -102,7 +137,7 @@ class OnboardingInvitationService:
                 is_active=True
             )
             db.add(membership)
-        else:
+        elif not membership.is_active:
             membership.role = invite.role
             membership.is_active = True
 
@@ -112,7 +147,7 @@ class OnboardingInvitationService:
 
         return {
             "organization_id": invite.organization_id,
-            "role": invite.role.value,
+            "role": membership.role.value,
             "status": "ACCEPTED"
         }
 

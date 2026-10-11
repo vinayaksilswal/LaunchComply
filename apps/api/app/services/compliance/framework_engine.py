@@ -354,16 +354,16 @@ class ComplianceFrameworkEngine:
                 impl = ControlImplementation(
                     organization_id=organization_id,
                     control_id=control.id,
-                    status="IMPLEMENTED",
-                    owner="compliance@launchcomply.io",
-                    implementation_description=f"Automated and procedural implementation of {control.title} via LaunchComply engine.",
+                    status="NOT_STARTED",
+                    owner="",
+                    implementation_description="",
                     applicable=True,
                     implementation_type=control.default_implementation_type,
                     frequency=control.default_frequency,
                     maturity="DEFINED",
-                    last_reviewed_at=datetime.utcnow() - timedelta(days=15),
-                    next_review_at=datetime.utcnow() + timedelta(days=75),
-                    effective_from=datetime.utcnow() - timedelta(days=90),
+                    last_reviewed_at=None,
+                    next_review_at=None,
+                    effective_from=None,
                 )
                 db.add(impl)
         await db.flush()

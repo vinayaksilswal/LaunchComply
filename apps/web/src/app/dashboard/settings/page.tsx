@@ -1,2 +1,2 @@
-import { redirect } from "next/navigation";
-export default function Page() { redirect("/dashboard/account"); }
+import { AccountDetails } from "../account/AccountDetails";
+export default function Page() { return <AccountDetails />; }

@@ -10,8 +10,8 @@ interface RequestItem {
   quote?: { id: string; amount_minor: number; currency: string; is_real_payment_verified: boolean } | null;
   reports: { id: string; title: string; created_at: string }[];
 }
-export function ServiceRequests({ code, family, compact = false }: {
-  code?: string; family?: "security" | "compliance"; compact?: boolean;
+export function ServiceRequests({ code, family, compact = false, applicationId }: {
+  code?: string; family?: "security" | "compliance"; compact?: boolean; applicationId?: string;
 }) {
   const { organization } = useAccount();
   const [items, setItems] = useState<RequestItem[] | null>(null);
@@ -23,12 +23,12 @@ export function ServiceRequests({ code, family, compact = false }: {
     let active = true;
     setError(""); setItems(null);
     apiClient<{ requests: RequestItem[]; truncated?: boolean }>("/business-requests", {
-      params: { service_code: code, service_family: family },
+      params: { service_code: code, service_family: family, application_id: applicationId },
     }).then(result => {
       if (active) { setItems(result.requests); setTruncated(!!result.truncated); }
     }).catch(failure => { if (active) setError(failure.message); });
     return () => { active = false; };
-  }, [organization, code, family, refresh]);
+  }, [organization, code, family, applicationId, refresh]);
   useEffect(() => {
     const update = () => setRefresh(value => value + 1);
     window.addEventListener("launchcomply:service-request-submitted", update);
@@ -36,12 +36,12 @@ export function ServiceRequests({ code, family, compact = false }: {
   }, []);
   return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
     <header className="flex items-center justify-between border-b border-slate-100 p-5">
-      <h2 className="text-sm font-semibold">Service applications & reports</h2>
+      <h2 className="text-sm font-semibold">{family === "compliance" ? "Compliance applications & reports" : family === "security" ? "Security assessments & reports" : "Requests & reports"}</h2>
       <button type="button" onClick={() => setRefresh(value => value + 1)} aria-label="Refresh service applications" className="p-1.5 text-slate-500"><RefreshCw className="h-4 w-4" /></button>
     </header>
     {error ? <p role="alert" className="p-5 text-sm text-rose-700">{error}</p>
       : !items ? <p role="status" className="p-6 text-sm text-slate-500">Loading your service applications…</p>
-      : !items.length ? <div className="p-8 text-center"><FileText className="mx-auto h-7 w-7 text-slate-300" /><h3 className="mt-3 text-sm font-semibold">Apply to get started</h3><p className="mt-2 text-sm leading-6 text-slate-500">Your submitted requests, delivery status, and published reports will appear here.</p></div>
+      : !items.length ? <div className="p-5"><p className="text-sm text-slate-500">No submitted {family === "compliance" ? "compliance applications" : family === "security" ? "security assessments" : "service requests"}. Submitted requests and reports appear here.</p></div>
       : (compact ? items.slice(0, 3) : items).map(item => <article key={item.id} className="border-b border-slate-100 p-5 last:border-0">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h3 className="text-sm font-semibold"><Link href={`/dashboard/services/${item.id}`} className="hover:text-cyan-700">{item.title}</Link></h3><p className="mt-1 text-xs text-slate-500">Submitted {new Date(item.created_at).toLocaleString()} · Reference {item.id.slice(0, 8)}</p></div>

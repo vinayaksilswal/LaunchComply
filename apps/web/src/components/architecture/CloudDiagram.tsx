@@ -1,5 +1,7 @@
 "use client";
 import { forwardRef, useId } from "react";
+import { routeFlow, flowEvidence } from "./flowRouting";
+import { networkPlacement } from "./networkPlacement";
 import {
   Globe,
   Server,
@@ -53,8 +55,8 @@ export const architectureLayers = [
 
 export function diagramBounds(graph: ArchitectureGraph, compact = false, boundaries?: DiagramBoundary[]) {
   return {
-    width: Math.max(540, ...graph.nodes.map((n) => n.x + (compact ? 260 : 320)), ...(boundaries || []).map(b => (b.x || 0) + (b.width || 0) + 24)),
-    height: Math.max(320, ...graph.nodes.map((n) => n.y + (compact ? 144 : 180)), ...(boundaries || []).map(b => (b.y || 0) + (b.height || 0) + 24)),
+    width: Math.max(540, ...graph.nodes.map((n) => n.x + 320), ...(boundaries || []).map(b => (b.x || 0) + (b.width || 0) + 24)),
+    height: Math.max(320, ...graph.nodes.map((n) => n.y + 180), ...(boundaries || []).map(b => (b.y || 0) + (b.height || 0) + 24)),
   };
 }
 
@@ -70,11 +72,11 @@ export function arrangeArchitecture(
     const columns = Math.min(3, Math.ceil(nodes.length / 4));
     nodes.forEach((node, i) =>
       positions.set(node.id, {
-        x: left + (i % columns) * 250,
-        y: 90 + Math.floor(i / columns) * 140,
+        x: left + (i % columns) * 320,
+        y: 150 + Math.floor(i / columns) * 180,
       }),
     );
-    left += columns * 250 + 60;
+    left += columns * 320 + 60;
   }
   return {
     ...graph,
@@ -104,6 +106,8 @@ export function downloadArchitectureSvg(svg: SVGSVGElement | null, filename = "c
   if (!svg) return;
   const copy = svg.cloneNode(true) as SVGSVGElement;
   copy.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  copy.setAttribute("font-family", "Arial, Helvetica, sans-serif");
+  copy.style.fontFamily = "Arial, Helvetica, sans-serif";
   const box = svg.viewBox.baseVal;
   copy.setAttribute("width", String(box.width));
   copy.setAttribute("height", String(box.height));
@@ -153,7 +157,7 @@ export const CloudDiagram = forwardRef<
 ) {
   const id = useId().replace(/:/g, "");
   const compact = !code;
-  const cardWidth = compact ? 220 : 280, cardHeight = compact ? 104 : 136;
+  const cardWidth = 280, cardHeight = 136;
   const { width, height } = diagramBounds(graph, compact, boundaries);
   const related = new Set(
     graph.edges
@@ -168,6 +172,7 @@ export const CloudDiagram = forwardRef<
       width={width * zoom}
       height={height * zoom}
       viewBox={`0 0 ${width} ${height}`}
+      fontFamily="Arial, Helvetica, sans-serif"
       className="select-none touch-none"
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -226,9 +231,9 @@ export const CloudDiagram = forwardRef<
               height={boundary.height ?? Math.max(...nodes.map((n) => n.y + cardHeight)) - y + padding}
               rx="12"
               fill={boundary.color}
-              fillOpacity="0.018"
+              fillOpacity={boundary.id === "vpc" || boundary.id === "aws-cloud" ? 0 : 0.045}
               stroke={boundary.color}
-              strokeOpacity="0.45"
+              strokeOpacity={boundary.id === "aws-cloud" ? 0.75 : 0.5}
               strokeDasharray={
                 boundary.id.startsWith("network-") ? "5 4" : undefined
               }
@@ -237,20 +242,20 @@ export const CloudDiagram = forwardRef<
               x={x + 12}
               y={y + 11}
               width={Math.min(boundaryWidth - 24, boundary.label.length * 6 + 20)}
-              height="30"
+              height="34"
               rx="6"
               fill="white"
             />
             <text
               x={x + 22}
               y={y + 27}
-              fontSize="11"
+              fontSize={boundary.id === "aws-cloud" ? 17 : 14}
               fontWeight="600"
               fill={boundary.color}
             >
-              {lines(boundary.label, Math.max(24, Math.floor((boundaryWidth - 44) / 6))).map((line, i) => <tspan key={i} x={x + 22} dy={i ? 13 : 0}>{line}</tspan>)}
+              {lines(boundary.label, Math.max(22, Math.floor((boundaryWidth - 44) / 7))).map((line, i) => <tspan key={i} x={x + 22} dy={i ? 15 : 0}>{line}</tspan>)}
             </text>
-            {boundary.note && <text x={x + 16} y={y + (boundary.height || 0) - 25} fontSize="10" fill="#64748b">{lines(boundary.note, Math.max(24, Math.floor((boundaryWidth - 32) / 5.4))).map((line, i) => <tspan key={i} x={x + 16} dy={i ? 13 : 0}>{line}</tspan>)}</text>}
+            {boundary.note && <text x={x + 16} y={y + (boundary.height || 0) - 25} fontSize="11" fill="#64748b">{lines(boundary.note, Math.max(22, Math.floor((boundaryWidth - 32) / 6))).map((line, i) => <tspan key={i} x={x + 16} dy={i ? 13 : 0}>{line}</tspan>)}</text>}
           </g>
         );
       })}
@@ -291,31 +296,10 @@ export const CloudDiagram = forwardRef<
         const from = graph.nodes.find((n) => n.id === edge.source),
           to = graph.nodes.find((n) => n.id === edge.target);
         if (!from || !to) return null;
-        const dx = to.x - from.x,
-          dy = to.y - from.y;
-        const horizontal = Math.abs(dx) > Math.abs(dy);
-        const x1 = from.x + (horizontal ? (dx >= 0 ? cardWidth : 0) : cardWidth / 2),
-          y1 = from.y + (horizontal ? cardHeight / 2 : dy >= 0 ? cardHeight : 0);
-        const x2 = to.x + (horizontal ? (dx >= 0 ? 0 : cardWidth) : cardWidth / 2),
-          y2 = to.y + (horizontal ? cardHeight / 2 : dy >= 0 ? 0 : cardHeight);
-        const mx = (x1 + x2) / 2,
-          my = (y1 + y2) / 2;
-        let path = horizontal
-          ? `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`
-          : `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`;
-        let labelX = mx,
-          labelY = my;
-        // Keep long cross-layer links beside the cards instead of drawing through
-        // intervening resources. Short traffic links use the nearest ports.
-        if (!horizontal && Math.abs(dy) > 300) {
-          const corridor =
-            Math.max(from.x + cardWidth, to.x + cardWidth) + 24 + (i % 3) * 12;
-          const start = from.y + cardHeight / 2,
-            end = to.y + cardHeight / 2;
-          path = `M${from.x + cardWidth},${start} H${corridor} V${end} H${to.x + cardWidth}`;
-          labelX = corridor;
-          labelY = (start + end) / 2;
-        }
+        const routed = routeFlow(from, to, graph.nodes, i);
+        const path = routed.path, labelX = routed.x, labelY = routed.y;
+        const inferred = flowEvidence(edge.label).startsWith("Source signal");
+        const color = to.zone === "DATA" ? "#059669" : from.zone === "SUPPORT" || to.zone === "SUPPORT" ? "#b45309" : "#0e7490";
         const active = edge.source === selected || edge.target === selected;
         const label =
           edge.label.length > 35 ? edge.label.slice(0, 34) + "…" : edge.label;
@@ -330,13 +314,16 @@ export const CloudDiagram = forwardRef<
             <path
               d={path}
               fill="none"
-              stroke={active ? "#0891b2" : "#94a3b8"}
-              strokeWidth={active ? 2.5 : 1.6}
+              stroke={active ? "#0284c7" : code ? "#94a3b8" : color}
+              strokeWidth={active ? 2.8 : 1.8}
+              strokeDasharray={inferred ? "7 5" : undefined}
+              strokeLinejoin="round"
               markerEnd={`url(#${id}-arrow)`}
             />
+            {!code && <g aria-label={`Request flow ${i + 1}`}><circle cx={labelX} cy={labelY} r="12" fill="white" stroke={active ? "#0284c7" : color} strokeWidth="1.5" /><text x={labelX} y={labelY + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={color}>{i + 1}</text></g>}
             {(code || active) && <><rect
               x={labelX - label.length * 2.9 - 7}
-              y={labelY - 12}
+              y={labelY - (code ? 12 : 40)}
               width={label.length * 5.8 + 14}
               height="24"
               rx="7"
@@ -345,7 +332,7 @@ export const CloudDiagram = forwardRef<
             />
             <text
               x={labelX}
-              y={labelY + 4}
+              y={labelY + (code ? 4 : -24)}
               textAnchor="middle"
               fontSize="10"
               fill={active ? "#0e7490" : "#64748b"}
@@ -430,7 +417,7 @@ export const CloudDiagram = forwardRef<
               height="34"
               rx="9"
               fill={layer.color}
-              fillOpacity="0.08"
+              fillOpacity="0.14"
             />
             <Icon
               x={node.x + 23}
@@ -442,44 +429,44 @@ export const CloudDiagram = forwardRef<
             <text
               x={node.x + 60}
               y={node.y + 29}
-              fontSize={compact ? 13 : 12}
+              fontSize={compact ? 18 : 15}
               fontWeight="600"
               fill="#0f172a"
             >
-              {lines(node.label, compact ? 20 : 28).map((line, i) => (
-                <tspan key={i} x={node.x + 60} dy={i ? 15 : 0}>
+              {lines(node.label, compact ? 22 : 24).map((line, i) => (
+                <tspan key={i} x={node.x + 60} dy={i ? 21 : 0}>
                   {line}
                 </tspan>
               ))}
             </text>
-            <text x={node.x + 16} y={node.y + (compact ? 64 : 72)} fontSize={compact ? 12 : 11} fill="#475569">
-              {lines(node.service, compact ? 29 : 38, compact ? 1 : 2).map((line, i) => (
-                <tspan key={i} x={node.x + 16} dy={i ? 14 : 0}>
+            <text x={node.x + 16} y={node.y + 75} fontSize={compact ? 15 : 13} fill="#475569">
+              {lines(node.service, compact ? 32 : 34, 1).map((line, i) => (
+                <tspan key={i} x={node.x + 16} dy={i ? 17 : 0}>
                   {line}
                 </tspan>
               ))}
             </text>
             <line
               x1={node.x + 16}
-              y1={node.y + (compact ? 77 : 101)}
+              y1={node.y + 101}
               x2={node.x + cardWidth - 16}
-              y2={node.y + (compact ? 77 : 101)}
+              y2={node.y + 101}
               stroke="#f1f5f9"
             />
             <text
               x={node.x + 16}
-              y={node.y + (compact ? 94 : 121)}
-              fontSize="9"
+              y={node.y + 121}
+              fontSize="10"
               fontWeight="600"
               fill={layer.color}
             >
-              {code ? "STATIC CODE FINDING" : "PROPOSED SERVICE"}
+              {code ? "STATIC SOURCE" : /Proposed (\d+) replicas/i.test(node.description) ? `${/Proposed (\d+) replicas/i.exec(node.description)?.[1]} REPLICAS · PLAN` : ({ PUBLIC_FRONTEND: "PUBLIC FRONTEND", PUBLIC_INGRESS: "HTTPS INGRESS", PRIVATE_COMPUTE: "PRIVATE COMPUTE", PRIVATE_DATA: "ISOLATED DATA", VPC_ENDPOINT: "PRIVATE SERVICE ROUTE", PRIVATE_MANAGED_STORAGE: "PRIVATE MANAGED STORAGE", OUTSIDE_VPC: "MANAGED / GLOBAL", REVIEW: "PLACEMENT TO CONFIRM" }[networkPlacement(node)])}
             </text>
             <text
               x={node.x + cardWidth - 16}
-              y={node.y + (compact ? 94 : 121)}
+              y={node.y + 121}
               textAnchor="end"
-              fontSize="9"
+              fontSize="10"
               fill="#64748b"
             >
               {
@@ -487,7 +474,7 @@ export const CloudDiagram = forwardRef<
                   (e) => e.source === node.id || e.target === node.id,
                 ).length
               }{" "}
-              connections
+              links
             </text>
           </g>
         );

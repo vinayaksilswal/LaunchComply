@@ -43,7 +43,14 @@ import { useGraphHistory } from "./useGraphHistory";
 import { NetworkReview, networkPlacement } from "./networkPlacement";
 import { DesignReview, type SavedDesignReview } from "./DesignReview";
 import { SecureTrafficDesign } from "./SecureTrafficDesign";
-import { AssistantWindow, type AssistantDock } from "./AssistantWindow";
+import { AssistantWindow } from "./AssistantWindow";
+import { ArchitectureSettings, type EnvironmentConnection } from "./ArchitectureSettings";
+import { privateStorageProposal } from "./privateStorage";
+import { AwsServiceCatalog } from "./AwsServiceCatalog";
+import { ArchitectQuestions, type ArchitectQuestion } from "./ArchitectQuestions";
+import { ArchitectureHistory } from "./ArchitectureHistory";
+import { RequestFlows } from "./RequestFlows";
+const noConnections: EnvironmentConnection[] = [];
 
 type Zone = "EDGE" | "APPLICATION" | "DATA" | "SUPPORT";
 interface Node {
@@ -65,6 +72,7 @@ interface Graph {
   edges: Edge[];
 }
 interface Evidence {
+  environment_connections?: EnvironmentConnection[];
   repositories?: { id: string; full_name: string; branch: string; commit: string }[];
   modules?: SourceModule[];
   module_edges?: Edge[];
@@ -82,6 +90,7 @@ interface Evidence {
   }[];
 }
 interface Draft {
+  last_ai_questions?: ArchitectQuestion[];
   design_review?: SavedDesignReview;
   last_ai_workflow?: { framework: string; stages: string[]; missing_requirements: string[]; status: string };
   source_changed?: boolean;
@@ -140,15 +149,13 @@ export function ArchitectureCanvas() {
   const [preview, setPreview] = useState(false);
   const [newConnection, setNewConnection] = useState("");
   const [chatVisible, setChatVisible] = useState(true);
-  const [assistantDock, setAssistantDock] = useState<AssistantDock>("right");
-  const [assistantMinimized, setAssistantMinimized] = useState(false);
-  const [assistantMaximized, setAssistantMaximized] = useState(false);
+  const [assistantMinimized, setAssistantMinimized] = useState(true);
   const [reviewApproval, setReviewApproval] = useState(false);
   const [requirementsVisible, setRequirementsVisible] = useState(query.get("step") === "targets");
   useEffect(() => {
     if (window.matchMedia("(max-width: 767px)").matches && query.get("step") !== "targets") setChatVisible(false);
     if (query.get("step") === "targets") {
-      setView("cloud"); setRequirementsVisible(true); setChatVisible(true);
+      setView("cloud"); setRequirementsVisible(true); setChatVisible(true); setAssistantMinimized(false);
     } else if (["approval", "review"].includes(query.get("step") || "")) {
       setView("inventory"); setRequirementsVisible(false);
     }
@@ -209,7 +216,7 @@ export function ArchitectureCanvas() {
     setWorkspace((current) =>
       current ? { ...current, architecture: result } : current,
     );
-    if (["analyze", "requirements"].includes(operationName)) resetGraph(result.graph);
+    if (["analyze", "requirements", "restore"].includes(operationName)) resetGraph(result.graph);
     else setGraph(result.graph);
 
     setPreview(false);
@@ -288,7 +295,7 @@ export function ArchitectureCanvas() {
   }, [requirementsVisible, chatVisible, assistantMinimized]);
 
   const operation = async (name: string, path: string, data?: object) => {
-    if (!appId || busy) return;
+    if (!appId || busy) return false;
     setBusy(name);
     setError(null);
     try {
@@ -302,12 +309,14 @@ export function ArchitectureCanvas() {
       );
       if (name === "chat") setPrompt("");
       if (name === "requirements") setRequirementsVisible(false);
+      return true;
     } catch (failure) {
       setError(
         failure instanceof Error
           ? failure.message + (failure instanceof ApiError && failure.requestId ? ` Reference: ${failure.requestId.slice(0, 8)}.` : "")
           : "Unable to update architecture.",
       );
+      return false;
     } finally {
       setBusy(null);
     }
@@ -432,28 +441,29 @@ export function ArchitectureCanvas() {
   return (
     <div className="bg-white h-full min-h-0 overflow-hidden flex flex-col text-slate-900">
       {draft?.source_changed && <div role="alert" className="shrink-0 px-5 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-900">Repository links changed. This diagram shows previous sources. <button disabled={!!busy || !canRefresh} onClick={() => operation("analyze", "analyze")} className="font-semibold underline">Refresh code findings</button> before making or approving changes.</div>}
-      <header className="px-5 py-3 shrink-0 border-b border-slate-200 flex flex-wrap gap-4 items-center justify-between">
+      <header className="px-3 py-1.5 shrink-0 border-b border-slate-200 flex flex-wrap gap-2 items-center justify-between">
         <div className="flex gap-3 items-center">
-          <span className="p-2.5 rounded-xl bg-cyan-50 text-cyan-700">
-            <Network className="w-6 h-6" />
+          <span className="p-1.5 rounded-lg bg-cyan-50 text-cyan-700">
+            <Network className="w-4 h-4" />
           </span>
           <div>
-            <h1 className="text-xl font-bold tracking-tight">
+            <h1 className="text-base font-bold tracking-tight">
               Business architecture
             </h1>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="hidden text-xs text-slate-500 mt-1">
               Understand your business assets. Shape your cloud architecture.
             </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {draft && <button disabled={!!busy} onClick={() => { setRequirementsVisible(true); setChatVisible(true); setAssistantMinimized(false); requestAnimationFrame(() => requirementsPanel.current?.scrollIntoView({ block: "start", behavior: "smooth" })); }} className="rounded-lg border px-3 py-2 text-xs font-semibold">Traffic & availability</button>}
+          {draft && <ArchitectureHistory applicationId={appId} currentId={draft.id} dirty={dirty} disabled={!!busy} canRestore={canEdit} onRestore={versionId => operation("restore", "restore", { expected_id: draft.id, version_id: versionId })} />}
+          {draft && <ArchitectureSettings key={appId} graph={graph} requirements={draft.requirements} version={draft.version} connections={draft.evidence.environment_connections || noConnections} modules={draft.evidence.modules || []} disabled={!canEdit || !!busy} proposalPending={!!draft.proposal} saving={!!busy} errorMessage={error} blockedReason={dirty ? "Save your diagram changes before saving settings." : draft.proposal ? "Apply the pending AI proposal before saving settings." : undefined} onRequirements={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} onConnections={bindings => operation("environment", "environment-connections", { expected_id: draft.id, bindings })} onGraph={value => { setGraph(value); setArrangedView(false); setView("cloud"); }} />}
           <select
             aria-label="Business asset for architecture"
             disabled={loading || !!busy || dirty}
             value={appId}
             onChange={(event) => setAppId(event.target.value)}
-            className="border border-slate-200 rounded-lg px-3 py-2.5 text-sm max-w-60 bg-white"
+            className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs max-w-60 bg-white"
           >
             <option value="" disabled>
               Select application
@@ -467,7 +477,7 @@ export function ArchitectureCanvas() {
           <button
             disabled={!draft || !!busy}
             onClick={exportDraft}
-            className="border border-slate-200 rounded-lg p-2.5 disabled:opacity-40"
+            className="border border-slate-200 rounded-lg p-1.5 disabled:opacity-40"
             aria-label="Export draft JSON"
           >
             <Download className="w-4 h-4" />
@@ -478,7 +488,7 @@ export function ArchitectureCanvas() {
               draft &&
               operation("save", "save", { expected_id: draft.id, graph })
             }
-            className="inline-flex gap-2 items-center bg-slate-900 text-white rounded-lg px-4 py-2.5 text-sm font-semibold disabled:opacity-40"
+            className="inline-flex gap-2 items-center bg-slate-900 text-white rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-40"
           >
             <Save className="w-4 h-4" />
             {busy === "save" ? "Saving…" : "Save draft"}
@@ -501,7 +511,7 @@ export function ArchitectureCanvas() {
           {error && !accountError && <button aria-label="Dismiss architecture error" onClick={() => setError(null)} className="ml-auto p-1"><X className="w-4 h-4" /></button>}
         </div>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-2 shrink-0 border-b border-slate-200">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1 shrink-0 border-b border-slate-200">
         <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
           {[
             { id: "cloud", label: "Cloud deployment design" },
@@ -515,15 +525,16 @@ export function ArchitectureCanvas() {
                 setView(tab.id as "cloud" | "code" | "inventory");
                 setSelected(null);
               }}
-              className={`px-4 py-2 rounded-md text-xs font-semibold ${view === tab.id ? "bg-white shadow-sm text-slate-900" : "text-slate-500"}`}
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold ${view === tab.id ? "bg-white shadow-sm text-slate-900" : "text-slate-500"}`}
             >
               {tab.label}
             </button>
           ))}
+          <AwsServiceCatalog aiDisabled={!draft || dirty || !!busy || !!draft.proposal || !canEdit || !workspace?.capabilities.ai_chat} onAsk={message => { if (!draft) return; setChatVisible(true); setAssistantMinimized(false); void operation("chat", "chat", { expected_id: draft.id, message }); }} />
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs">
           {draft && <button disabled={!!busy || dirty || !canRefresh} onClick={() => operation("analyze", "analyze")} className="font-semibold text-cyan-700 disabled:opacity-40">{busy === "analyze" ? "Inspecting source…" : "Refresh code findings"}</button>}
-          <span className="text-amber-700 bg-amber-50 rounded-full px-3 py-1.5 border border-amber-100">
+          <span className="text-amber-700 bg-amber-50 rounded-full px-2 py-1 border border-amber-100">
             {dirty
               ? "Unsaved changes"
               : preview
@@ -537,16 +548,16 @@ export function ArchitectureCanvas() {
             className="inline-flex gap-1.5 text-cyan-700 font-semibold"
           >
             <Sparkles className="w-4 h-4" />
-            {chatVisible ? "Hide assistant" : "Open assistant"}
+            {chatVisible ? "Hide AI" : "Open AI"}
           </button>
         </div>
       </div>
       <div
-        className={`relative grid flex-1 min-h-0 overflow-hidden ${chatVisible && !assistantMinimized && !assistantMaximized && assistantDock !== "floating" ? assistantDock === "left" ? "md:grid-cols-[340px_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,1fr)_340px]" : "grid-cols-1"}`}
+        className="relative grid grid-cols-1 flex-1 min-h-0 overflow-hidden"
       >
         <section className="min-w-0 min-h-0 flex flex-col border-r border-slate-200">
-          <div className="flex flex-wrap justify-between gap-3 items-center px-4 py-2 shrink-0 border-b border-slate-100">
-            <div className="flex flex-wrap gap-4">
+          <div className="flex flex-wrap justify-between gap-2 items-center px-3 py-1.5 shrink-0 border-b border-slate-100">
+            <div className="flex flex-wrap gap-3">
               {(view === "code" ? sourceAreas : zones).map((zone) => (
                 <span
                   key={zone.id}
@@ -579,6 +590,7 @@ export function ArchitectureCanvas() {
                 }
               }} className="mr-2 max-w-48 border rounded-lg p-1.5 text-xs bg-white"><option value="">Find a component</option>{shown.nodes.map(item => <option key={item.id} value={item.id}>{view === "code" ? draft?.evidence.modules?.find(module => module.id === item.id)?.path || item.label : `${item.label} · ${item.service}`}</option>)}</select>}
               {view === "cloud" && <>
+                <RequestFlows graph={shown} onFocus={id => { setSelected(id); setChatVisible(true); setAssistantMinimized(false); }} />
                 <SecureTrafficDesign graph={graph} disabled={!draft || !!busy || preview || !canEdit || !!draft.proposal} onApply={next => { setGraph(next); setArrangedView(false); setCloudFocus(null); setSelected(null); autoFit.current = true; }} />
                 <button aria-label="Undo architecture change" title="Undo · Ctrl+Z / Cmd+Z" disabled={!canUndo || !!busy || preview || !canEdit} onClick={() => restoreHistory("undo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Undo2 className="w-4 h-4" /></button>
                 <button aria-label="Redo architecture change" title="Redo · Ctrl+Shift+Z / Ctrl+Y" disabled={!canRedo || !!busy || preview || !canEdit} onClick={() => restoreHistory("redo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Redo2 className="w-4 h-4" /></button>
@@ -608,6 +620,7 @@ export function ArchitectureCanvas() {
               >
                 <Download className="w-4 h-4" />
               </button>
+              <button disabled={!shown.nodes.length} onClick={() => { autoFit.current = false; setZoom(1); }} className="rounded-lg border px-2 py-1.5 text-xs disabled:opacity-40">Readable size</button>
               <button
                 aria-label="Zoom out"
                 disabled={!shown.nodes.length}
@@ -931,8 +944,8 @@ export function ArchitectureCanvas() {
           </div>
         </section>
         {chatVisible && (
-          <AssistantWindow dock={assistantDock} minimized={assistantMinimized} maximized={assistantMaximized} onDock={setAssistantDock} onMinimize={setAssistantMinimized} onMaximize={setAssistantMaximized} onClose={() => setChatVisible(false)}>
-            <div className="px-4 py-3 shrink-0 border-b flex items-center justify-between">
+          <AssistantWindow minimized={assistantMinimized} onMinimize={setAssistantMinimized} onClose={() => setChatVisible(false)}>
+            <div className="px-3 py-2 shrink-0 border-b flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <span className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
                   <Sparkles className="w-4 h-4" />
@@ -946,10 +959,10 @@ export function ArchitectureCanvas() {
                   </p>
                 </div>
               </div>
-              <button aria-label="Close architecture assistant" onClick={() => setChatVisible(false)} className="ml-2 rounded-lg p-2 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+
             </div>
             <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-4">
-              {draft && (requirementsVisible || !draft.requirements) && <div ref={requirementsPanel}><RequirementsForm key={appId} value={draft.requirements} disabled={!!busy || !canEdit} saveBlockedReason={dirty ? "Save your diagram changes before saving targets." : draft.proposal ? "Apply the pending AI proposal before saving targets." : undefined} saving={busy === "requirements"} onSave={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} /></div>}
+              {draft && requirementsVisible && <div ref={requirementsPanel}><RequirementsForm key={appId} value={draft.requirements} disabled={!!busy || !canEdit} saveBlockedReason={dirty ? "Save your diagram changes before saving targets." : draft.proposal ? "Apply the pending AI proposal before saving targets." : undefined} saving={busy === "requirements"} onSave={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} /></div>}
               {draft && !requirementsVisible && draft.requirements && <div className="rounded-xl border p-3 text-xs leading-5 text-slate-600"><strong className="text-slate-900">Deployment targets</strong><br />{draft.requirements.region} · {draft.requirements.availability.replaceAll("_", " ").toLowerCase()}<br />{draft.requirements.peak_requests_per_minute.toLocaleString()} requests/min · {draft.requirements.concurrent_users.toLocaleString()} users</div>}
               {draft && view === "cloud" && <NetworkReview graph={fullDesign} />}
               {draft && (
@@ -1022,11 +1035,16 @@ export function ArchitectureCanvas() {
                       <div className="rounded-lg border border-cyan-100 bg-cyan-50/40 p-3">
                         <label className="block text-xs font-semibold text-slate-700">VPC placement
                           <select aria-label="VPC placement" disabled={!!busy} value={networkPlacement(node)} onChange={event => {
+                            if (event.target.value === "PRIVATE_MANAGED_STORAGE") {
+                              try { setGraph(arrangeBusinessArchitecture(privateStorageProposal(graph, [node.id]))); setArrangedView(false); } catch (failure) { setError(failure instanceof Error ? failure.message : "Unable to plan private storage."); }
+                              return;
+                            }
                             const publicFrontend = event.target.value === "PUBLIC_FRONTEND";
                             const base = node.service.replace(/\s*·\s*(?:public frontend|private backend|private compute)/gi, "");
                             updateNode({ service: publicFrontend ? "ECS Fargate · public frontend" : `${/static hosting\s*(?:\/|or)\s*container/i.test(base) ? "ECS Fargate" : base} · private compute`.slice(0, 100), description: `${node.description.slice(0, 300)} Customer-selected ${publicFrontend ? "public frontend subnet; web-ingress SG only; browser API via authenticated HTTPS ingress" : "private application subnet; no public IP; ingress SG only"}. Routes, TLS, ports and egress require review.`.slice(0, 500) });
                           }} className="mt-1 w-full rounded border bg-white p-2 text-xs">
-                            <option value={networkPlacement(node)}>{networkPlacement(node) === "PUBLIC_FRONTEND" ? "Public frontend subnet · proposed" : networkPlacement(node) === "PRIVATE_COMPUTE" ? "Private application subnet · proposed" : networkPlacement(node) === "PRIVATE_DATA" ? "Isolated data subnet · proposed" : networkPlacement(node) === "PUBLIC_INGRESS" ? "Public HTTPS ingress subnet · proposed" : networkPlacement(node) === "OUTSIDE_VPC" ? "Managed/global service · outside VPC" : "Hosting decision required"}</option>
+                            <option value={networkPlacement(node)}>{networkPlacement(node) === "PUBLIC_FRONTEND" ? "Public frontend subnet · proposed" : networkPlacement(node) === "PRIVATE_COMPUTE" ? "Private application subnet · proposed" : networkPlacement(node) === "PRIVATE_DATA" ? "Isolated data subnet · proposed" : networkPlacement(node) === "PUBLIC_INGRESS" ? "Public HTTPS ingress subnet · proposed" : networkPlacement(node) === "PRIVATE_MANAGED_STORAGE" ? "Private S3 · gateway access proposed" : networkPlacement(node) === "VPC_ENDPOINT" ? "VPC endpoint · route association proposed" : networkPlacement(node) === "OUTSIDE_VPC" ? "Managed/global service · outside VPC" : "Hosting decision required"}</option>
+                            {/\bs3\b/i.test(node.service) && !/endpoint/i.test(node.service) && networkPlacement(node) !== "PRIVATE_MANAGED_STORAGE" && <option value="PRIVATE_MANAGED_STORAGE">Private S3 · Block Public Access + VPC endpoint</option>}
                             {node.zone === "APPLICATION" && /web app|frontend/i.test(`${node.label} ${node.description}`) && networkPlacement(node) !== "PUBLIC_FRONTEND" && <option value="PUBLIC_FRONTEND">Public frontend container · ECS Fargate</option>}
                             {node.zone === "APPLICATION" && /ecs|fargate|ec2|eks|container/i.test(node.service) && networkPlacement(node) !== "PRIVATE_COMPUTE" && <option value="PRIVATE_COMPUTE">Private application subnet</option>}
                           </select>
@@ -1238,6 +1256,7 @@ export function ArchitectureCanvas() {
                   <div className="space-y-2">{message.content.split(/\n\s*\n/).filter(Boolean).map((paragraph, part) => <p key={part} className="whitespace-pre-wrap">{paragraph}</p>)}</div>
                 </div>
               ))}
+              {!!draft?.last_ai_questions?.length && <ArchitectQuestions key={`${draft.id}-${draft.messages.length}`} questions={draft.last_ai_questions} disabled={!!busy || dirty || !canEdit || !workspace?.capabilities.ai_chat} onAnswer={message => void operation("chat", "chat", { expected_id: draft.id, message })} />}
               {draft?.proposal && (
                 <div className="p-4 rounded-xl border border-cyan-200 bg-cyan-50 space-y-3">
                   <p className="text-sm font-semibold text-cyan-900">

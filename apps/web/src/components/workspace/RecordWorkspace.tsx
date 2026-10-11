@@ -22,6 +22,7 @@ import { ServiceQuotes } from "./ServiceQuotes";
 import { AwsAccountConnection } from "./AwsAccountConnection";
 import { DeploymentPreparation } from "./DeploymentPreparation";
 import { CloudSecurity } from "./CloudSecurity";
+import { ComplianceApplications } from "./ComplianceApplications";
 interface RecordItem {
   id: string;
   title: string;
@@ -52,6 +53,8 @@ export function RecordWorkspace({ module }: { module: string }) {
   const [refresh, setRefresh] = useState(0);
   const [query, setQuery] = useState("");
   const [offset, setOffset] = useState(0);
+  const [applicationId, setApplicationId] = useState<string | undefined>();
+  useEffect(() => { setApplicationId(new URLSearchParams(window.location.search).get("application") || undefined); }, [module]);
   const [selected, setSelected] = useState<RecordItem | null>(null);
   useEffect(() => {
     setOffset(0);
@@ -135,9 +138,7 @@ export function RecordWorkspace({ module }: { module: string }) {
     "security",
     "vapt",
     "compliance",
-    "iso27001",
-    "soc2",
-    "privacy",
+
     "support",
     "services",
   ].includes(module)
@@ -152,9 +153,7 @@ export function RecordWorkspace({ module }: { module: string }) {
             security: "SECURITY_ASSESSMENT",
             vapt: "VAPT_ASSESSMENT",
             compliance: "COMPLIANCE_HELP",
-            iso27001: "ISO27001_HELP",
-            soc2: "SOC2_HELP",
-            privacy: "PRIVACY_HELP",
+
             support: "SUPPORT",
             services: "SUPPORT",
           } as Record<string, string>
@@ -169,9 +168,7 @@ export function RecordWorkspace({ module }: { module: string }) {
             security: "Apply for security review",
             vapt: "Apply for assessment",
             compliance: "Apply for compliance help",
-            iso27001: "Apply for ISO 27001 preparation",
-            soc2: "Apply for SOC 2 preparation",
-            privacy: "Apply for privacy review",
+
             support: "Get help",
             services: "Apply for support",
           } as Record<string, string>
@@ -197,7 +194,7 @@ export function RecordWorkspace({ module }: { module: string }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {request && !["services", "deployments"].includes(module) && <RequestHelp {...request} />}
+          {request && !["services", "deployments", "compliance"].includes(module) && <RequestHelp {...request} applicationId={applicationId} />}
           <button
             onClick={() => setRefresh((value) => value + 1)}
             className="inline-flex gap-2 items-center px-4 py-2.5 border border-slate-200 rounded-lg text-sm hover:bg-slate-50"
@@ -207,7 +204,7 @@ export function RecordWorkspace({ module }: { module: string }) {
           </button>
         </div>
       </header>
-      <nav
+      {!["services", "support", "billing", "team"].includes(module) && <nav
         aria-label={`${definition.group} pages`}
         className="flex gap-1 overflow-x-auto border-b border-slate-200 pb-2"
       >
@@ -221,7 +218,7 @@ export function RecordWorkspace({ module }: { module: string }) {
             {item.title}
           </Link>
         ))}
-      </nav>
+      </nav>}
       {(error || accountError) && (
         <div
           role="alert"
@@ -239,8 +236,9 @@ export function RecordWorkspace({ module }: { module: string }) {
       {module === "deployments" && <DeploymentPreparation />}
       {["operations", "deployments"].includes(module) && <AwsAccountConnection />}
       {module === "billing" && <ServiceQuotes />}
-      {module === "notifications" && <Link href="/dashboard/services" className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-700">Open service applications & reports<ArrowRight className="h-4 w-4" /></Link>}
+      {module === "notifications" && <Link href="/dashboard/services" className="inline-flex items-center gap-2 text-sm font-semibold text-cyan-700">Open requests & reports<ArrowRight className="h-4 w-4" /></Link>}
       {module === "security" && <CloudSecurity />}
+      {module === "compliance" && <ComplianceApplications applicationId={applicationId} />}
       {module === "compliance" && (
         <div className="grid sm:grid-cols-3 gap-3">
           {[
@@ -259,33 +257,10 @@ export function RecordWorkspace({ module }: { module: string }) {
           ))}
         </div>
       )}
-      {module === "services" && (
-        <div className="grid sm:grid-cols-3 gap-4">
-          {[
-            { code: "DEPLOYMENT_HELP", label: "Deployment support", detail: "Review your saved design and prepare a supported launch." },
-            { code: "VAPT_ASSESSMENT", label: "Security assessment", detail: "Agree on scope and authorization before vulnerability testing." },
-            { code: "ISO27001_HELP", label: "ISO 27001 preparation", detail: "Define business scope, controls and evidence for review." },
-            { code: "SOC2_HELP", label: "SOC 2 preparation", detail: "Organize controls and evidence for an independent auditor." },
-            { code: "PRIVACY_HELP", label: "Privacy review", detail: "Review your business data practices and required actions." },
-            { code: "AWS_CONNECTION", label: "Cloud monitoring setup", detail: "Connect your account for observed cloud resource information." },
-            { code: "BACKUP_REVIEW", label: "Recovery review", detail: "Review recorded backups and plan a verified recovery exercise." },
-            { code: "COST_REVIEW", label: "Cloud cost review", detail: "Review provider billing access and available cost records." },
-            { code: "SUPPORT", label: "Workspace support", detail: "Get help with your business workspace and integrations." },
-          ].map((item) => (
-            <div
-              key={item.code}
-              className="border border-slate-200 rounded-xl p-5 bg-slate-50"
-            >
-              <h2 className="text-sm font-semibold">{item.label}</h2>
-              <p className="mt-2 mb-4 text-sm leading-6 text-slate-500">{item.detail}</p>
-              <RequestHelp code={item.code} label={`Apply for ${item.label.toLowerCase()}`} />
-            </div>
-          ))}
-        </div>
-      )}
-      {request && (
+      {request && module !== "compliance" && (
         <ServiceRequests
           code={["services", "compliance", "security"].includes(module) ? undefined : request.code}
+          applicationId={applicationId}
           family={module === "compliance" ? "compliance" : module === "security" ? "security" : undefined}
         />
       )}

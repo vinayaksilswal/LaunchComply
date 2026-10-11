@@ -26,10 +26,17 @@ SERVICE_FAMILIES = {
 
 @router.get("/business-requests")
 async def customer_requests(service_code: Code | None = None, service_family: Literal["security", "compliance"] | None = None,
+    application_id: str | None = Query(default=None, max_length=36),
     membership=Depends(member), db: AsyncSession = Depends(get_db)):
     conditions = [ServiceRequest.organization_id == membership.organization_id]
     if service_code: conditions.append(ServiceRequest.service_code == service_code)
     if service_family: conditions.append(ServiceRequest.service_code.in_(SERVICE_FAMILIES[service_family]))
+    if application_id:
+        await application(db, application_id, membership)
+        asset_requests = select(AuditEvent.entity_id).where(AuditEvent.organization_id == membership.organization_id,
+            AuditEvent.action == "BUSINESS_REQUEST_SUBMITTED", AuditEvent.entity_type == "service_request",
+            AuditEvent.details["application_id"].as_string() == application_id)
+        conditions.append(ServiceRequest.id.in_(asset_requests))
     items = (await db.execute(select(ServiceRequest).where(*conditions).order_by(ServiceRequest.created_at.desc()).limit(100))).scalars().all()
     ids = [item.id for item in items]
     reports = (await db.execute(select(ServiceDeliveryReport).where(ServiceDeliveryReport.organization_id == membership.organization_id,
@@ -59,12 +66,29 @@ class CreateRequest(BaseModel):
     application_id: str | None = Field(default=None, max_length=36)
     architecture_id: str | None = Field(default=None, max_length=36)
     notes: str = Field(default="", max_length=700)
+    compliance_framework: str | None = Field(default=None, min_length=1, max_length=100, pattern=r"^[^\x00-\x1f\x7f]+$")
+    readiness_framework_code: str | None = Field(default=None, min_length=1, max_length=100)
 
 @router.post("/business-requests")
 async def create(payload: CreateRequest, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, payload.application_id, membership, lock=bool(payload.architecture_id)) if payload.application_id else None
     submitted_design = None
+    readiness_snapshot = None
+    if payload.readiness_framework_code:
+        if payload.service_code != "COMPLIANCE_HELP":
+            raise HTTPException(422, "Readiness applies only to compliance applications.")
+        from app.services.compliance.workspace_readiness import workspace_readiness
+        readiness_result = await workspace_readiness(db, membership.organization_id, payload.readiness_framework_code)
+        readiness_snapshot = next(iter(readiness_result["frameworks"]), None)
+        if not readiness_snapshot or not readiness_snapshot["ready_to_apply"]:
+            raise HTTPException(409, "Complete the current controls, evidence and effectiveness reviews before applying. Refresh compliance readiness.")
+        if payload.compliance_framework != readiness_snapshot["framework_name"]:
+            raise HTTPException(422, "The application framework must match the reviewed readiness program.")
     notes = (f"Application: {app.name} ({app.id})\n" if app else "") + payload.notes
+    if payload.compliance_framework:
+        if payload.service_code not in SERVICE_FAMILIES["compliance"]:
+            raise HTTPException(422, "Choose a compliance request for this framework.")
+        notes = f"Compliance framework: {payload.compliance_framework}\n" + notes
     if payload.architecture_id:
         if not app or payload.service_code != "DEPLOYMENT_HELP":
             raise HTTPException(422, "A saved architecture reference is only supported for a business asset deployment review.")
@@ -91,14 +115,16 @@ async def create(payload: CreateRequest, membership=Depends(editor), db: AsyncSe
         raise HTTPException(409, "This request identifier has already been used.")
     titles = {"DEPLOYMENT_HELP": "Help deploy my app", "SECURITY_ASSESSMENT": "Review app security", "COMPLIANCE_HELP": "Prepare business compliance", "AWS_CONNECTION": "Connect AWS monitoring", "BACKUP_REVIEW": "Review backups and recovery", "COST_REVIEW": "Connect cloud cost reporting", "SUPPORT": "Help with my workspace", "VAPT_ASSESSMENT": "Vulnerability assessment application", "ISO27001_HELP": "ISO 27001 preparation application", "SOC2_HELP": "SOC 2 preparation application", "PRIVACY_HELP": "Privacy review application"}
     item = ServiceRequest(id=str(payload.request_id), organization_id=membership.organization_id,
-        service_code=payload.service_code, title=titles[payload.service_code], status="REQUESTED", customer_notes=notes,
+        service_code=payload.service_code, title=f"{payload.compliance_framework} preparation application" if payload.compliance_framework else titles[payload.service_code], status="REQUESTED", customer_notes=notes,
         estimated_delivery="Awaiting operations review")
     db.add(item)
     user = await db.get(User, membership.user_id)
     db.add(AuditEvent(organization_id=membership.organization_id, actor_id=membership.user_id, actor_email=user.email,
         action="BUSINESS_REQUEST_SUBMITTED", entity_type="service_request", entity_id=item.id,
         details={"service_code": item.service_code, "application_id": app.id if app else None,
-                 "submitted_design": submitted_design}))
+                 "submitted_design": submitted_design, "compliance_framework": payload.compliance_framework,
+                 "readiness": {"framework_code": readiness_snapshot["framework_code"], "completed": readiness_snapshot["completed"],
+                    "total": readiness_snapshot["total"], "checked_at": readiness_result["checked_at"], "scope": readiness_result["scope"]} if readiness_snapshot else None}))
     try:
         await db.commit()
     except IntegrityError:

@@ -9,6 +9,7 @@ export interface SourceModule {
   repository_id?: string;
   imports: string[];
   entry_points: string[];
+  environment_keys?: { name: string; line: number }[];
 }
 
 export const sourceAreas: { id: string; name: string; color: string; zone: ArchitectureZone }[] = [

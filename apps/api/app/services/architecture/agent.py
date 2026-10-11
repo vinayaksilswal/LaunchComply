@@ -51,10 +51,15 @@ def validate_proposal(state: ArchitectState):
     answer = state["answer"]
     # Schema validation is not a claim of AWS deployability or sufficient capacity.
     parsed = PydanticOutputParser(pydantic_object=AIAnswer).parse(json.dumps({
-        "message": answer["message"], "graph": answer["graph"]})).model_dump()
+        "message": answer["message"], "graph": answer["graph"], "questions": answer.get("questions", [])})).model_dump()
+    # Clarification is not permission to rewrite a design while choices are missing.
+    if parsed["questions"]:
+        parsed["graph"] = state["graph"]
+    from app.services.architecture.proposal_policy import check_transition
+    check_transition(state["graph"], parsed["graph"], state["message"])
     if answer.get("ai_model"): parsed["ai_model"] = answer["ai_model"]
     if answer.get("provider_attempts"): parsed["provider_attempts"] = answer["provider_attempts"]
-    parsed["agent_workflow"] = {**state["workflow"], "stages": state["workflow"]["stages"] + ["graph_schema_validated"],
+    parsed["agent_workflow"] = {**state["workflow"], "stages": state["workflow"]["stages"] + ["graph_schema_validated", "request_path_policy_checked"],
         "status": "AWAITING_CUSTOMER_REVIEW",
         "planning_review_status": build_review(parsed["graph"], state["evidence"], state.get("requirements"))["status"]}
     return {"answer": parsed}

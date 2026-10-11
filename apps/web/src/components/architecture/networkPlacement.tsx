@@ -1,10 +1,12 @@
 import type { ArchitectureGraph, ArchitectureNode } from "./CloudDiagram";
 
-export type NetworkPlacement = "PUBLIC_INGRESS" | "PUBLIC_FRONTEND" | "PRIVATE_COMPUTE" | "PRIVATE_DATA" | "OUTSIDE_VPC" | "REVIEW";
+export type NetworkPlacement = "PUBLIC_INGRESS" | "PUBLIC_FRONTEND" | "PRIVATE_COMPUTE" | "PRIVATE_DATA" | "VPC_ENDPOINT" | "PRIVATE_MANAGED_STORAGE" | "OUTSIDE_VPC" | "REVIEW";
 
 /** Service names describe intended placement, not observed AWS resources. */
 export function networkPlacement(node: ArchitectureNode): NetworkPlacement {
   const service = node.service;
+  if (/s3 gateway vpc endpoint/i.test(service)) return "VPC_ENDPOINT";
+  if (/\bs3\b.*private access/i.test(service)) return "PRIVATE_MANAGED_STORAGE";
   // Ambiguous candidates must not be drawn as confirmed private workloads.
   if (/static hosting\s*(?:\/|or)\s*container|cloudfront\s*(?:\/|or)\s*alb|choose a cloud|candidate|review compatibility/i.test(service)) return "REVIEW";
   if (/public frontend/i.test(service) && /fargate|ecs|ec2|container/i.test(service)) return "PUBLIC_FRONTEND";
@@ -27,6 +29,7 @@ export function NetworkReview({ graph }: { graph: ArchitectureGraph }) {
     <ul className="text-xs leading-5 text-slate-600 space-y-2">
       <li>{counts("PUBLIC_FRONTEND").length} public-tier frontends · {counts("PRIVATE_COMPUTE").length} private compute services · {counts("PRIVATE_DATA").length} private data services · {counts("PUBLIC_INGRESS").length} proposed ingress services.</li>
       {!!counts("PUBLIC_FRONTEND").length && <li>Public-tier frontend containers accept traffic only from their web ingress security group. Browser API requests use an authenticated HTTPS entry point; backend tasks have no public IP and accept only the API ingress security group. Configure TLS to targets, CORS, authentication and health checks before deployment.</li>}
+      {!!counts("PRIVATE_MANAGED_STORAGE").length && <li>Private S3 buckets remain outside the VPC. Block public access; review workload IAM, bucket and endpoint policies, encryption, region and route-table associations. A gateway endpoint provides the proposed private access path, not a bucket inside a subnet.</li>}
       {!!privateWorkloads && <li>Decide outbound access: NAT per availability zone when internet access is needed, or supported VPC endpoints. Isolated data subnets should have no direct internet route.</li>}
       {!!counts("PRIVATE_COMPUTE").length && !counts("PUBLIC_INGRESS").length && <li className="text-amber-800">Private compute is proposed, but no explicit load balancer is selected. Confirm whether it serves public traffic or only background jobs.</li>}
       <li>Confirm non-overlapping CIDRs, route tables, TLS termination, health checks, task ports and security groups. Permit application traffic from the ingress security group; restrict data access to its consumers.</li>

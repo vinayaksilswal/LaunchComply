@@ -1,8 +1,8 @@
 import uuid
 import asyncio
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,8 @@ from app.models.source_archive import ApplicationSourceArchive
 from app.models.source_control import Repository, ApplicationRepository, SourceControlConnection, ConnectionStatus
 from app.services.architecture import workspace as service
 from app.services.architecture import knowledge
+from app.services.architecture.environment_connections import Connection, map_connections
+from app.services.architecture.capacity_planning import plan_capacity
 from typing import Literal
 from app.services.architecture.repository_links import linked_repositories
 
@@ -83,6 +85,61 @@ async def read(application_id: str, membership=Depends(member), db: AsyncSession
         "capabilities": {"repository_analysis": service.github_available(), "ai_chat": service.ai_available(),
                          "aws_references": knowledge.available()}}
 
+@router.get("/{application_id}/versions")
+async def versions(application_id: str, offset: int = Query(default=0, ge=0, le=10000),
+    membership=Depends(member), db: AsyncSession = Depends(get_db)):
+    app = await application(db, application_id, membership)
+    rows = (await db.execute(select(Architecture).where(Architecture.application_id == app.id,
+        Architecture.organization_id == membership.organization_id,
+        Architecture.spec_json["format"].as_string() == "repository-draft-v1")
+        .order_by(Architecture.created_at.desc(), Architecture.id.desc()).offset(offset).limit(21))).scalars().all()
+    return {"versions": [{"id": item.id, "version": item.version, "created_at": item.created_at,
+        "components": len((item.spec_json.get("graph") or {}).get("nodes", [])),
+        "source_commit": (item.spec_json.get("evidence") or {}).get("commit"),
+        "restored_from": item.spec_json.get("restored_from")} for item in rows[:20]],
+        "has_more": len(rows) > 20, "offset": offset}
+
+async def historical_version(db, app, version_id):
+    arch = (await db.execute(select(Architecture).where(Architecture.id == version_id,
+        Architecture.application_id == app.id, Architecture.organization_id == app.organization_id))).scalar_one_or_none()
+    if not arch or (arch.spec_json or {}).get("format") != "repository-draft-v1":
+        raise HTTPException(404, "Saved architecture not found for this business asset.")
+    return arch
+
+@router.get("/{application_id}/versions/{version_id}")
+async def version_preview(application_id: str, version_id: str, membership=Depends(member), db: AsyncSession = Depends(get_db)):
+    app = await application(db, application_id, membership)
+    return output(await historical_version(db, app, version_id))
+
+class RestoreVersion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_id: str = Field(max_length=36)
+    version_id: str = Field(max_length=36)
+
+@router.post("/{application_id}/restore")
+async def restore_version(application_id: str, payload: RestoreVersion, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
+    app = await application(db, application_id, membership, lock=True)
+    arch = await latest(db, app)
+    if not arch or arch.id != payload.expected_id:
+        raise HTTPException(409, "The current architecture changed. Refresh before restoring a saved version.")
+    old = await historical_version(db, app, payload.version_id)
+    if old.id == arch.id:
+        raise HTTPException(409, "This version is already current.")
+    graph = service.Graph.model_validate(old.spec_json["graph"]).model_dump()
+    spec = {**old.spec_json, "revision": arch.spec_json["revision"] + 1, "graph": graph, "proposal": None,
+        "messages": [], "restored_from": {"id": old.id, "version": old.version}, "deployment_status": "NOT_DEPLOYED"}
+    for key in ("design_approval", "aws_references", "ai_request", "last_ai_questions", "last_ai_workflow", "last_ai_diagnostics"):
+        spec.pop(key, None)
+    spec["source_changed"] = bool(arch.spec_json.get("source_changed") or old.spec_json.get("source_changed")
+        or (old.spec_json.get("evidence") or {}).get("commit") != (arch.spec_json.get("evidence") or {}).get("commit"))
+    record = Architecture(application_id=app.id, organization_id=membership.organization_id, name=app.name,
+        version=f"v{spec['revision']}", status="DRAFT", spec_json=spec)
+    db.add(record)
+    await audit(db, membership, app, "ARCHITECTURE_VERSION_RESTORED", {"restored_id": old.id, "restored_version": old.version})
+    await db.commit()
+    await db.refresh(record)
+    return output(record)
+
 @router.post("/{application_id}/analyze")
 async def analyze(application_id: str, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
@@ -96,11 +153,25 @@ async def analyze(application_id: str, membership=Depends(editor), db: AsyncSess
     except TimeoutError:
         raise HTTPException(504, "Repository analysis timed out. No draft was saved. Please try again.") from None
     previous = await latest(db, app)
+    graph = service.draft_graph(evidence)
+    if previous:
+        saved_bindings = (previous.spec_json.get("evidence") or {}).get("environment_connections", [])
+        ids = {node["id"] for node in graph["nodes"]}
+        retained = [Connection(name=item["name"], source=item["source"], target=item.get("target") if item.get("target") in ids else None, protocol=item.get("protocol", "unknown")) for item in saved_bindings if item["source"] in ids]
+        if retained:
+            graph, records = map_connections(graph, evidence, retained)
+            evidence = {**evidence, "environment_connections": records}
+        if len(retained) < len(saved_bindings):
+            evidence = {**evidence, "environment_mapping_notice": "Some workload identities changed. Previous mapping remains in design history; review keys for the new workload identities."}
+    requirements = (previous.spec_json or {}).get("requirements") if previous else None
+    capacity_plan = None
+    if requirements:
+        graph, capacity_plan = plan_capacity(graph, requirements)
     revision = (previous.spec_json["revision"] + 1) if previous else 1
     arch = Architecture(application_id=app.id, organization_id=membership.organization_id,
         name=app.name, version=f"v{revision}", status="DRAFT", spec_json={"format": "repository-draft-v1", "revision": revision,
-            "graph": service.draft_graph(evidence), "evidence": evidence, "messages": [], "proposal": None,
-            "deployment_status": "NOT_DEPLOYED", "requirements": (previous.spec_json or {}).get("requirements") if previous else None})
+            "graph": graph, "evidence": evidence, "messages": [], "proposal": None,
+            "deployment_status": "NOT_DEPLOYED", "requirements": requirements, "capacity_plan": capacity_plan})
     db.add(arch)
     await audit(db, membership, app, "ARCHITECTURE_MANIFESTS_ANALYZED")
     await db.commit()
@@ -129,18 +200,40 @@ class Requirements(BaseModel):
     region: Literal["ap-south-1", "ap-south-2", "us-east-1", "us-east-2", "us-west-2", "eu-west-1", "eu-west-2", "eu-central-1", "ap-southeast-1", "ap-southeast-2", "ap-northeast-1", "ca-central-1", "sa-east-1"]
     availability: Literal["SINGLE_AZ", "MULTI_AZ", "MULTI_REGION"]
     secondary_region: str | None = Field(default=None, max_length=30)
+    sizing_workload_id: str | None = Field(default=None, max_length=64)
+    requests_per_second_per_replica: float | None = Field(default=None, gt=0, le=1_000_000, allow_inf_nan=False)
 
 @router.post("/{application_id}/requirements")
 async def requirements(application_id: str, payload: Requirements, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
     arch = await current(db, app, payload.expected_id)
     values = payload.model_dump(exclude={"expected_id"})
+    if pending_proposal(arch.spec_json):
+        raise HTTPException(409, "Apply or resolve the pending AI proposal before changing deployment targets.")
     regions = Requirements.model_fields["region"].annotation.__args__
     if payload.availability == "MULTI_REGION" and (payload.secondary_region not in regions or payload.secondary_region == payload.region):
         raise HTTPException(422, "Choose a different supported recovery region for a multi-region design.")
     if payload.availability != "MULTI_REGION": values["secondary_region"] = None
-    # A changed requirement creates a new design version and invalidates its approval.
-    return await save_version(db, membership, app, arch, arch.spec_json["graph"], "ARCHITECTURE_REQUIREMENTS_SAVED", {"requirements": values})
+    if payload.sizing_workload_id and not any(node["id"] == payload.sizing_workload_id and node["zone"] == "APPLICATION" for node in arch.spec_json["graph"]["nodes"]):
+        raise HTTPException(422, "Choose a workload from this saved architecture for sizing.")
+    if payload.requests_per_second_per_replica and not payload.sizing_workload_id:
+        raise HTTPException(422, "Select a workload before entering its benchmark throughput.")
+    graph, plan = plan_capacity(arch.spec_json["graph"], values)
+    return await save_version(db, membership, app, arch, graph, "ARCHITECTURE_REQUIREMENTS_SAVED", {"requirements": values, "capacity_plan": plan})
+
+class EnvironmentConnections(BaseModel):
+    expected_id: str = Field(max_length=36)
+    bindings: list[Connection] = Field(max_length=60)
+
+@router.post("/{application_id}/environment-connections")
+async def environment_connections(application_id: str, payload: EnvironmentConnections, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
+    app = await application(db, application_id, membership, lock=True)
+    arch = await current(db, app, payload.expected_id)
+    if pending_proposal(arch.spec_json):
+        raise HTTPException(409, "Apply or resolve the pending AI proposal before mapping connections.")
+    evidence = arch.spec_json["evidence"]
+    graph, records = map_connections(arch.spec_json["graph"], evidence, payload.bindings)
+    return await save_version(db, membership, app, arch, graph, "ARCHITECTURE_ENVIRONMENT_CONNECTIONS_SAVED", {"evidence": {**evidence, "environment_connections": records}})
 
 async def current(db, app, expected_id):
     arch = await latest(db, app)
@@ -155,6 +248,7 @@ async def save_version(db, membership, app, arch, graph, action, updates=None):
     # Approval belongs to one saved version; editing never authorizes deployment.
     spec.pop("design_approval", None)
     spec.pop("ai_request", None)
+    spec.pop("last_ai_questions", None)
     if graph != arch.spec_json["graph"] or updates:
         spec.pop("aws_references", None)
     record = Architecture(application_id=app.id, organization_id=membership.organization_id,
@@ -259,6 +353,7 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
     # An explanation with no diagram edits must not block requirement entry or
     # make the customer apply an unchanged graph. Existing versions stay intact.
     graph_changed = answer["graph"] != spec["graph"]
+    spec["last_ai_questions"] = answer.get("questions", [])
     spec["proposal"] = {"id": str(uuid.uuid4()), "graph": answer["graph"]} if graph_changed else None
     spec["last_ai_at"] = now.isoformat()
     if answer.get("ai_model"): spec["last_ai_model"] = answer["ai_model"]

@@ -35,7 +35,7 @@ export default function DashboardLayout({
       {/* Main Content Area */}
       <div className="flex-1 lg:ml-16 flex flex-col min-w-0 min-h-0 bg-slate-50/40 pt-14 lg:pt-0">
         {/* Top Header */}
-        <header className="h-14 shrink-0 bg-white/95 border-b border-slate-200 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md">
+        <header className={`${fixedWorkspace ? "h-9 px-3" : "h-14 px-4 sm:px-6"} shrink-0 bg-white/95 border-b border-slate-200 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md`}>
           {/* Breadcrumb / Context */}
           <div className="flex items-center gap-2 text-xs truncate">
             <span className="text-slate-500 font-medium hidden sm:inline">

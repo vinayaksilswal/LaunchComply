@@ -6,6 +6,8 @@ from app.services.architecture.knowledge import fingerprint
 
 def placement(service):
     """Match intended service placement, never observed subnet membership."""
+    if re.search(r"s3 gateway vpc endpoint", service, re.I): return "VPC_ENDPOINT"
+    if re.search(r"\bs3\b.*private access", service, re.I): return "PRIVATE_MANAGED_STORAGE"
     if re.search(r"static hosting\s*(?:/|or)\s*container|cloudfront\s*(?:/|or)\s*alb|choose a cloud|candidate|review compatibility", service, re.I):
         return "DECISION_REQUIRED"
     if re.search(r"public frontend", service, re.I) and re.search(r"fargate|ecs|ec2|container", service, re.I):
@@ -93,6 +95,17 @@ def build_review(graph, evidence=None, requirements=None, source_changed=False):
         f"Proposed: {len(ingress)} ingress, {len(public_frontends)} public-tier frontends, {len(private_compute)} private compute and {len(private_data)} private data services. Public frontend containers should accept only web-ingress SG traffic. Browser API calls use authenticated HTTPS ingress; private backend tasks have no public IP and accept only API-ingress SG traffic. Confirm VPCs, CIDRs, routes, AZ allocation, NAT/endpoints, TLS target configuration, authentication, CORS and health checks. Route 53 and CloudFront are global services outside the VPC; regional origins still require a region.",
         private_compute + private_data + ingress + public_frontends)
     workloads = [node["id"] for node in nodes if node.get("zone") == "APPLICATION"]
+    private_storage = [item["node_id"] for item in services if item["placement"] == "PRIVATE_MANAGED_STORAGE"]
+    if private_storage:
+        add("STORAGE", "Review private storage access", "REVIEW", "S3 buckets are managed outside the VPC. Block Public Access, workload IAM, bucket/endpoint policies, encryption and same-region gateway route-table associations need implementation review. Databases and caches remain in isolated subnets. No bucket or access policy has been provisioned.", private_storage)
+    bindings = evidence.get("environment_connections", [])
+    if bindings:
+        unresolved = sum(not item.get("target") or item.get("source") not in {node["id"] for node in nodes} or item.get("target") not in {node["id"] for node in nodes} for item in bindings)
+        add("ENVIRONMENT", "Review environment connections", "REVIEW", f"{len(bindings)} customer-declared keys; {unresolved} unresolved or missing component destinations. Static references show key names in sampled files, not runtime use or validated credentials. Configure secrets privately and verify endpoint, protocol, authentication and network access.", sorted({item["source"] for item in bindings}))
+    if requirements.get("sizing_workload_id"):
+        from app.services.architecture.capacity_planning import plan_capacity
+        _, capacity = plan_capacity(graph, requirements)
+        add("CAPACITY", "Review workload scaling", "REVIEW", f"Peak demand {capacity['peak_requests_per_second']} requests/s. " + (f"{capacity['suggested_replicas']} replicas proposed using supplied throughput and 25% headroom. " if capacity['suggested_replicas'] else "Benchmark required for peak-capacity sizing. ") + capacity["scope"], [requirements["sizing_workload_id"]])
     add("RUNTIME", "Define build and runtime settings", "REVIEW",
         "Review each workload's build directory, runtime image, start command, listening port, health endpoint, environment-variable names and secret references. CPU, memory, replica limits and autoscaling need workload measurements; no sizes are inferred from traffic alone.", workloads)
     data = [node["id"] for node in nodes if node.get("zone") == "DATA"]

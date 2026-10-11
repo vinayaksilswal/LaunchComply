@@ -271,14 +271,18 @@ async def invite_member(
     db: AsyncSession = Depends(get_db)
 ):
     """Sends cryptographically hashed one-time team invitation."""
-    inv = await onboarding_invitation_service.create_invitation(
-        db=db,
-        organization_id=membership.organization_id,
-        email=payload.email,
-        role=payload.role,
-        invited_by_user_id=membership.user_id
-    )
-    actor_email = getattr(membership.user, "email", "team@launchcomply.io") if membership.user else "team@launchcomply.io"
+    try:
+        inv = await onboarding_invitation_service.create_invitation(
+            db=db,
+            organization_id=membership.organization_id,
+            email=payload.email,
+            role=payload.role,
+            invited_by_user_id=membership.user_id
+        )
+    except ValueError as failure:
+        raise HTTPException(409, str(failure))
+    actor = await db.get(User, membership.user_id)
+    actor_email = actor.email
     await log_audit_event(
         db=db,
         organization_id=membership.organization_id,

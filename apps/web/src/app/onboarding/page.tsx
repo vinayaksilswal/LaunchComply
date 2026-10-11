@@ -110,7 +110,6 @@ export default function OnboardingPage() {
         {error && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 text-rose-700 p-4 text-sm"><p>{error}</p><Link href="/dashboard/support" className="inline-block mt-2 font-semibold underline">Get workspace help</Link></div>}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-slate-100 pt-5"><p className="text-xs text-slate-500 max-w-sm">Creating a workspace does not deploy resources or start an assessment.</p><button type="submit" disabled={!!busy || !appName.trim() || (source === "github" ? !selectedRepos.length : !file)} className={primary}>{busy === "create" ? <><Loader2 className="w-4 h-4 animate-spin" />{source === "upload" ? "Uploading & preparing…" : "Creating workspace…"}</> : <>Continue to business architecture<ArrowRight className="w-4 h-4" /></>}</button></div>
       </form>
-      <p className="text-center text-sm text-slate-500 mt-6">Looking for security or compliance help? <Link href="/dashboard/services" className="text-cyan-700 font-semibold hover:underline">Explore services</Link></p>
-    </main><footer className="p-6 border-t border-slate-200 bg-white text-center text-xs text-slate-500">LaunchComply · From Localhost to Real Business.</footer>
+    </main><footer className="p-6 border-t border-slate-200 bg-white text-center text-xs text-slate-500">LaunchComply</footer>
   </div>;
 }

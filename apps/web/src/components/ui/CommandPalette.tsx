@@ -46,23 +46,23 @@ const DEFAULT_COMMANDS: SearchItem[] = [
   },
   {
     id: "apps",
-    title: "My apps",
+    title: "My business assets",
     category: "BUILD",
     href: "/dashboard/applications",
     icon: Layers,
   },
   {
     id: "arch",
-    title: "App design",
+    title: "Business architecture",
     category: "BUILD",
     href: "/dashboard/architecture",
     icon: Layout,
   },
   {
     id: "account",
-    title: "My account",
+    title: "Settings",
     category: "ORGANIZATION",
-    href: "/dashboard/account",
+    href: "/dashboard/settings",
     icon: Users,
   },
   ...MODULES.filter(

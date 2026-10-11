@@ -3,12 +3,16 @@
 NETWORK_GUIDANCE = {
     "scope": "AWS reference guidance only; not an observed or provisioned customer network.",
     "references": [
+        {"title": "Private S3 gateway access", "url": "https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints-s3.html"},
+        {"title": "ECS target tracking scaling", "url": "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-autoscaling-targettracking.html"},
         {"title": "VPC with private servers and NAT", "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-example-private-subnets-nat.html"},
         {"title": "Fargate task networking", "url": "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-task-networking.html"},
         {"title": "Application Load Balancers", "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/application-load-balancers.html"},
         {"title": "ECS network security and TLS", "url": "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/security-network.html"},
     ],
     "design_checks": [
+        "Private S3 is a managed bucket outside a VPC, with Block Public Access, workload IAM and reviewed bucket/endpoint policies. A same-region S3 gateway endpoint uses workload route tables; do not place a bucket in a subnet or assume gateway access from transit/on-premises networks.",
+        "Traffic requirements are demand, not measured per-task throughput. Use a supplied workload benchmark for replica proposals, state the request-mix/headroom assumptions, and review min/max, CPU/memory, scaling metrics and recovery capacity. ECS target tracking requires a selected metric and target; it is not automatically enabled by drawing replicas.",
         "Public/private describes subnet routing inside a VPC, not two mandatory VPC types.",
         "For public container services, consider an internet-facing ALB in public subnets and private compute without public IPs. Confirm listener and health-check ports from source.",
         "Use separate private data subnets for VPC-hosted persistence; restrict its security group to actual consumers. Do not invent database sharing between repositories.",

@@ -26,7 +26,7 @@ class UsageRecordRequest(BaseModel):
 
 
 class InviteMemberRequest(BaseModel):
-    email: str = Field(..., description="Recipient email address")
+    email: EmailStr = Field(..., max_length=255, description="Recipient email address")
     role: MembershipRole = Field(default=MembershipRole.DEVELOPER, description="Assigned organization role")
 
 

@@ -10,7 +10,6 @@ import {
   Activity,
 } from "lucide-react";
 import { ServiceRequests } from "@/components/workspace/ServiceRequests";
-import { RequestHelp } from "@/components/workspace/RequestHelp";
 import { DeploymentPreparation } from "@/components/workspace/DeploymentPreparation";
 import { apiClient } from "@/lib/api";
 import { useAccount } from "@/components/auth/AccountProvider";
@@ -117,31 +116,6 @@ export default function DashboardOverviewPage() {
         </div>
       )}
       <DeploymentPreparation home />
-      <section
-        className="grid sm:grid-cols-2 gap-4"
-        aria-label="Business services"
-      >
-        {[
-          {
-            code: "SECURITY_ASSESSMENT",
-            label: "Apply for security review",
-            description: "Request an assessment of your app.",
-          },
-          {
-            code: "COMPLIANCE_HELP",
-            label: "Apply for compliance help",
-            description: "Prepare the evidence your business needs.",
-          },
-        ].map((item) => (
-          <div
-            key={item.code}
-            className="border border-slate-200 rounded-2xl bg-slate-50 p-5 space-y-3"
-          >
-            <p className="text-sm text-slate-500">{item.description}</p>
-            <RequestHelp code={item.code} label={item.label} />
-          </div>
-        ))}
-      </section>
       <section
         className="grid sm:grid-cols-3 gap-4"
         aria-label="Workspace totals"

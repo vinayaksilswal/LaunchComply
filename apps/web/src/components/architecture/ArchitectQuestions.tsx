@@ -1,0 +1,9 @@
+"use client";
+import { useState } from "react";
+export interface ArchitectQuestion { id: string; question: string; options: string[]; }
+export function ArchitectQuestions({ questions, disabled, onAnswer }: { questions: ArchitectQuestion[]; disabled: boolean; onAnswer: (message: string) => void }) {
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  return <form aria-label="Architecture assistant questions" onSubmit={event => { event.preventDefault(); onAnswer("Architecture choices:\n" + questions.map(question => `${question.question}\nAnswer: ${answers[question.id]?.trim()}`).join("\n\n")); }} className="space-y-4 rounded-xl border border-cyan-200 bg-cyan-50/40 p-4">
+    <h3 className="text-sm font-semibold">A few choices before changing the design</h3>{questions.map(question => <fieldset key={question.id} disabled={disabled} className="space-y-2"><legend className="mb-2 text-xs leading-5 font-semibold">{question.question}</legend><div className="flex flex-wrap gap-2">{question.options.map(option => <button type="button" key={option} aria-pressed={answers[question.id] === option} onClick={() => setAnswers(current => ({ ...current, [question.id]: option }))} className={`rounded-lg border px-2 py-1.5 text-xs ${answers[question.id] === option ? "border-cyan-500 bg-white text-cyan-900" : "bg-white text-slate-600"}`}>{option}</button>)}</div><input required maxLength={200} aria-label={`Answer: ${question.question}`} value={answers[question.id] || ""} onChange={event => setAnswers(current => ({ ...current, [question.id]: event.target.value }))} placeholder="Choose an option or type your answer" className="w-full rounded-lg border bg-white p-2 text-xs" /></fieldset>)}<button disabled={disabled || questions.some(question => !answers[question.id]?.trim())} className="rounded-lg bg-cyan-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">Send choices to AI</button>
+  </form>;
+}
