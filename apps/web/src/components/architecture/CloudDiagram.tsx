@@ -159,6 +159,19 @@ export const CloudDiagram = forwardRef<
   const compact = !code;
   const cardWidth = 280, cardHeight = 136;
   const { width, height } = diagramBounds(graph, compact, boundaries);
+  const captionObstacles = (boundaries || []).flatMap(boundary => {
+    const nodes = graph.nodes.filter(node => boundary.nodes.includes(node.id));
+    if (!nodes.length) return [];
+    const padding = boundary.padding || 20;
+    const x = boundary.x ?? Math.max(5, Math.min(...nodes.map(node => node.x)) - padding);
+    const y = boundary.y ?? Math.max(5, Math.min(...nodes.map(node => node.y)) - padding - 30);
+    const boxWidth = boundary.width ?? Math.max(...nodes.map(node => node.x + cardWidth)) - x + padding;
+    const boxHeight = boundary.height ?? Math.max(...nodes.map(node => node.y + cardHeight)) - y + padding;
+    return [
+      { x: x + 12, y: y + 11, width: Math.min(boxWidth - 24, boundary.label.length * 6 + 20), height: 34 },
+      ...(boundary.note ? [{ x: x + 16, y: y + boxHeight - 38, width: boxWidth - 32, height: 28 }] : []),
+    ];
+  });
   const related = new Set(
     graph.edges
       .filter((e) => e.source === selected || e.target === selected)
@@ -296,7 +309,7 @@ export const CloudDiagram = forwardRef<
         const from = graph.nodes.find((n) => n.id === edge.source),
           to = graph.nodes.find((n) => n.id === edge.target);
         if (!from || !to) return null;
-        const routed = routeFlow(from, to, graph.nodes, i);
+        const routed = routeFlow(from, to, graph.nodes, i, captionObstacles);
         const path = routed.path, labelX = routed.x, labelY = routed.y;
         const inferred = flowEvidence(edge.label).startsWith("Source signal");
         const color = to.zone === "DATA" ? "#059669" : from.zone === "SUPPORT" || to.zone === "SUPPORT" ? "#b45309" : "#0e7490";

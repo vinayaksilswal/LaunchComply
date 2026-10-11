@@ -1,5 +1,6 @@
 import type { ArchitectureGraph, ArchitectureNode } from "./CloudDiagram";
 export type Point = { x: number; y: number };
+export type FlowObstacle = { x: number; y: number; width: number; height: number };
 const width = 280, height = 136;
 /** Metadata classification is intentionally conservative: a drawn arrow is never runtime proof. */
 export function flowEvidence(label: string) {
@@ -13,23 +14,23 @@ export function flowProtocol(label: string) {
   return /https|tls/i.test(label) ? "HTTPS / TLS plan" : /postgres/i.test(label) ? "PostgreSQL · encryption to review" : /redis/i.test(label) ? "Redis · encryption to review" : /dns/i.test(label) ? "DNS resolution" : /grpc/i.test(label) ? "gRPC · TLS to review" : "Protocol to confirm";
 }
 const length = (points: Point[]) => points.slice(1).reduce((total, p, i) => total + Math.abs(p.x - points[i].x) + Math.abs(p.y - points[i].y), 0);
-function intersects(a: Point, b: Point, n: ArchitectureNode) {
-  const left = n.x - 12, right = n.x + width + 12, top = n.y - 12, bottom = n.y + height + 12;
+function intersects(a: Point, b: Point, n: FlowObstacle) {
+  const left = n.x - 12, right = n.x + n.width + 12, top = n.y - 12, bottom = n.y + n.height + 12;
   return a.y === b.y ? a.y > top && a.y < bottom && Math.max(a.x, b.x) > left && Math.min(a.x, b.x) < right
     : a.x > left && a.x < right && Math.max(a.y, b.y) > top && Math.min(a.y, b.y) < bottom;
 }
 /** Choose short orthogonal channels outside resource cards. Recomputed on dragging;
  * a manually overlapping layout may still need Arrange layers. Never changes graph edges. */
-export function routeFlow(from: ArchitectureNode, to: ArchitectureNode, nodes: ArchitectureNode[], index: number) {
+export function routeFlow(from: ArchitectureNode, to: ArchitectureNode, nodes: ArchitectureNode[], index: number, captions: FlowObstacle[] = []) {
   const rightward = to.x >= from.x, downward = to.y >= from.y;
   const startH = { x: from.x + (rightward ? width : 0), y: from.y + height / 2 }, endH = { x: to.x + (rightward ? 0 : width), y: to.y + height / 2 };
   const startV = { x: from.x + width / 2, y: from.y + (downward ? height : 0) }, endV = { x: to.x + width / 2, y: to.y + (downward ? 0 : height) };
-  const obstacles = nodes.filter(n => n.id !== from.id && n.id !== to.id);
+  const obstacles = [...nodes.filter(n => n.id !== from.id && n.id !== to.id).map(node => ({ x: node.x, y: node.y, width, height })), ...captions];
   const offset = (index % 5) * 7;
   const mx = (startH.x + endH.x) / 2, my = (startV.y + endV.y) / 2;
   const candidates: Point[][] = [];
-  const xs = [...new Set([mx + offset, from.x - 28 - offset, from.x + width + 28 + offset, to.x - 28 - offset, to.x + width + 28 + offset, ...obstacles.flatMap(n => [n.x - 28, n.x + width + 28])])];
-  const ys = [...new Set([my + offset, from.y - 28 - offset, from.y + height + 28 + offset, to.y - 28 - offset, to.y + height + 28 + offset, ...obstacles.flatMap(n => [n.y - 28, n.y + height + 28])])];
+  const xs = [...new Set([mx + offset, from.x - 28 - offset, from.x + width + 28 + offset, to.x - 28 - offset, to.x + width + 28 + offset, ...obstacles.flatMap(n => [n.x - 14, n.x + n.width + 14])])];
+  const ys = [...new Set([my + offset, from.y - 28 - offset, from.y + height + 28 + offset, to.y - 28 - offset, to.y + height + 28 + offset, ...obstacles.flatMap(n => [n.y - 14, n.y + n.height + 14])])];
   // Only outward-facing departure/arrival ports; no segment can re-enter its own card.
   for (const x of xs) {
     if (x < 20 || (rightward ? x < startH.x || x > endH.x : x > startH.x || x < endH.x)) continue;
@@ -44,8 +45,8 @@ export function routeFlow(from: ArchitectureNode, to: ArchitectureNode, nodes: A
   const direction = rightward ? 1 : -1;
   const departureX = startH.x + direction * 24;
   const arrivalX = endH.x - direction * 24;
-  const outerTop = Math.max(20, Math.min(...nodes.map(node => node.y)) - 38 - offset);
-  const outerBottom = Math.max(...nodes.map(node => node.y + height)) + 38 + offset;
+  const outerTop = Math.max(20, Math.min(...nodes.map(node => node.y), ...captions.map(caption => caption.y)) - 38 - offset);
+  const outerBottom = Math.max(...nodes.map(node => node.y + height), ...captions.map(caption => caption.y + caption.height)) + 38 + offset;
   const lanes = [...new Set([...ys.filter(y => y >= 20).sort((a, b) => Math.abs(a - startH.y) + Math.abs(a - endH.y) - Math.abs(b - startH.y) - Math.abs(b - endH.y)).slice(0, 12), outerTop, outerBottom])];
   if (rightward ? departureX <= arrivalX : departureX >= arrivalX) {
     for (const y of lanes) candidates.push([
