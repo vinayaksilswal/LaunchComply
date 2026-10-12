@@ -10,6 +10,8 @@ const frontendCandidate = isFrontendWorkload;
 const backendCandidate = (node: ArchitectureNode) => node.zone === "APPLICATION" && !frontendCandidate(node) && !isPlatformService(node);
 type RequestPath = "FRONTEND_PROXY" | "PUBLIC_API";
 
+const sourceIdentity = (node: ArchitectureNode) => `Component identity: ${node.label} (${node.id}). Inspected paths and dependency signals remain in Source code architecture; runtime configuration is unverified.`;
+
 /** Explicit customer-selected planning change, never a claim about source calls or deployed routes. */
 function secureTrafficProposal(graph: ArchitectureGraph, frontendIds: string[], backendId: string, requestPath: RequestPath): ArchitectureGraph {
   const fronts = new Set(frontendIds);
@@ -17,8 +19,8 @@ function secureTrafficProposal(graph: ArchitectureGraph, frontendIds: string[], 
   if (!backend || !backendCandidate(backend) || !fronts.size || fronts.has(backendId) || frontendIds.some(id => !graph.nodes.some(node => node.id === id && frontendCandidate(node)))) throw new Error("Select frontend services and a separate backend service.");
   if (!/ecs|fargate|container/i.test(backend.service)) throw new Error("This pattern needs a container backend. Choose its hosting service before applying.");
   const proxy = requestPath === "FRONTEND_PROXY";
-  const nodes = graph.nodes.map(node => fronts.has(node.id) ? { ...node, service: proxy ? "ECS Fargate · public frontend + proxy" : "ECS Fargate · public frontend", description: `${proxy ? "Proposed server-side /api proxy REQUIRED in frontend hosting container, not verified in source. Browser calls same-origin HTTPS; server forwards only allowed paths to internal ALB, with authentication/authorization, timeouts and target TLS configuration." : "Proposed browser calls authenticated public HTTPS API ingress; review CORS, authentication and target TLS."} Public frontend subnet; web-ingress SG only; no direct task access. Source context: ${node.description}`.slice(0, 500) }
-    : node.id === backendId ? { ...node, service: "ECS Fargate · private backend", description: `Proposed private backend: no public IP or direct internet ingress; accept only API-ingress SG. ${proxy ? "Internal API ALB accepts frontend server SGs only." : "Public API ALB fronts private targets."} Configure target TLS, authorization, health checks, IAM and outbound NAT/endpoints. Source context: ${node.description}`.slice(0, 500) } : { ...node });
+  const nodes = graph.nodes.map(node => fronts.has(node.id) ? { ...node, service: proxy ? "ECS Fargate · public frontend + proxy" : "ECS Fargate · public frontend", description: `${proxy ? "Proposed server-side /api proxy REQUIRED; source implementation unverified. Browser uses same-origin HTTPS; hosting server forwards allowed paths to internal ALB. Configure authorization, CSRF protection where needed, timeouts and TLS." : "Proposed browser calls authenticated public HTTPS API ingress; review CORS, authentication and TLS."} Public subnet; web-ALB SG only. ${sourceIdentity(node)}`.slice(0, 500) }
+    : node.id === backendId ? { ...node, service: "ECS Fargate · private backend", description: `Proposed private backend: no public IP/direct ingress; accept only API-ALB SG. ${proxy ? "Internal ALB accepts frontend server SGs only." : "Public API ALB fronts private targets."} Configure HTTPS targets, authorization, health checks, scoped IAM and outbound NAT/endpoints. ${sourceIdentity(node)}`.slice(0, 500) } : { ...node });
   const unique = (base: string) => { let id = base, index = 1; while (nodes.some(node => node.id === id)) id = `${base}-${index++}`; return id; };
   // Convert only an ingress dedicated to this backend and these selected frontends.
   const apiIngress = nodes.find(node => ["PUBLIC_INGRESS", "PRIVATE_INGRESS"].includes(networkPlacement(node)) && graph.edges.some(edge => edge.source === node.id && edge.target === backendId)
@@ -37,6 +39,7 @@ function secureTrafficProposal(graph: ArchitectureGraph, frontendIds: string[], 
   const edges: ArchitectureGraph["edges"] = [];
   const link = (source: string, target: string, label: string) => { if (!edges.some(edge => edge.source === source && edge.target === target)) edges.push({ source, target, label }); };
   const cdn = nodes.find(node => /cloudfront/i.test(node.service));
+  if (cdn) cdn.description = "Proposed global CloudFront distribution with HTTPS origin forwarding to the public frontend web ALB. Frontend containers serve the web application and the selected API path. Configure origin access restrictions, cache behaviors (no caching of authenticated /api responses), certificates and WAF association if selected. This is not an S3 static-hosting origin or a direct route to private API ingress.";
   const dns = nodes.find(node => /route\s*53/i.test(node.service));
   if (dns && cdn) link(dns.id, cdn.id, "DNS resolution · proposed");
   if (cdn) link(cdn.id, webId, "HTTPS web origin · proposed");
