@@ -48,6 +48,8 @@ import { AssistantWindow } from "./AssistantWindow";
 import { ArchitectureSettings, type EnvironmentConnection } from "./ArchitectureSettings";
 import { privateStorageProposal, isS3Storage } from "./privateStorage";
 import { AwsServiceCatalog } from "./AwsServiceCatalog";
+import { ArchitectEditScope, type ArchitectScope } from "./ArchitectEditScope";
+import { GraphChangeReview } from "./GraphChangeReview";
 import { ArchitectQuestions, type ArchitectQuestion } from "./ArchitectQuestions";
 import { ArchitectureHistory } from "./ArchitectureHistory";
 import { RequestFlows } from "./RequestFlows";
@@ -100,7 +102,9 @@ interface Draft {
   version: string;
   graph: Graph;
   evidence: Evidence;
-  messages: { role: string; content: string }[];
+  messages: { role: string; content: string; version?: string; scope?: ArchitectScope }[];
+  ai_request?: { id: string };
+  last_ai_scope?: ArchitectScope;
   proposal: { id: string; graph: Graph } | null;
   created_at: string;
   aws_references?: AwsReferenceReview;
@@ -110,7 +114,7 @@ interface Workspace {
   application_id: string;
   application_name: string;
   architecture: Draft | null;
-  capabilities: { repository_analysis: boolean; ai_chat: boolean; aws_references?: boolean; workload_scaling?: boolean };
+  capabilities: { repository_analysis: boolean; ai_chat: boolean; aws_references?: boolean; workload_scaling?: boolean; scoped_ai_edits?: boolean };
 }
 const zones: { id: Zone; name: string; color: string; icon: typeof Globe }[] = [
   { id: "EDGE", name: "Public entry", color: "#0891b2", icon: Globe },
@@ -147,8 +151,11 @@ export function ArchitectureCanvas() {
   const [reload, setReload] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
+  const [aiScope, setAiScope] = useState<ArchitectScope>({ mode: "REVIEW", node_ids: [] });
+  const [catalogOpen, setCatalogOpen] = useState(0);
   const [preview, setPreview] = useState(false);
   const [newConnection, setNewConnection] = useState("");
+  const [connectionLabel, setConnectionLabel] = useState("Proposed connection");
   const [chatVisible, setChatVisible] = useState(true);
   const [assistantMinimized, setAssistantMinimized] = useState(true);
   const [reviewApproval, setReviewApproval] = useState(false);
@@ -188,8 +195,9 @@ export function ArchitectureCanvas() {
     organization?.role.toUpperCase() || "",
   );
   const canEdit = canRefresh && !draft?.source_changed;
+  const canEditGraph = canEdit && !draft?.proposal;
   const restoreHistory = (direction: "undo" | "redo") => {
-    if (busy || preview || !canEdit || view !== "cloud" || (direction === "undo" ? !canUndo : !canRedo)) return;
+    if (busy || preview || !canEditGraph || view !== "cloud" || (direction === "undo" ? !canUndo : !canRedo)) return;
     setCloudFocus(null);
     drag.current = null;
     const restored = direction === "undo" ? undo() : redo();
@@ -197,7 +205,7 @@ export function ArchitectureCanvas() {
   };
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey || busy || preview || !canEdit || view !== "cloud") return;
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || busy || preview || !canEditGraph || view !== "cloud") return;
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog']") || document.querySelector("[role='dialog']")) return;
       const key = event.key.toLowerCase();
@@ -211,7 +219,7 @@ export function ArchitectureCanvas() {
     };
     document.addEventListener("keydown", keydown);
     return () => document.removeEventListener("keydown", keydown);
-  }, [busy, preview, canEdit, view, undo, redo, canUndo, canRedo, draft?.graph]);
+  }, [busy, preview, canEditGraph, view, undo, redo, canUndo, canRedo, draft?.graph]);
   const adopt = (result: Draft, operationName: string) => {
     endEdit();
     setWorkspace((current) =>
@@ -276,6 +284,8 @@ export function ArchitectureCanvas() {
     setError(null);
 
     setPreview(false);
+    setAiScope({ mode: "REVIEW", node_ids: [] });
+    setPrompt("");
     apiClient<Workspace>(`/architecture/workspace/${appId}`)
       .then((result) => {
         if (active) {
@@ -331,10 +341,12 @@ export function ArchitectureCanvas() {
     }
   };
   const send = () => {
-    if (draft && prompt.trim() && !dirty)
+    if (draft && prompt.trim() && !dirty && !draft.proposal && workspace?.capabilities.scoped_ai_edits &&
+        (!["EDIT", "REMOVE"].includes(aiScope.mode) || aiScope.node_ids.length))
       void operation("chat", "chat", {
         expected_id: draft.id,
         message: prompt.trim(),
+        edit_scope: aiScope,
       });
   };
   const codeGraph: Graph = {
@@ -379,7 +391,7 @@ export function ArchitectureCanvas() {
   const boundaries = view === "code" ? sourceDesign.boundaries : businessBoundaries(shown, draft?.requirements);
   const { width, height } = diagramBounds(shown, view !== "code", boundaries);
   const updateNode = (change: Partial<Node>) => {
-    if (!node || !canEdit || busy || view === "code" || preview) return;
+    if (!node || !canEditGraph || busy || view === "code" || preview) return;
     setGraph((current) => ({
       ...current,
       nodes: current.nodes.map((item) =>
@@ -466,7 +478,7 @@ export function ArchitectureCanvas() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {draft && <ArchitectureHistory applicationId={appId} currentId={draft.id} dirty={dirty} disabled={!!busy} canRestore={canEdit} onRestore={versionId => operation("restore", "restore", { expected_id: draft.id, version_id: versionId })} />}
-          {draft && <ArchitectureSettings key={appId} graph={graph} requirements={draft.requirements} scalingAvailable={!!workspace?.capabilities.workload_scaling} version={draft.version} connections={draft.evidence.environment_connections || noConnections} modules={draft.evidence.modules || []} disabled={!canEdit || !!busy} proposalPending={!!draft.proposal} saving={!!busy} errorMessage={error} blockedReason={dirty ? "Save your diagram changes before saving settings." : draft.proposal ? "Apply the pending AI proposal before saving settings." : undefined} onRequirements={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} onConnections={bindings => operation("environment", "environment-connections", { expected_id: draft.id, bindings })} onGraph={value => { setGraph(value); setArrangedView(false); setView("cloud"); }} />}
+          {draft && <ArchitectureSettings key={appId} graph={graph} requirements={draft.requirements} scalingAvailable={!!workspace?.capabilities.workload_scaling} version={draft.version} connections={draft.evidence.environment_connections || noConnections} modules={draft.evidence.modules || []} disabled={!canEditGraph || !!busy} proposalPending={!!draft.proposal} saving={!!busy} errorMessage={error} blockedReason={dirty ? "Save your diagram changes before saving settings." : draft.proposal ? "Apply the pending AI proposal before saving settings." : undefined} onRequirements={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} onConnections={bindings => operation("environment", "environment-connections", { expected_id: draft.id, bindings })} onGraph={value => { setGraph(value); setArrangedView(false); setView("cloud"); }} />}
           <select
             aria-label="Business asset for architecture"
             disabled={loading || !!busy || dirty}
@@ -492,7 +504,7 @@ export function ArchitectureCanvas() {
             <Download className="w-4 h-4" />
           </button>
           <button
-            disabled={!draft || !dirty || !!busy || !canEdit}
+            disabled={!draft || !dirty || !!busy || !canEditGraph}
             onClick={() =>
               draft &&
               operation("save", "save", { expected_id: draft.id, graph })
@@ -539,7 +551,15 @@ export function ArchitectureCanvas() {
               {tab.label}
             </button>
           ))}
-          <AwsServiceCatalog aiDisabled={!draft || dirty || !!busy || !!draft.proposal || !canEdit || !workspace?.capabilities.ai_chat} onAsk={message => { if (!draft) return; setChatVisible(true); setAssistantMinimized(false); void operation("chat", "chat", { expected_id: draft.id, message }); }} />
+          <AwsServiceCatalog openKey={catalogOpen} addDisabled={!draft || !!busy || preview || !!draft.proposal || !canEdit || graph.nodes.length >= 80} aiDisabled={!draft || dirty || !!busy || !!draft.proposal || !canEdit || !workspace?.capabilities.ai_chat || !workspace?.capabilities.scoped_ai_edits} onAsk={message => { setChatVisible(true); setAssistantMinimized(false); setPrompt(message); setAiScope({ mode: "REVIEW", node_ids: [] }); }} onAdd={node => {
+            const id = `node-${crypto.randomUUID().slice(0, 8)}`;
+            setGraph(current => {
+              if (current.nodes.length >= 80) return current;
+              const maxY = Math.max(150, ...current.nodes.map(item => item.y + 180));
+              return { ...current, nodes: [...current.nodes, { ...node, id, x: 150, y: Math.min(5800, maxY) }] };
+            });
+            setArrangedView(false); setView("cloud"); setSelected(id); setChatVisible(true); setAssistantMinimized(false); autoFit.current = true;
+          }} />
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs">
           {draft && <button disabled={!!busy || dirty || !canRefresh} onClick={() => operation("analyze", "analyze")} className="font-semibold text-cyan-700 disabled:opacity-40">{busy === "analyze" ? "Inspecting source…" : "Refresh code findings"}</button>}
@@ -601,14 +621,14 @@ export function ArchitectureCanvas() {
               {view === "cloud" && <>
                 <RequestFlows graph={shown} onFocus={id => { setSelected(id); setChatVisible(true); setAssistantMinimized(false); }} />
                 <SecureTrafficDesign graph={graph} disabled={!draft || !!busy || preview || !canEdit || !!draft.proposal} onApply={next => { setGraph(next); setArrangedView(false); setCloudFocus(null); setSelected(null); autoFit.current = true; }} />
-                <button aria-label="Undo architecture change" title="Undo · Ctrl+Z / Cmd+Z" disabled={!canUndo || !!busy || preview || !canEdit} onClick={() => restoreHistory("undo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Undo2 className="w-4 h-4" /></button>
-                <button aria-label="Redo architecture change" title="Redo · Ctrl+Shift+Z / Ctrl+Y" disabled={!canRedo || !!busy || preview || !canEdit} onClick={() => restoreHistory("redo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Redo2 className="w-4 h-4" /></button>
+                <button aria-label="Undo architecture change" title="Undo · Ctrl+Z / Cmd+Z" disabled={!canUndo || !!busy || preview || !canEditGraph} onClick={() => restoreHistory("undo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Undo2 className="w-4 h-4" /></button>
+                <button aria-label="Redo architecture change" title="Redo · Ctrl+Shift+Z / Ctrl+Y" disabled={!canRedo || !!busy || preview || !canEditGraph} onClick={() => restoreHistory("redo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Redo2 className="w-4 h-4" /></button>
                 <button aria-pressed={arrangedView} onClick={() => { setArrangedView(value => !value); setCloudFocus(null); }} className="rounded-lg border px-2 py-1.5 text-xs">{arrangedView ? "Arranged view" : "Saved layout"}</button>
                 {(cloudFocus ? <button onClick={() => setCloudFocus(null)} className="rounded-lg border px-2 py-1.5 text-xs">Show full design</button> : <button disabled={!selected} onClick={() => setCloudFocus(selected)} className="rounded-lg border px-2 py-1.5 text-xs disabled:opacity-40">Focus connections</button>)}
               </>}
               <button
                 disabled={
-                  !draft || view === "code" || preview || !!busy || !canEdit
+                  !draft || view === "code" || preview || !!busy || !canEditGraph
                 }
                 onClick={() => {
                   setGraph(arrangeBusinessArchitecture(graph));
@@ -833,7 +853,7 @@ export function ArchitectureCanvas() {
                     setNewConnection("");
                   }}
                   onNodePointerDown={
-                    view === "cloud" && !preview && canEdit && !busy
+                    view === "cloud" && !preview && canEditGraph && !busy
                       ? (event, item) => {
                           if (event.button !== 0 || !event.isPrimary || !diagram.current) return;
                           const origin = diagram.current.getBoundingClientRect();
@@ -892,7 +912,7 @@ export function ArchitectureCanvas() {
                     drag.current = null;
                     endEdit();
                   }}
-                  onNodeMove={view === "cloud" && !preview && canEdit && !busy ? (item, dx, dy) => {
+                  onNodeMove={view === "cloud" && !preview && canEditGraph && !busy ? (item, dx, dy) => {
                     autoFit.current = false;
                     keepEditZoom.current = true;
                     setArrangedView(false);
@@ -923,29 +943,9 @@ export function ArchitectureCanvas() {
             {draft && view === "cloud" && (
               <button
                 disabled={
-                  !!busy || preview || !canEdit || graph.nodes.length >= 80
+                  !!busy || preview || !!draft.proposal || !canEdit || graph.nodes.length >= 80
                 }
-                onClick={() => {
-                  const id = `node-${crypto.randomUUID().slice(0, 8)}`;
-                  setGraph((current) => ({
-                    ...current,
-                    nodes: [
-                      ...current.nodes,
-                      {
-                        id,
-                        label: "New service",
-                        service: "Choose a cloud service",
-                        zone: "SUPPORT",
-                        description:
-                          "Manually proposed component. Requirements need review.",
-                        x: 70,
-                        y: Math.min(6000, height - 40),
-                      },
-                    ],
-                  }));
-                  setSelected(id);
-
-                }}
+                onClick={() => setCatalogOpen(value => value + 1)}
                 className="flex items-center gap-1.5 text-cyan-700 font-semibold disabled:opacity-40"
               >
                 <Plus className="w-4 h-4" />
@@ -998,7 +998,7 @@ export function ArchitectureCanvas() {
                     <button onClick={() => { setCodeMode("files"); setCodeFocus(node.id); setSelected(null); }} className="rounded-lg bg-cyan-50 text-cyan-800 px-3 py-2 text-xs font-semibold">Inspect files in this group</button>
                     <ul className="text-xs text-slate-500 space-y-2 break-all">{overview.groups[node.id].map(item => <li key={item.id}>{item.path}</li>)}</ul>
                   </div>}
-                  {view !== "code" && !preview && canEdit ? (
+                  {view !== "code" && !preview && canEditGraph ? (
                     <>
                       <label className="block text-xs text-slate-500">
                         Component name
@@ -1098,9 +1098,10 @@ export function ArchitectureCanvas() {
                             ))}
                         </select>
                       </label>
+                      <label className="block text-xs">Connection purpose & protocol<input aria-label="New connection label" value={connectionLabel} maxLength={80} onChange={event => setConnectionLabel(event.target.value)} className="mt-1 w-full rounded border p-2" /></label>
                       <button
                         disabled={
-                          !newConnection ||
+                          !newConnection || !connectionLabel.trim() ||
                           !!busy ||
                           graph.edges.length >= 160 ||
                           graph.edges.some(
@@ -1117,7 +1118,7 @@ export function ArchitectureCanvas() {
                               {
                                 source: node.id,
                                 target: newConnection,
-                                label: "Proposed connection",
+                                label: connectionLabel.trim(),
                               },
                             ],
                           }));
@@ -1135,7 +1136,7 @@ export function ArchitectureCanvas() {
                               edge.target === node.id) && (
                               <div
                                 key={index}
-                                className="flex justify-between text-xs text-slate-500 gap-2"
+                                className="rounded-lg border p-2 text-xs text-slate-500 space-y-2"
                               >
                                 <span>
                                   {
@@ -1150,6 +1151,8 @@ export function ArchitectureCanvas() {
                                     )?.label
                                   }
                                 </span>
+                                <input aria-label={`Connection ${index + 1} label`} maxLength={80} value={edge.label} onFocus={beginEdit} onBlur={endEdit} onChange={event => setGraph(current => ({ ...current, edges: current.edges.map((item, i) => i === index ? { ...item, label: event.target.value } : item) }))} className="block w-full rounded border p-2 text-slate-900" />
+                                <button disabled={!!busy || graph.edges.some((item, i) => i !== index && item.source === edge.target && item.target === edge.source)} onClick={() => setGraph(current => ({ ...current, edges: current.edges.map((item, i) => i === index ? { ...item, source: item.target, target: item.source } : item) }))} className="mr-3 text-cyan-700">Reverse direction</button>
                                 <button
                                   disabled={!!busy}
                                   aria-label={`Remove connection ${index + 1}`}
@@ -1262,52 +1265,18 @@ export function ArchitectureCanvas() {
                   className={`rounded-xl p-3 text-xs leading-5 break-words ${message.role === "user" ? "bg-slate-100 ml-5" : "border border-indigo-100 bg-indigo-50/30"}`}
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
-                    {message.role === "user" ? "You" : "Architecture assistant"}
+                    {message.role === "user" ? "You" : "Architecture assistant"}{message.version ? ` · ${message.version} · ${message.scope?.mode.toLowerCase() || "review"}` : " · earlier conversation"}
                   </p>
                   <div className="space-y-2">{message.content.split(/\n\s*\n/).filter(Boolean).map((paragraph, part) => <p key={part} className="whitespace-pre-wrap">{paragraph}</p>)}</div>
                 </div>
               ))}
-              {!!draft?.last_ai_questions?.length && <ArchitectQuestions key={`${draft.id}-${draft.messages.length}`} questions={draft.last_ai_questions} disabled={!!busy || dirty || !canEdit || !workspace?.capabilities.ai_chat} onAnswer={message => void operation("chat", "chat", { expected_id: draft.id, message })} />}
+              {!!draft?.last_ai_questions?.length && <ArchitectQuestions key={`${draft.id}-${draft.messages.length}`} questions={draft.last_ai_questions} disabled={!!busy || dirty || !canEdit || !workspace?.capabilities.ai_chat || !workspace?.capabilities.scoped_ai_edits || !draft.ai_request?.id} onAnswer={message => void operation("chat", "chat", { expected_id: draft.id, message, answer_to: draft.ai_request?.id })} />}
               {draft?.proposal && (
                 <div className="p-4 rounded-xl border border-cyan-200 bg-cyan-50 space-y-3">
                   <p className="text-sm font-semibold text-cyan-900">
                     Proposed diagram changes
                   </p>
-                  <p className="text-xs text-cyan-800">
-                    {
-                      draft.proposal.graph.nodes.filter(
-                        (n) => !graph.nodes.some((old) => old.id === n.id),
-                      ).length
-                    }{" "}
-                    added ·{" "}
-                    {
-                      graph.nodes.filter(
-                        (n) =>
-                          !draft.proposal!.graph.nodes.some(
-                            (next) => next.id === n.id,
-                          ),
-                      ).length
-                    }{" "}
-                    removed ·{" "}
-                    {
-                      draft.proposal.graph.nodes.filter((n) =>
-                        graph.nodes.some(
-                          (old) =>
-                            old.id === n.id &&
-                            (old.label !== n.label ||
-                              old.service !== n.service ||
-                              old.zone !== n.zone ||
-                              old.description !== n.description),
-                        ),
-                      ).length
-                    }{" "}
-                    modified.
-                  </p>
-                  <p className="text-xs text-cyan-800">
-                    {draft.proposal.graph.nodes.length} components ·{" "}
-                    {draft.proposal.graph.edges.length} connections. Review the
-                    diagram before applying.
-                  </p>
+                  <GraphChangeReview before={graph} after={draft.proposal.graph} />
                   <button
                     disabled={dirty || !!busy}
                     onClick={() => {
@@ -1332,6 +1301,7 @@ export function ArchitectureCanvas() {
                     <Check className="w-3.5 h-3.5" />
                     Apply to draft
                   </button>
+                  <button disabled={dirty || !!busy || !canEdit} onClick={() => { setPreview(false); void operation("discard", "discard-proposal", { expected_id: draft.id, proposal_id: draft.proposal!.id }); }} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-40">Discard proposal · keep saved design</button>
                 </div>
               )}
               {busy && (
@@ -1354,6 +1324,8 @@ export function ArchitectureCanvas() {
               }}
               className="border-t p-3 shrink-0 space-y-2"
             >
+              <ArchitectEditScope graph={graph} value={aiScope} onChange={setAiScope} disabled={!!busy || dirty || !!draft?.proposal || !canEdit || !workspace?.capabilities.scoped_ai_edits} />
+              {selected && <button type="button" disabled={!!busy || dirty || !!draft?.proposal || !canEdit} onClick={() => setAiScope({ mode: "EDIT", node_ids: [selected] })} className="text-xs font-semibold text-cyan-700 disabled:opacity-40">Edit selected: {graph.nodes.find(node => node.id === selected)?.label}</button>}
               <div className="rounded-xl border border-slate-200 focus-within:border-cyan-400 p-3">
                 <textarea
                   aria-label="Message architecture assistant"
@@ -1365,7 +1337,7 @@ export function ArchitectureCanvas() {
                     !workspace?.capabilities.ai_chat ||
                     !canEdit ||
                     !!busy ||
-                    dirty
+                    dirty || !!draft.proposal || !workspace?.capabilities.scoped_ai_edits
                   }
                   placeholder="Ask about your architecture…"
                   rows={3}
@@ -1373,7 +1345,7 @@ export function ArchitectureCanvas() {
                 />
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] text-slate-400">
-                    Changes stay in your draft
+                    {aiScope.mode === "REVIEW" ? "Review only" : "Review changes before applying"}
                   </span>
                   <button
                     type="submit"
@@ -1384,7 +1356,7 @@ export function ArchitectureCanvas() {
                       !workspace?.capabilities.ai_chat ||
                       !canEdit ||
                       !!busy ||
-                      dirty
+                      dirty || !!draft.proposal || !workspace?.capabilities.scoped_ai_edits || (["EDIT", "REMOVE"].includes(aiScope.mode) && !aiScope.node_ids.length)
                     }
                     className="bg-cyan-700 p-2 rounded-lg text-white disabled:opacity-30"
                   >
@@ -1401,6 +1373,10 @@ export function ArchitectureCanvas() {
                     ? "Analyze your connected repository to start an architecture draft."
                   : !canEdit
                     ? "An owner or administrator can request architecture changes."
+                  : draft.proposal
+                    ? "Review and apply or discard the pending changes before continuing."
+                  : !workspace?.capabilities.scoped_ai_edits
+                    ? "The scoped AI editor is awaiting the API release. Manual editing remains available."
                   : dirty
                   ? "Save your changes before asking for another proposal."
                   : !workspace?.capabilities.ai_chat

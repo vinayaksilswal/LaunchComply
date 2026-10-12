@@ -34,3 +34,38 @@ Review backups, tested restore/RPO/RTO, monitoring/alert drills, deploy/rollback
 - [Frontend server/API integration](https://docs.aws.amazon.com/prescriptive-guidance/latest/micro-frontends-aws/api-integration-data-fetching.html)
 - [SaaS tenant isolation](https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/isolation-mindset.html)
 - [ECS task IAM roles](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-iam-roles.html)
+# Scoped editing and AWS resource catalog
+
+The editor offers direct insertion from common AWS services and a versioned Mumbai
+CloudFormation catalog (264 resource families, 1,748 resource types in specification
+267.0.0). `tools/update_aws_catalog.py` refreshes the snapshot from the official
+regional resource specification. Catalog coverage is not universal AWS product
+coverage or implementation support. A component is inserted without connections;
+its architecture layer, actual placement, consumers and resource properties require
+review. CloudFormation types remain planning references, not executable templates.
+
+AI defaults to review only. Add mode preserves existing nodes, coordinates and
+connections. Edit mode requires an explicit component selection and allows only
+selected nodes, incident flows and related additions. Remove mode permits only
+selected deletions and incident-flow removal. Permissions come from the validated
+request scope; instruction keywords cannot authorize a whole-diagram replacement.
+The provider returns bounded edit operations rather than resending the complete
+graph. The server materializes, checks scope, validates graph references and applies
+the existing request-path policy before creating a proposal. Incompatible free
+provider responses can fall through the existing bounded routing chain.
+
+Clarification answers are tied to the original request receipt, intent and scope.
+Expired questions are rejected. Proposed changes show exact fields and flows;
+the customer can preview, apply or discard. Applying rechecks the saved graph
+fingerprint and scope. Older proposals without scope metadata must be discarded.
+Conversation replies are labelled with their saved version and action; earlier
+conversation is marked explicitly. Discarding does not create a new graph version.
+
+Manual connection editing includes purpose/protocol labels, reversal and removal,
+with existing undo/redo. Graphs remain bounded to 80 components and 160 connections.
+This release does not implement arbitrary enterprise IaC, verify real network
+isolation or enable automatic AWS provisioning. The deployment execution gate stays
+closed until an authenticated, reviewed execution workflow is implemented.
+
+Sources: [AWS CloudFormation resource specification](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/cfn-resource-specification.html),
+[regional resource provider schemas](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/resource-type-schemas.html).

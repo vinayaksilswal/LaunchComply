@@ -20,6 +20,7 @@ from app.services.architecture import knowledge
 from app.services.architecture.environment_connections import Connection, map_connections
 from app.services.architecture.capacity_planning import plan_capacity
 from app.services.architecture.deployment_planning import WorkloadPolicy, policy_issues
+from app.services.architecture.edit_scope import EditScope
 from typing import Literal
 from app.services.architecture.repository_links import linked_repositories
 
@@ -84,7 +85,7 @@ async def read(application_id: str, membership=Depends(member), db: AsyncSession
     arch = await latest(db, app)
     return {"application_id": app.id, "application_name": app.name, "architecture": output(arch),
         "capabilities": {"repository_analysis": service.github_available(), "ai_chat": service.ai_available(),
-                         "aws_references": knowledge.available(), "workload_scaling": True}}
+                         "aws_references": knowledge.available(), "workload_scaling": True, "scoped_ai_edits": True}}
 
 @router.get("/{application_id}/versions")
 async def versions(application_id: str, offset: int = Query(default=0, ge=0, le=10000),
@@ -184,8 +185,11 @@ class Save(BaseModel):
     graph: service.Graph
 
 class Chat(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     expected_id: str = Field(max_length=36)
     message: str = Field(min_length=1, max_length=2000)
+    edit_scope: EditScope = Field(default_factory=EditScope)
+    answer_to: str | None = Field(default=None, max_length=36)
 
 class Apply(BaseModel):
     expected_id: str = Field(max_length=36)
@@ -306,6 +310,22 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
     app = await application(db, application_id, membership, lock=True)
     arch = await current(db, app, payload.expected_id)
     spec = dict(arch.spec_json)
+    from app.services.architecture.edit_scope import EditScope, ScopeViolation, validate_selection
+    if pending_proposal(spec):
+        raise HTTPException(409, "Apply or discard the pending proposal before asking for another change.")
+    message = payload.message
+    if payload.answer_to:
+        if payload.answer_to != (spec.get("ai_request") or {}).get("id") or not spec.get("last_ai_questions"):
+            raise HTTPException(409, "These questions have expired. Start a new request.")
+        scope_input = spec.get("last_ai_scope")
+        message = (spec.get("last_ai_intent") or "") + "\nCustomer clarification:\n" + message
+    else:
+        scope_input = payload.edit_scope.model_dump()
+    try:
+        scope = EditScope.model_validate(scope_input or {}).model_dump()
+        validate_selection(spec["graph"], scope)
+    except ValueError:
+        raise HTTPException(422, "Choose valid components for the AI edit scope.") from None
     now = datetime.now(timezone.utc)
     running = spec.get("ai_request") or {}
     if running.get("status") == "RUNNING" and (now - datetime.fromisoformat(running["started_at"])).total_seconds() < 110:
@@ -323,7 +343,9 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
     failure = None
     answer = None
     try:
-        answer = await service.refine(spec["graph"], spec["evidence"], payload.message, spec["messages"], references, spec.get("requirements"))
+        answer = await service.refine(spec["graph"], spec["evidence"], message, spec["messages"], references, spec.get("requirements"), scope)
+    except ScopeViolation:
+        failure = HTTPException(422, {"code": "ARCHITECTURE_AI_SCOPE_REJECTED", "message": "AI tried to change components outside your selected scope. Your saved design is unchanged. Narrow the request or choose the required components."})
     except HTTPException as error:
         failure = error
     except TimeoutError:
@@ -354,15 +376,19 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
         arch.spec_json = spec
         await audit(db, membership, app, "ARCHITECTURE_AI_REQUEST_FAILED", diagnostics)
         await db.commit()
-        raise HTTPException(failure.status_code, {"code": code, "request_id": request_id, "message": "The architecture request failed. Your saved design is unchanged."})
+        raise HTTPException(failure.status_code, {"code": code, "request_id": request_id, "message": "AI tried to change components outside your selected scope. Your saved design is unchanged. Narrow the request or select the required components." if code == "ARCHITECTURE_AI_SCOPE_REJECTED" else "The architecture request failed. Your saved design is unchanged."})
     spec.pop("last_ai_failure", None)
     spec["ai_request"] = {**spec["ai_request"], "status": "COMPLETED", "finished_at": finished}
-    spec["messages"] = (spec["messages"] + [{"role": "user", "content": payload.message}, {"role": "assistant", "content": answer["message"]}])[-20:]
+    metadata = {"version": arch.version, "scope": scope, "request_id": request_id}
+    spec["messages"] = (spec["messages"] + [{"role": "user", "content": payload.message, **metadata}, {"role": "assistant", "content": answer["message"], **metadata}])[-20:]
     # An explanation with no diagram edits must not block requirement entry or
     # make the customer apply an unchanged graph. Existing versions stay intact.
     graph_changed = answer["graph"] != spec["graph"]
     spec["last_ai_questions"] = answer.get("questions", [])
-    spec["proposal"] = {"id": str(uuid.uuid4()), "graph": answer["graph"]} if graph_changed else None
+    spec["last_ai_scope"] = scope
+    spec["last_ai_intent"] = message[:4000]
+    spec["proposal"] = {"id": str(uuid.uuid4()), "graph": answer["graph"], "scope": scope,
+                        "base_fingerprint": knowledge.fingerprint(spec["graph"])} if graph_changed else None
     spec["last_ai_at"] = now.isoformat()
     if answer.get("ai_model"): spec["last_ai_model"] = answer["ai_model"]
     if answer.get("agent_workflow"): spec["last_ai_workflow"] = answer["agent_workflow"]
@@ -395,4 +421,23 @@ async def apply(application_id: str, payload: Apply, membership=Depends(editor),
     proposal = arch.spec_json.get("proposal")
     if not proposal or proposal["id"] != payload.proposal_id:
         raise HTTPException(409, "This proposal has expired. Request a new proposal.")
+    from app.services.architecture.edit_scope import enforce_scope, ScopeViolation
+    if not proposal.get("scope") or proposal.get("base_fingerprint") != knowledge.fingerprint(arch.spec_json["graph"]):
+        raise HTTPException(409, "This proposal predates the current edit scope. Discard it and request a new one.")
+    try:
+        enforce_scope(arch.spec_json["graph"], proposal["graph"], proposal["scope"])
+    except ScopeViolation:
+        raise HTTPException(409, "The proposal exceeds its approved edit scope. Discard it.") from None
     return await save_version(db, membership, app, arch, proposal["graph"], "ARCHITECTURE_AI_PROPOSAL_APPLIED")
+
+@router.post("/{application_id}/discard-proposal")
+async def discard_proposal(application_id: str, payload: Apply, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
+    app = await application(db, application_id, membership, lock=True)
+    arch = await current(db, app, payload.expected_id)
+    proposal = arch.spec_json.get("proposal")
+    if not proposal or proposal["id"] != payload.proposal_id:
+        raise HTTPException(409, "This proposal has expired. Reload the design.")
+    arch.spec_json = {**arch.spec_json, "proposal": None, "last_ai_questions": []}
+    await audit(db, membership, app, "ARCHITECTURE_AI_PROPOSAL_DISCARDED", {"proposal_id": payload.proposal_id})
+    await db.commit()
+    return output(arch)

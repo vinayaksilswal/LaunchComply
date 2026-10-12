@@ -1,6 +1,8 @@
 "use client";
-import { useRef, useState } from "react";
-import { Search, Sparkles, X, ExternalLink } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Search, Sparkles, X, ExternalLink, Plus } from "lucide-react";
+import catalog from "./awsResourceCatalog.json";
+import type { ArchitectureNode, ArchitectureZone } from "./CloudDiagram";
 
 const services = [
   ["Amazon ECS on Fargate", "Compute", "Run separate frontend, API and worker containers. Public frontend subnets and private backend subnets can share a regional VPC; restrict task access to ingress security groups.", "AmazonECS/latest/developerguide/fargate-task-networking.html"],
@@ -30,19 +32,55 @@ const services = [
   ["ECS Service Auto Scaling", "Operations", "Target tracking based on a selected metric and target. Throughput benchmarks inform planning; scaling limits and policy need actual configuration.", "AmazonECS/latest/developerguide/service-autoscaling-targettracking.html"],
 ] as const;
 
-export function AwsServiceCatalog({ aiDisabled, onAsk }: { aiDisabled: boolean; onAsk: (request: string) => void }) {
+type Entry = { name: string; category: string; description: string; documentation: string; resources?: { type: string; documentation: string }[] };
+const entries: Entry[] = [
+  ...services.map(([name, category, description, path]) => ({ name, category, description, documentation: `https://docs.aws.amazon.com/${path}` })),
+  ...catalog.families.map(family => ({ name: `AWS ${family.name}`, category: "Resource families", description: "CloudFormation resource family. Choose a resource type and review its properties, regional availability, permissions and integration before implementation.", documentation: family.resources[0].documentation, resources: family.resources })),
+];
+
+export function AwsServiceCatalog({ aiDisabled, addDisabled, onAsk, onAdd, openKey = 0 }: {
+  aiDisabled: boolean; addDisabled: boolean; onAsk: (request: string) => void;
+  onAdd: (node: Pick<ArchitectureNode, "label" | "service" | "zone" | "description">) => void; openKey?: number;
+}) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<(typeof services)[number]>(services[0]);
+  const [category, setCategory] = useState("All");
+  const [selected, setSelected] = useState<Entry>(entries[0]);
+  const [resource, setResource] = useState("");
+  const [label, setLabel] = useState(entries[0].name);
+  const [zone, setZone] = useState<ArchitectureZone>("APPLICATION");
+  const [notice, setNotice] = useState("");
+  useEffect(() => { if (openKey) dialog.current?.showModal(); }, [openKey]);
+  const choose = (entry: Entry) => {
+    setSelected(entry); setResource(entry.resources?.[0].type || ""); setLabel(entry.name); setNotice("");
+    setZone(entry.category === "Compute" ? "APPLICATION" : ["Data", "Messaging"].includes(entry.category) ? "DATA" : ["Networking", "Delivery"].includes(entry.category) ? "EDGE" : "SUPPORT");
+  };
+  const matches = entries.filter(entry => (category === "All" || entry.category === category) &&
+    `${entry.name} ${entry.category} ${entry.description} ${entry.resources?.map(item => item.type).join(" ") || ""}`.toLowerCase().includes(query.toLowerCase()));
+  const service = resource || selected.name;
+  const documentation = selected.resources?.find(item => item.type === resource)?.documentation || selected.documentation;
   return <>
     <button onClick={() => dialog.current?.showModal()} className="px-4 py-2 text-xs font-semibold text-slate-600">AWS services</button>
-    <dialog ref={dialog} aria-labelledby="aws-services-title" className="m-auto w-[calc(100%_-_2rem)] max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl border bg-white p-6 text-slate-900 shadow-xl backdrop:bg-slate-900/40">
-      <div className="flex justify-between"><div><h2 id="aws-services-title" className="text-lg font-bold">AWS service catalog</h2><p className="mt-1 text-xs text-slate-500">Explore deployment services. Ask the assistant to review their fit before adding them.</p></div><button aria-label="Close AWS services" onClick={() => dialog.current?.close()}><X className="h-5 w-5" /></button></div>
-      <div className="mt-5 grid gap-5 md:grid-cols-[280px_1fr]">
-        <div><label className="flex items-center gap-2 rounded-lg border p-2"><Search className="h-4 w-4 text-slate-400" /><input aria-label="Search AWS services" value={query} onChange={event => setQuery(event.target.value)} placeholder="Service or category" className="w-full text-xs outline-none" /></label><div className="mt-3 max-h-[55vh] overflow-y-auto space-y-1">{services.filter(service => service.join(" ").toLowerCase().includes(query.toLowerCase())).map(service => <button key={service[0]} aria-pressed={selected[0] === service[0]} onClick={() => setSelected(service)} className={`block w-full rounded-lg p-3 text-left text-xs ${selected[0] === service[0] ? "bg-cyan-50 text-cyan-900" : "hover:bg-slate-50"}`}><strong>{service[0]}</strong><span className="mt-1 block text-slate-500">{service[1]}</span></button>)}</div></div>
-        <section className="rounded-xl border p-5"><span className="text-xs font-semibold text-cyan-700">{selected[1]}</span><h3 className="mt-2 text-xl font-bold">{selected[0]}</h3><p className="mt-3 text-sm leading-6 text-slate-600">{selected[2]}</p><h4 className="mt-6 text-sm font-semibold">How to implement</h4><ol className="mt-3 list-decimal space-y-2 pl-5 text-xs leading-5 text-slate-600"><li>Confirm the service’s purpose and the source components that use it.</li><li>Choose region, traffic, availability and the appropriate network placement.</li><li>Review its connections, IAM, secrets, TLS, operating limits and cost.</li><li>Review the AI’s diagram proposal and approve the saved design.</li><li>Prepare and review infrastructure configuration, then verify deployment in the customer’s AWS account.</li></ol><a href={`https://docs.aws.amazon.com/${selected[3]}`} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-1 text-xs text-cyan-700 underline">Official implementation documentation <ExternalLink className="h-3 w-3" /></a><button disabled={aiDisabled} onClick={() => { onAsk(`Help me add ${selected[0]} to this AWS architecture. First assess the supplied source and existing graph. Ask up to three essential questions with short selectable options about purpose, consuming components, connections and configuration if needed. Do not modify the graph until I answer required choices. Then explain the AWS implementation steps and propose only reviewed connections. All frontend hosting is AWS public-subnet containers; backend is private with HTTPS ingress and security-group-only access. Preserve source identities. ${selected[0] === "AWS WAF" ? "Associate WAF with a selected ALB or CloudFront distribution; it is web filtering, not a VPC bridge." : ""}`); dialog.current?.close(); }} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-700 p-3 text-xs font-semibold text-white disabled:opacity-40"><Sparkles className="h-4 w-4" />Ask AI how to add it</button>{aiDisabled && <p className="mt-2 text-xs text-slate-500">Save the current diagram and resolve pending proposals before starting a new AI request. Editing access and AI configuration are required.</p>}</section>
+    <dialog ref={dialog} aria-labelledby="aws-services-title" className="m-auto w-[calc(100%_-_2rem)] max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl border bg-white p-5 text-slate-900 shadow-xl backdrop:bg-slate-900/40">
+      <div className="flex justify-between gap-3"><div><h2 id="aws-services-title" className="text-lg font-bold">AWS service catalog</h2><p className="mt-1 text-xs text-slate-500">{catalog.families.length} resource families · {catalog.families.reduce((count, family) => count + family.resources.length, 0).toLocaleString()} resource types · common deployment services</p></div><button aria-label="Close AWS services" onClick={() => dialog.current?.close()}><X className="h-5 w-5" /></button></div>
+      <div className="mt-4 grid gap-4 md:grid-cols-[280px_1fr]">
+        <div><label className="flex items-center gap-2 rounded-lg border p-2"><Search className="h-4 w-4 text-slate-400" /><input aria-label="Search AWS services" value={query} onChange={event => setQuery(event.target.value)} placeholder="Service, category or resource type" className="w-full text-sm outline-none" /></label>
+          <select aria-label="AWS service category" value={category} onChange={event => setCategory(event.target.value)} className="mt-2 w-full rounded-lg border p-2 text-xs">{["All", ...Array.from(new Set(entries.map(entry => entry.category)))].map(item => <option key={item}>{item}</option>)}</select>
+          <p className="mt-2 text-xs text-slate-500">{matches.length} matches</p>
+          <div className="mt-2 max-h-[50vh] overflow-y-auto space-y-1">{matches.map(entry => <button key={entry.name} aria-pressed={selected.name === entry.name} onClick={() => choose(entry)} className={`block w-full rounded-lg p-3 text-left text-xs ${selected.name === entry.name ? "bg-cyan-50 text-cyan-900" : "hover:bg-slate-50"}`}><strong>{entry.name}</strong><span className="mt-1 block text-slate-500">{entry.resources ? `${entry.resources.length} resource types` : entry.category}</span></button>)}{!matches.length && <p className="p-3 text-sm text-slate-500">No matches. Search another name or choose All categories.</p>}</div>
+        </div>
+        <section className="rounded-xl border p-4 space-y-3"><span className="text-xs font-semibold text-cyan-700">{selected.category} · planning component</span><h3 className="text-xl font-bold">{selected.name}</h3><p className="text-sm leading-6 text-slate-600">{selected.description}</p>
+          {selected.resources && <label className="block text-xs font-semibold">Resource type<select aria-label="AWS resource type" value={resource} onChange={event => { setResource(event.target.value); setLabel(event.target.value.split("::").slice(1).join(" ")); }} className="mt-1 block w-full rounded-lg border p-2 font-normal">{selected.resources.map(item => <option key={item.type}>{item.type}</option>)}</select></label>}
+          <div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold">Component name<input aria-label="Catalog component name" maxLength={100} value={label} onChange={event => setLabel(event.target.value)} className="mt-1 block w-full rounded-lg border p-2 font-normal" /></label><label className="text-xs font-semibold">Architecture layer<select aria-label="Catalog architecture layer" value={zone} onChange={event => setZone(event.target.value as ArchitectureZone)} className="mt-1 block w-full rounded-lg border p-2 font-normal"><option value="EDGE">Entry & networking</option><option value="APPLICATION">Application services</option><option value="DATA">Data & messaging</option><option value="SUPPORT">Operations & security</option></select></label></div>
+          <p className="text-xs leading-5 text-slate-500">Inserts one unconnected component. Existing services, connections and positions stay unchanged. Select it on the diagram to configure placement and connections.</p>
+          <button disabled={addDisabled || !label.trim()} onClick={() => { onAdd({ label: label.trim(), service: service.slice(0, 100), zone, description: `Manually selected ${service}. Purpose, placement, permissions and connections require review. CloudFormation type is a planning reference, not an implemented resource.`.slice(0, 500) }); setNotice(`${label.trim()} added to your draft. Close this catalog to configure it or undo.`); }} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 p-3 text-sm font-semibold text-white disabled:opacity-40"><Plus className="h-4 w-4" />Add to architecture</button>
+          {notice && <p role="status" className="rounded-lg bg-cyan-50 p-2 text-xs text-cyan-900">{notice}</p>}
+          <details className="rounded-lg border p-3 text-xs leading-5"><summary className="cursor-pointer font-semibold">Implementation checklist</summary><ol className="mt-2 list-decimal space-y-1 pl-4"><li>Define purpose, consumers and connection direction.</li><li>Select region, availability, placement and scaling needs.</li><li>Review resource properties, IAM, encryption, TLS, secrets and costs.</li><li>Prepare infrastructure configuration and review the actual plan.</li><li>Deploy through an authorized workflow; verify health, isolation and rollback.</li></ol></details>
+          <a href={documentation} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-cyan-700 underline">AWS resource documentation <ExternalLink className="h-3 w-3" /></a>
+          <button disabled={aiDisabled} onClick={() => { onAsk(`Review how to implement ${service} in this AWS architecture. Assess its fit and ask up to three essential questions about purpose, consumers, configuration and connections. Explain the implementation steps. Preserve the graph; I will choose an edit scope before requesting changes. WAF is an association with ingress, not a VPC bridge.`); dialog.current?.close(); }} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-cyan-200 p-3 text-xs font-semibold text-cyan-800 disabled:opacity-40"><Sparkles className="h-4 w-4" />Prepare AI implementation review</button>
+        </section>
       </div>
-      <p className="mt-5 text-xs text-slate-500">Curated deployment catalog. Documentation and proposals do not provision resources or verify capacity.</p>
+      <p className="mt-4 text-xs leading-5 text-slate-500">AWS CloudFormation specification {catalog.version} · Mumbai snapshot {catalog.checked_at}. This list covers supported resource families, not every AWS product. Availability and account access need checking. Automatic provisioning is not available.</p>
     </dialog>
   </>;
 }

@@ -21,12 +21,8 @@ def operations(node):
 def check_transition(original, proposed, request):
     if original == proposed:
         return
-    old = {node["id"]: node for node in original["nodes"]}
     nodes = {node["id"]: node for node in proposed["nodes"]}
-    # Layout refinements must not silently discard linked repositories' workloads.
-    if not re.search(r"remove|delete|consolidat|merge|rebuild|replace", request, re.I):
-        if any(node.get("zone") == "APPLICATION" and key not in nodes for key, node in old.items()):
-            raise ValueError("WORKLOAD_IDENTITY_LOST")
+    # Component identity/removal is enforced by the server-owned edit scope.
     for node in proposed["nodes"]:
         if frontend(node) and (not re.search(r"fargate|ecs|ec2|eks|container", node.get("service", ""), re.I) or not re.search(r"public frontend", node.get("service", ""), re.I)):
             raise ValueError("FRONTEND_PLACEMENT_UNRESOLVED")
