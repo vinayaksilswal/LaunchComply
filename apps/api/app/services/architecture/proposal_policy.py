@@ -21,9 +21,17 @@ def operations(node):
 def check_transition(original, proposed, request):
     if original == proposed:
         return
+    old = {node["id"]: node for node in original["nodes"]}
     nodes = {node["id"]: node for node in proposed["nodes"]}
     # Component identity/removal is enforced by the server-owned edit scope.
     for node in proposed["nodes"]:
+        previous = old.get(node["id"])
+        if previous and previous.get("zone") == "APPLICATION" and (
+            node.get("zone") != "APPLICATION" or frontend(previous) != frontend(node)
+        ):
+            raise ValueError("WORKLOAD_ROLE_CHANGED")
+        if previous and previous.get("zone") == "DATA" and node.get("zone") != "DATA":
+            raise ValueError("DATA_ROLE_CHANGED")
         if frontend(node) and (not re.search(r"fargate|ecs|ec2|eks|container", node.get("service", ""), re.I) or not re.search(r"public frontend", node.get("service", ""), re.I)):
             raise ValueError("FRONTEND_PLACEMENT_UNRESOLVED")
         if node.get("zone") == "APPLICATION" and not frontend(node) and re.search(r"public frontend|public backend|public api|public ip", node.get("service", ""), re.I):

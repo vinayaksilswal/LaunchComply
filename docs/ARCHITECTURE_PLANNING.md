@@ -82,6 +82,10 @@ conversation is marked explicitly. Discarding does not create a new graph versio
 
 Manual connection editing includes purpose/protocol labels, reversal and removal,
 with existing undo/redo. Graphs remain bounded to 80 components and 160 connections.
+AI edits retain the existing application/data layer and frontend/backend role for
+source-linked workloads. Changing a label or layer cannot turn an existing private
+backend into a public frontend identity. Proposal review replaces the composer
+while changes are pending, keeping the exact change list and review actions visible.
 This release does not implement arbitrary enterprise IaC, verify real network
 isolation or enable automatic AWS provisioning. The deployment execution gate stays
 closed until an authenticated, reviewed execution workflow is implemented.

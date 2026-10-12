@@ -1317,7 +1317,7 @@ export function ArchitectureCanvas() {
               )}
               <div ref={chatEnd} />
             </div>
-            <form
+            {draft?.proposal ? <p className="shrink-0 border-t bg-cyan-50 p-3 text-xs leading-5 text-cyan-900">Review the exact changes above. Preview, apply or discard them to continue.</p> : <form
               onSubmit={(event) => {
                 event.preventDefault();
                 send();
@@ -1383,7 +1383,7 @@ export function ArchitectureCanvas() {
                     ? "AI chat requires administrator configuration."
                     : "AI receives this draft and dependency findings. Review suggestions before applying."}
               </p>
-            </form>
+            </form>}
           </AssistantWindow>
         )}
       </div>
