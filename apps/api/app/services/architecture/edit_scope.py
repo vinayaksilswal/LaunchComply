@@ -21,7 +21,9 @@ class EditScope(BaseModel):
 
 
 class ScopeViolation(ValueError):
-    pass
+    def __init__(self, message, code="EDIT_SCOPE"):
+        super().__init__(message)
+        self.code = code
 
 
 def apply_operations(original, answer):
@@ -31,12 +33,12 @@ def apply_operations(original, answer):
     for update in answer.get("node_updates", []):
         key = update["id"]
         if key not in nodes or key in seen:
-            raise ScopeViolation("Invalid or repeated update ID.")
+            raise ScopeViolation("Invalid or repeated update ID.", "INVALID_UPDATE_ID")
         seen.add(key)
         nodes[key].update({field: value for field, value in update.items() if value is not None})
     for node in answer.get("new_nodes", []):
         if node["id"] in nodes:
-            raise ScopeViolation("New components must have new IDs.")
+            raise ScopeViolation("New components must have new IDs.", "DUPLICATE_NODE_ID")
         nodes[node["id"]] = node
     removed = answer.get("removed_node_ids", [])
     if len(set(removed)) != len(removed):
@@ -76,7 +78,7 @@ def enforce_scope(original, proposed, scope):
         raise ScopeViolation("Removal cannot add or replace components.")
     for key in old.keys() & new.keys():
         if old[key] != new[key] and (mode != "EDIT" or key not in selected):
-            raise ScopeViolation("The response changed an unselected component or its position.")
+            raise ScopeViolation("The response changed an unselected component or its position.", "UNSELECTED_NODE_CHANGE")
     key = lambda edge: (edge["source"], edge["target"], edge["label"])
     before = Counter(map(key, original["edges"]))
     after = Counter(map(key, proposed["edges"]))

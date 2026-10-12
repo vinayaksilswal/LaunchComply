@@ -1322,10 +1322,10 @@ export function ArchitectureCanvas() {
                 event.preventDefault();
                 send();
               }}
-              className="border-t p-3 shrink-0 space-y-2"
+              className="border-t p-3 shrink-0 space-y-2 max-h-[60%] overflow-y-auto"
             >
               <ArchitectEditScope graph={graph} value={aiScope} onChange={setAiScope} disabled={!!busy || dirty || !!draft?.proposal || !canEdit || !workspace?.capabilities.scoped_ai_edits} />
-              {selected && <button type="button" disabled={!!busy || dirty || !!draft?.proposal || !canEdit} onClick={() => setAiScope({ mode: "EDIT", node_ids: [selected] })} className="text-xs font-semibold text-cyan-700 disabled:opacity-40">Edit selected: {graph.nodes.find(node => node.id === selected)?.label}</button>}
+              {selected && graph.nodes.some(node => node.id === selected) && <button type="button" disabled={!!busy || dirty || !!draft?.proposal || !canEdit} onClick={() => setAiScope({ mode: "EDIT", node_ids: [selected] })} className="text-xs font-semibold text-cyan-700 disabled:opacity-40">Edit selected: {graph.nodes.find(node => node.id === selected)?.label}</button>}
               <div className="rounded-xl border border-slate-200 focus-within:border-cyan-400 p-3">
                 <textarea
                   aria-label="Message architecture assistant"

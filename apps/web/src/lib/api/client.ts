@@ -11,6 +11,7 @@ const serviceMessages: Record<string, string> = {
   ARCHITECTURE_AI_AUTH_FAILED: "The AI provider could not authorize this request. Ask your platform administrator to check its backend credentials.",
   ARCHITECTURE_AI_UNAVAILABLE: "The configured models are unavailable or could not return a valid proposal. Your saved design is unchanged. Try again shortly.",
   ARCHITECTURE_AI_INVALID_PROPOSAL: "The assistant returned an incomplete proposal. Your saved design is unchanged. Please try again.",
+  ARCHITECTURE_AI_SCOPE_REJECTED: "The AI response exceeded the selected edit scope. Your saved design is unchanged. Ask for a narrower change or select the required components.",
   ARCHITECTURE_AI_TIMEOUT: "The architecture assistant took too long. Your saved design is unchanged. Please try again.",
   ARCHITECTURE_AI_RATE_LIMIT: "The AI provider is currently rate limiting requests. Your design is unchanged. Try again later; daily quota may still be available.",
   ARCHITECTURE_AI_FREE_ALLOWANCE_EXHAUSTED: "The AI provider's daily free allowance is exhausted. Your design is unchanged. Try again after the allowance resets.",
@@ -194,7 +195,7 @@ export async function apiClient<T>(
         const message = response.status >= 500
           ? serviceMessages[code] || "The service is temporarily unavailable. Please try again shortly."
           :
-          errorPayload?.error?.message ||
+          serviceMessages[code] || errorPayload?.error?.message ||
           validationMessage ||
           errorPayload?.message ||
           `Request failed with status ${response.status}`;

@@ -53,6 +53,11 @@ The provider returns bounded edit operations rather than resending the complete
 graph. The server materializes, checks scope, validates graph references and applies
 the existing request-path policy before creating a proposal. Incompatible free
 provider responses can fall through the existing bounded routing chain.
+The free router can make one corrective attempt after schema, truncation or scope
+failure within the original deadline. Selected components and exact IDs are supplied
+explicitly; the correction never expands edit permissions. Authentication, policy
+and rate-limit outcomes do not trigger this corrective replay. Diagnostics retain
+fixed validation categories, not model output, source text or secret values.
 
 Clarification answers are tied to the original request receipt, intent and scope.
 Expired questions are rejected. Proposed changes show exact fields and flows;

@@ -354,7 +354,7 @@ async def provider_refine(graph, evidence, message, history, aws_references=None
         instructions += " Return only the edit operations in the schema, NOT a replacement graph. node_updates contain only changed fields and the existing ID. Keep all edit arrays empty when asking questions or when no change is needed. Do not resend unchanged nodes or edges. removed_edges must match an existing flow's source, target and label exactly. New node IDs must be unique."
     context = json.dumps({"draft": graph, "source_evidence": evidence, "recent_conversation": [] if read_only else history[-6:],
         "request": message, "aws_documentation_references": aws_references, "customer_requirements": requirements,
-        "planning_context": planning_context})
+        "planning_context": planning_context, "selected_components": [node for node in graph["nodes"] if node["id"] in scope["node_ids"]]})
     try:
         async with http_client() as client:
             if settings.ARCHITECTURE_AI_PROVIDER == "openrouter":
@@ -397,7 +397,11 @@ async def openrouter_proposal(client, instructions, context, schema, answer_mode
     deadline = time.monotonic() + REQUEST_BUDGET_SECONDS
     try:
         async with asyncio.timeout(REQUEST_BUDGET_SECONDS):
-            for candidate in models:
+            candidates = models + ([FREE_ROUTER] if FREE_ROUTER in models else [])
+            for index, candidate in enumerate(candidates):
+                repair = index == len(models)
+                if repair and (not attempts or attempts[-1]["kind"] not in {"SCOPE_REJECTED", "INVALID_RESPONSE", "TRUNCATED_RESPONSE"}):
+                    continue
                 # Reserve a full final attempt instead of spending the entire
                 # deadline on slow preferred models. Account policy blocks stop.
                 reserved = MODEL_TIMEOUT_SECONDS if candidate != FREE_ROUTER and FREE_ROUTER in models else 0
@@ -410,8 +414,16 @@ async def openrouter_proposal(client, instructions, context, schema, answer_mode
                     # The final router can use unused time from fast failures;
                     # it remains bounded by the overall request deadline.
                     attempt_budget = remaining if candidate == FREE_ROUTER else min(MODEL_TIMEOUT_SECONDS, remaining)
+                    correction = ""
+                    if repair:
+                        correction = (
+                            " The previous response failed server validation: " + attempts[-1].get("validation_code", attempts[-1]["kind"]) + ". "
+                            "Correct the edit list. Use EXACT existing IDs from selected_components for node_updates; never put existing nodes in new_nodes. "
+                            "Send only fields requested by the customer. Keep every unrelated edit array empty. Omit or use null for unchanged optional fields. "
+                            "The original graph and edit scope remain authoritative; do not expand permissions."
+                        )
                     request_body = {"model": used, "max_tokens": 8192 if fixed_graph is not None else 16000,
-                        "stream": False, "provider": dict(provider), "messages": provider_messages(instructions, context)}
+                        "stream": False, "provider": dict(provider), "messages": provider_messages(instructions + correction, context)}
                     if candidate == FREE_ROUTER:
                         request_body["provider"]["require_parameters"] = True
                         request_body["response_format"] = {"type": "json_schema", "json_schema": {
@@ -442,8 +454,9 @@ async def openrouter_proposal(client, instructions, context, schema, answer_mode
                         from app.services.architecture.edit_scope import ScopeViolation
                         try:
                             answer = materialize_answer(answer, supplied["draft"], scope)
-                        except ScopeViolation:
+                        except ScopeViolation as error:
                             record["kind"] = "SCOPE_REJECTED"
+                            record["validation_code"] = error.code
                             raise
                         if not answer.get("questions"):
                             from app.services.architecture.proposal_policy import check_transition
