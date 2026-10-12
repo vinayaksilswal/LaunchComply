@@ -19,6 +19,7 @@ from app.services.architecture import workspace as service
 from app.services.architecture import knowledge
 from app.services.architecture.environment_connections import Connection, map_connections
 from app.services.architecture.capacity_planning import plan_capacity
+from app.services.architecture.deployment_planning import WorkloadPolicy, policy_issues
 from typing import Literal
 from app.services.architecture.repository_links import linked_repositories
 
@@ -83,7 +84,7 @@ async def read(application_id: str, membership=Depends(member), db: AsyncSession
     arch = await latest(db, app)
     return {"application_id": app.id, "application_name": app.name, "architecture": output(arch),
         "capabilities": {"repository_analysis": service.github_available(), "ai_chat": service.ai_available(),
-                         "aws_references": knowledge.available()}}
+                         "aws_references": knowledge.available(), "workload_scaling": True}}
 
 @router.get("/{application_id}/versions")
 async def versions(application_id: str, offset: int = Query(default=0, ge=0, le=10000),
@@ -194,6 +195,7 @@ class ApplyReferences(BaseModel):
     expected_id: str = Field(max_length=36)
 
 class Requirements(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     expected_id: str = Field(max_length=36)
     peak_requests_per_minute: int = Field(ge=1, le=100_000_000)
     concurrent_users: int = Field(ge=1, le=10_000_000)
@@ -202,12 +204,15 @@ class Requirements(BaseModel):
     secondary_region: str | None = Field(default=None, max_length=30)
     sizing_workload_id: str | None = Field(default=None, max_length=64)
     requests_per_second_per_replica: float | None = Field(default=None, gt=0, le=1_000_000, allow_inf_nan=False)
+    workload_policies: list[WorkloadPolicy] = Field(default_factory=list, max_length=80)
 
 @router.post("/{application_id}/requirements")
 async def requirements(application_id: str, payload: Requirements, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
     arch = await current(db, app, payload.expected_id)
     values = payload.model_dump(exclude={"expected_id"})
+    if "workload_policies" not in payload.model_fields_set:
+        values["workload_policies"] = (arch.spec_json.get("requirements") or {}).get("workload_policies", [])
     if pending_proposal(arch.spec_json):
         raise HTTPException(409, "Apply or resolve the pending AI proposal before changing deployment targets.")
     regions = Requirements.model_fields["region"].annotation.__args__
@@ -218,6 +223,9 @@ async def requirements(application_id: str, payload: Requirements, membership=De
         raise HTTPException(422, "Choose a workload from this saved architecture for sizing.")
     if payload.requests_per_second_per_replica and not payload.sizing_workload_id:
         raise HTTPException(422, "Select a workload before entering its benchmark throughput.")
+    issues = policy_issues(arch.spec_json["graph"], values["workload_policies"])
+    if issues:
+        raise HTTPException(422, "Review workload scaling and load-balancer settings: " + " ".join(issues))
     graph, plan = plan_capacity(arch.spec_json["graph"], values)
     return await save_version(db, membership, app, arch, graph, "ARCHITECTURE_REQUIREMENTS_SAVED", {"requirements": values, "capacity_plan": plan})
 

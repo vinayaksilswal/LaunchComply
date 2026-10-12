@@ -35,6 +35,7 @@ import { apiClient, ApiError } from "@/lib/api";
 import { codeArchitecture, sourceOverview, sourceAreas, type SourceModule } from "./codeArchitecture";
 import { useAccount } from "@/components/auth/AccountProvider";
 import type { DeploymentRequirements } from "./ProductionDiagram";
+import { ScalingSummary } from "./WorkloadScaling";
 import { arrangeBusinessArchitecture, businessBoundaries } from "./businessArchitecture";
 import { RequirementsForm } from "./RequirementsForm";
 import { AwsReferences, type AwsReferenceReview } from "./AwsReferences";
@@ -109,7 +110,7 @@ interface Workspace {
   application_id: string;
   application_name: string;
   architecture: Draft | null;
-  capabilities: { repository_analysis: boolean; ai_chat: boolean; aws_references?: boolean };
+  capabilities: { repository_analysis: boolean; ai_chat: boolean; aws_references?: boolean; workload_scaling?: boolean };
 }
 const zones: { id: Zone; name: string; color: string; icon: typeof Globe }[] = [
   { id: "EDGE", name: "Public entry", color: "#0891b2", icon: Globe },
@@ -465,7 +466,7 @@ export function ArchitectureCanvas() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {draft && <ArchitectureHistory applicationId={appId} currentId={draft.id} dirty={dirty} disabled={!!busy} canRestore={canEdit} onRestore={versionId => operation("restore", "restore", { expected_id: draft.id, version_id: versionId })} />}
-          {draft && <ArchitectureSettings key={appId} graph={graph} requirements={draft.requirements} version={draft.version} connections={draft.evidence.environment_connections || noConnections} modules={draft.evidence.modules || []} disabled={!canEdit || !!busy} proposalPending={!!draft.proposal} saving={!!busy} errorMessage={error} blockedReason={dirty ? "Save your diagram changes before saving settings." : draft.proposal ? "Apply the pending AI proposal before saving settings." : undefined} onRequirements={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} onConnections={bindings => operation("environment", "environment-connections", { expected_id: draft.id, bindings })} onGraph={value => { setGraph(value); setArrangedView(false); setView("cloud"); }} />}
+          {draft && <ArchitectureSettings key={appId} graph={graph} requirements={draft.requirements} scalingAvailable={!!workspace?.capabilities.workload_scaling} version={draft.version} connections={draft.evidence.environment_connections || noConnections} modules={draft.evidence.modules || []} disabled={!canEdit || !!busy} proposalPending={!!draft.proposal} saving={!!busy} errorMessage={error} blockedReason={dirty ? "Save your diagram changes before saving settings." : draft.proposal ? "Apply the pending AI proposal before saving settings." : undefined} onRequirements={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} onConnections={bindings => operation("environment", "environment-connections", { expected_id: draft.id, bindings })} onGraph={value => { setGraph(value); setArrangedView(false); setView("cloud"); }} />}
           <select
             aria-label="Business asset for architecture"
             disabled={loading || !!busy || dirty}
@@ -735,6 +736,7 @@ export function ArchitectureCanvas() {
                   unspecified unless documented in its requirements. A
                   dependency alone cannot establish production capacity.
                 </p>
+                <ScalingSummary graph={shown} requirements={draft.requirements} />
                 <DesignReview review={draft.design_review} version={draft.version} saved={!dirty && !preview && !draft.proposal} assetId={appId} />
                 <div className="mt-5 overflow-x-auto">
                   <table className="w-full text-left text-xs">
@@ -823,6 +825,7 @@ export function ArchitectureCanvas() {
                   selected={selected}
                   code={view === "code"}
                   boundaries={boundaries.length ? boundaries : undefined}
+                  workloadPolicies={draft.requirements?.workload_policies}
                   onSelect={(id) => {
                     setSelected(id);
                     setChatVisible(true);

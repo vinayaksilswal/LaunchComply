@@ -1,6 +1,7 @@
 """Explicit workload planning assumptions, never observed or deployed capacity."""
 import math
 import re
+from app.services.architecture.deployment_planning import deployment_review
 
 
 def plan_capacity(graph, requirements):
@@ -15,6 +16,11 @@ def plan_capacity(graph, requirements):
             "status": "ASSUMPTION_BASED" if measured else "BENCHMARK_REQUIRED",
             "scope": "Sizing applies only to the selected workload, assuming all peak requests reach it. Other workloads, CPU/memory, concurrency, database capacity and recovery replication need separate measurement."}
     workload = requirements.get("sizing_workload_id")
+    plan["deployment_review"] = deployment_review(graph, requirements)
+    policy = next((item for item in requirements.get("workload_policies", []) if item.get("node_id") == workload), None)
+    if policy and replicas and replicas > policy["max_tasks"]:
+        plan["deployment_review"]["issues"].append("Benchmark-based peak sizing exceeds this workload's proposed maximum tasks. Revise the bound or demand assumptions before deployment.")
+        plan["deployment_review"]["status"] = "DECISIONS_REQUIRED"
     selected = next((node for node in graph["nodes"] if node["id"] == workload and node["zone"] == "APPLICATION"), None)
     if not selected:
         return graph, plan

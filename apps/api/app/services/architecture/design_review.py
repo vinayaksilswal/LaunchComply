@@ -116,6 +116,16 @@ def build_review(graph, evidence=None, requirements=None, source_changed=False):
         from app.services.architecture.capacity_planning import plan_capacity
         _, capacity = plan_capacity(graph, requirements)
         add("CAPACITY", "Review workload scaling", "REVIEW", f"Peak demand {capacity['peak_requests_per_second']} requests/s. " + (f"{capacity['suggested_replicas']} replicas proposed using supplied throughput and 25% headroom. " if capacity['suggested_replicas'] else "Benchmark required for peak-capacity sizing. ") + capacity["scope"], [requirements["sizing_workload_id"]])
+    from app.services.architecture.deployment_planning import deployment_review
+    deployment = deployment_review(graph, requirements)
+    if any(re.search(r"\becs\b|\bfargate\b", node.get("service", ""), re.I) and node.get("zone") == "APPLICATION" for node in nodes):
+        gaps = deployment["issues"]
+        missing_policies = deployment["unplanned_workload_ids"]
+        add("SCALING", "Plan per-service autoscaling and AZ resilience", "MISSING" if missing_policies or gaps else "REVIEW",
+            f"{len(deployment['policies'])} customer-declared workload policies; {len(missing_policies)} ECS services still need bounds, metric/target, cooldowns and deployment strategy. " + " ".join(gaps) + " " + deployment["scope"], missing_policies or [item["node_id"] for item in deployment["policies"]])
+        balanced = [node for node in nodes if node.get("zone") == "EDGE" and re.search(r"application load balancer|\balb\b", node.get("service", ""), re.I)]
+        add("LOAD_BALANCING", "Configure target groups, health and safe releases", "REVIEW",
+            "ALBs are regional services spanning selected AZ subnets. Use a dedicated IP target group per Fargate service and host/path rules for separate frontends; internal API ALB accepts only frontend-server SGs. Record target HTTPS port and implemented health endpoint, then review listener certificates, success codes, health grace/thresholds, connection draining, rollback and all-targets-unhealthy behavior. ALB HTTPS targets are encrypted, but ALB does not validate their certificates. Application authentication and SG restrictions remain required. Blue/green needs separate target groups and a traffic-shift/rollback plan; ALB request-count target tracking is not supported for that deployment type. No target group or listener is configured by this review.", [node["id"] for node in balanced])
     add("RUNTIME", "Define build and runtime settings", "REVIEW",
         "Review each workload's build directory, runtime image, start command, listening port, health endpoint, environment-variable names and secret references. CPU, memory, replica limits and autoscaling need workload measurements; no sizes are inferred from traffic alone.", workloads)
     data = [node["id"] for node in nodes if node.get("zone") == "DATA"]
@@ -123,6 +133,8 @@ def build_review(graph, evidence=None, requirements=None, source_changed=False):
         "Confirm persistence use, compatibility, encryption, retention, backup/restore and migration strategy. Agree recovery point/time targets and validate them. Multi-AZ and multi-region requirements need actual replica, replication and failover plans; service cards are not instance counts.", data)
     add("ACCESS", "Review identity and secrets", "REVIEW",
         "Review workload-specific IAM roles, customer provisioning permissions, secrets injection, audit logging and sensitive-data handling. An observation-role identity check is not provisioning permission or a security assessment.")
+    add("TENANT_ISOLATION", "Verify SaaS tenant isolation", "REVIEW",
+        "Choose pooled, silo or bridge isolation explicitly. Derive tenant context from a validated identity and server-side membership; authorize every object and operation. Verify cross-tenant denial in API queries, database rows/schemas, storage prefixes, caches and background jobs. Review administrator MFA, scoped service roles, per-tenant quotas/rate limits and tenant-aware audit logs without sensitive payloads. A private VPC or authenticated request alone does not establish tenant isolation. Source and adversarial acceptance evidence are still required.", workloads + data)
     add("OPERATIONS", "Agree costs and operating ownership", "REVIEW",
         "Review a real infrastructure plan, service and data-transfer costs, deployment/rollback process, alarms, support ownership and acceptance evidence before execution. This checklist records planning gaps; it cannot approve or deploy infrastructure.")
     add("OBSERVABILITY", "Configure monitoring and response", "REVIEW",
@@ -139,4 +151,8 @@ def build_review(graph, evidence=None, requirements=None, source_changed=False):
                 {"title": "AWS private workloads and public ingress", "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-example-private-subnets-nat.html"},
                 {"title": "AWS internal load balancer access", "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/userguide/how-elastic-load-balancing-works.html"},
                 {"title": "AWS frontend server API integration", "url": "https://docs.aws.amazon.com/prescriptive-guidance/latest/micro-frontends-aws/api-integration-data-fetching.html"},
+                {"title": "AWS ECS target tracking", "url": "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-autoscaling-targettracking.html"},
+                {"title": "AWS Fargate ALB target groups", "url": "https://docs.aws.amazon.com/AmazonECS/latest/developerguide/alb.html"},
+                {"title": "AWS ALB target health", "url": "https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html"},
+                {"title": "AWS SaaS tenant isolation", "url": "https://docs.aws.amazon.com/wellarchitected/latest/saas-lens/isolation-mindset.html"},
             ]}

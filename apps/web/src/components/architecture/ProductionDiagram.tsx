@@ -4,6 +4,13 @@ import { Cloud, Globe, Container, Database, HardDrive, ShieldCheck, KeyRound, Sc
 import type { ArchitectureGraph, ArchitectureNode } from "./CloudDiagram";
 import { networkPlacement } from "./networkPlacement";
 
+export interface WorkloadPolicy {
+  node_id: string; min_tasks: number; max_tasks: number;
+  metric: "CPU" | "MEMORY" | "ALB_REQUESTS"; target: number;
+  scale_out_cooldown_seconds: number; scale_in_cooldown_seconds: number;
+  deployment_strategy: "ROLLING" | "BLUE_GREEN";
+  alb_id: string | null; target_port: number | null; health_check_path: string | null;
+}
 export interface DeploymentRequirements {
   peak_requests_per_minute: number;
   concurrent_users: number;
@@ -12,6 +19,7 @@ export interface DeploymentRequirements {
   secondary_region: string | null;
   sizing_workload_id?: string | null;
   requests_per_second_per_replica?: number | null;
+  workload_policies?: WorkloadPolicy[];
 }
 interface Instance { key: string; node: ArchitectureNode; x: number; y: number; region: number; az: number; role: string; }
 interface Boundary { label: string; x: number; y: number; width: number; height: number; kind: "region" | "vpc" | "az" | "subnet"; }

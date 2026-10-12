@@ -19,7 +19,7 @@ export function RequirementsForm({ value, workloads = [], disabled, saving, save
   const control = "mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 text-xs text-slate-900 disabled:opacity-50";
   return <form aria-label="Deployment requirements" className="rounded-xl border border-cyan-200 bg-cyan-50/30 p-4 space-y-3" onSubmit={event => {
     event.preventDefault(); if (disabled || saveBlockedReason) return;
-    onSave({ peak_requests_per_minute: Number(peak), concurrent_users: Number(users), region, availability, secondary_region: availability === "MULTI_REGION" ? secondary : null, sizing_workload_id: workload || null, requests_per_second_per_replica: workload && throughput ? Number(throughput) : null });
+    onSave({ ...value, peak_requests_per_minute: Number(peak), concurrent_users: Number(users), region, availability, secondary_region: availability === "MULTI_REGION" ? secondary : null, sizing_workload_id: workload || null, requests_per_second_per_replica: workload && throughput ? Number(throughput) : null });
   }}>
     <h3 className="text-sm font-semibold">Plan for your users</h3>
     <p className="text-xs leading-5 text-slate-500">Tell us what you expect at your busiest time. These are planning targets; exact instance sizes need load testing.</p>

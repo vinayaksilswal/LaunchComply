@@ -2,6 +2,7 @@
 import { forwardRef, useId } from "react";
 import { routeFlow, flowEvidence } from "./flowRouting";
 import { networkPlacement } from "./networkPlacement";
+import type { WorkloadPolicy } from "./ProductionDiagram";
 import {
   Globe,
   Server,
@@ -131,6 +132,7 @@ export const CloudDiagram = forwardRef<
     selected?: string | null;
     code?: boolean;
     boundaries?: DiagramBoundary[];
+    workloadPolicies?: WorkloadPolicy[];
     onSelect: (id: string) => void;
     onNodePointerDown?: (
       event: React.PointerEvent<SVGGElement>,
@@ -147,6 +149,7 @@ export const CloudDiagram = forwardRef<
     selected,
     code,
     boundaries,
+    workloadPolicies,
     onSelect,
     onNodePointerDown,
     onPointerMove,
@@ -466,6 +469,7 @@ export const CloudDiagram = forwardRef<
               y2={node.y + 101}
               stroke="#f1f5f9"
             />
+            {!code && node.zone === "APPLICATION" && /\becs\b|\bfargate\b/i.test(node.service) && workloadPolicies?.filter(policy => policy.node_id === node.id).map(policy => <text key={policy.node_id} x={node.x + 16} y={node.y + 94} fontSize="12" fill="#0e7490">{policy.min_tasks}–{policy.max_tasks} tasks · {policy.metric === "ALB_REQUESTS" ? "ALB request scaling" : `${policy.metric} ${policy.target}%`} · plan</text>)}
             <text
               x={node.x + 16}
               y={node.y + 121}
