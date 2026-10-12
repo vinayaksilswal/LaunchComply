@@ -2,6 +2,23 @@ import type { ArchitectureGraph, ArchitectureNode } from "./CloudDiagram";
 export type Point = { x: number; y: number };
 export type FlowObstacle = { x: number; y: number; width: number; height: number };
 const width = 280, height = 136;
+/** Spread incident edges across each card border so distinct routes do not look
+ * like a single transit connection through a neighboring service. */
+export function flowPorts(graph: ArchitectureGraph, index: number) {
+  const edge = graph.edges[index];
+  const offset = (id: string) => {
+    const incident = graph.edges.map((item, i) => ({ item, i }))
+      .filter(({ item }) => item.source === id || item.target === id)
+      .sort((a, b) => {
+        const peer = (item: typeof edge) => graph.nodes.find(node => node.id === (item.source === id ? item.target : item.source));
+        const x = peer(a.item), y = peer(b.item);
+        return (x?.y || 0) - (y?.y || 0) || (x?.x || 0) - (y?.x || 0) || a.i - b.i;
+      });
+    const rank = incident.findIndex(item => item.i === index);
+    return incident.length < 2 ? 0 : -40 + 80 * rank / (incident.length - 1);
+  };
+  return { from: offset(edge.source), to: offset(edge.target) };
+}
 /** Metadata classification is intentionally conservative: a drawn arrow is never runtime proof. */
 export function flowEvidence(label: string) {
   if (/inferred|manifest|source signal/i.test(label)) return "Source signal · runtime unverified";
@@ -21,12 +38,12 @@ function intersects(a: Point, b: Point, n: FlowObstacle) {
 }
 /** Choose short orthogonal channels outside resource cards. Recomputed on dragging;
  * a manually overlapping layout may still need Arrange layers. Never changes graph edges. */
-export function routeFlow(from: ArchitectureNode, to: ArchitectureNode, nodes: ArchitectureNode[], index: number, captions: FlowObstacle[] = []) {
+export function routeFlow(from: ArchitectureNode, to: ArchitectureNode, nodes: ArchitectureNode[], index: number, captions: FlowObstacle[] = [], ports = { from: 0, to: 0 }) {
   const rightward = to.x >= from.x, downward = to.y >= from.y;
-  const startH = { x: from.x + (rightward ? width : 0), y: from.y + height / 2 }, endH = { x: to.x + (rightward ? 0 : width), y: to.y + height / 2 };
-  const startV = { x: from.x + width / 2, y: from.y + (downward ? height : 0) }, endV = { x: to.x + width / 2, y: to.y + (downward ? 0 : height) };
+  const startH = { x: from.x + (rightward ? width : 0), y: from.y + height / 2 + ports.from }, endH = { x: to.x + (rightward ? 0 : width), y: to.y + height / 2 + ports.to };
+  const startV = { x: from.x + width / 2 + ports.from * 2, y: from.y + (downward ? height : 0) }, endV = { x: to.x + width / 2 + ports.to * 2, y: to.y + (downward ? 0 : height) };
   const obstacles = [...nodes.filter(n => n.id !== from.id && n.id !== to.id).map(node => ({ x: node.x, y: node.y, width, height })), ...captions];
-  const offset = (index % 5) * 7;
+  const offset = (index % 11) * 7;
   const mx = (startH.x + endH.x) / 2, my = (startV.y + endV.y) / 2;
   const candidates: Point[][] = [];
   const xs = [...new Set([mx + offset, from.x - 28 - offset, from.x + width + 28 + offset, to.x - 28 - offset, to.x + width + 28 + offset, ...obstacles.flatMap(n => [n.x - 14, n.x + n.width + 14])])];
@@ -56,7 +73,7 @@ export function routeFlow(from: ArchitectureNode, to: ArchitectureNode, nodes: A
   }
   // Side corridor for same-column resources and return paths.
   for (const right of [true, false]) {
-    const a = { x: from.x + (right ? width : 0), y: from.y + height / 2 }, b = { x: to.x + (right ? width : 0), y: to.y + height / 2 };
+    const a = { x: from.x + (right ? width : 0), y: from.y + height / 2 + ports.from }, b = { x: to.x + (right ? width : 0), y: to.y + height / 2 + ports.to };
     const x = right ? Math.max(from.x, to.x) + width + 38 + offset : Math.min(from.x, to.x) - 38 - offset;
     if (x >= 20) candidates.push([a, { x, y: a.y }, { x, y: b.y }, b]);
   }

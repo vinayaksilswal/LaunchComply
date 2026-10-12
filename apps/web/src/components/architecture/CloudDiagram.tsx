@@ -1,6 +1,6 @@
 "use client";
 import { forwardRef, useId } from "react";
-import { routeFlow, flowEvidence } from "./flowRouting";
+import { routeFlow, flowEvidence, flowPorts } from "./flowRouting";
 import { networkPlacement } from "./networkPlacement";
 import type { WorkloadPolicy } from "./ProductionDiagram";
 import {
@@ -312,7 +312,7 @@ export const CloudDiagram = forwardRef<
         const from = graph.nodes.find((n) => n.id === edge.source),
           to = graph.nodes.find((n) => n.id === edge.target);
         if (!from || !to) return null;
-        const routed = routeFlow(from, to, graph.nodes, i, captionObstacles);
+        const routed = routeFlow(from, to, graph.nodes, i, captionObstacles, flowPorts(graph, i));
         const path = routed.path, labelX = routed.x, labelY = routed.y;
         const inferred = flowEvidence(edge.label).startsWith("Source signal");
         const color = to.zone === "DATA" ? "#059669" : from.zone === "SUPPORT" || to.zone === "SUPPORT" ? "#b45309" : "#0e7490";

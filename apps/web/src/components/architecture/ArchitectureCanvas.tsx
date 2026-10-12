@@ -1227,7 +1227,7 @@ export function ArchitectureCanvas() {
                   </ul>
                 </details>
               )}
-              {draft?.last_ai_workflow && <p className="text-xs text-slate-500 border border-slate-200 rounded-lg p-3">Source context reviewed · proposal schema checked · your review required. {draft.last_ai_workflow.missing_requirements.length > 0 && "Traffic and availability details are still needed."}</p>}
+              {draft?.last_ai_workflow && <p className="text-xs text-slate-500 border border-slate-200 rounded-lg p-3">Source context reviewed · proposal schema checked · your review required. {(!draft.requirements?.region || !draft.requirements?.peak_requests_per_minute || !draft.requirements?.concurrent_users || !draft.requirements?.availability) && "Traffic and availability details are still needed."}</p>}
               {!draft?.messages.length && (
                 <div className="pt-2">
                   <p className="text-sm text-slate-700 leading-6">
