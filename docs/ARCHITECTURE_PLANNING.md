@@ -63,6 +63,10 @@ unchanged fields and constrains update/removal IDs to the selected IDs. Unused e
 arrays are constrained by action. Compact edit responses use an 8,192-token output
 budget; an output-budget corrective attempt can reduce it to 4,096. Local validation
 and scope checks remain mandatory even when an endpoint advertises schema support.
+A schema/request-format rejection can use JSON-object transport for the one
+corrective free-router attempt. The supplied schema, Pydantic validation, graph
+references, request-path policy and edit-scope enforcement remain unchanged; this
+does not permit unvalidated model output or a whole-diagram replacement.
 
 New cards use an unoccupied grid slot when the diagram is tall, preserving existing
 positions. Raw `AWS::` resource types start with placement requiring review: an EC2

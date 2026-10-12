@@ -428,7 +428,12 @@ async def openrouter_proposal(client, instructions, context, schema, answer_mode
                         "stream": False, "provider": dict(provider), "messages": provider_messages(instructions + correction, context)}
                     if candidate == FREE_ROUTER:
                         request_body["provider"]["require_parameters"] = True
-                        request_body["response_format"] = {"type": "json_schema", "json_schema": {
+                        # Some endpoints support JSON mode but reject the strict
+                        # schema subset. Transport fallback never relaxes server
+                        # parsing, graph validation or edit-scope enforcement.
+                        json_mode = repair and attempts[-1]["kind"] in {"SCHEMA_CONFIGURATION", "REQUEST_REJECTED"}
+                        record["format_mode"] = "JSON_OBJECT_VALIDATED" if json_mode else "JSON_SCHEMA"
+                        request_body["response_format"] = {"type": "json_object"} if json_mode else {"type": "json_schema", "json_schema": {
                             "name": "architecture_explanation" if fixed_graph is not None else "architecture_proposal",
                             "strict": True, "schema": schema}}
                     async with asyncio.timeout(attempt_budget):
