@@ -28,6 +28,7 @@ const remedies: Record<string, string> = {
   ROUTING_PARAMETER: "The provider rejected a routing field. Review request parameters while preserving the privacy and free-only policies.",
   INVALID_RESPONSE: "The response did not match the architecture schema. No proposal was saved.",
   SCOPE_REJECTED: "The response exceeded the server-owned edit permissions or used an invalid component ID. The graph was preserved; a bounded correction can retry without expanding scope.",
+  SCHEMA_CONFIGURATION: "The endpoint rejected the structured response schema. Check required properties, nullable update fields and the supported schema subset. No graph change was saved.",
   TRUNCATED_RESPONSE: "The response was incomplete. Review the output budget and model choice.",
   CONTEXT_LIMIT: "Choose a model that supports the source and design context size.",
   TIMEOUT: "The model did not complete within the request deadline.",

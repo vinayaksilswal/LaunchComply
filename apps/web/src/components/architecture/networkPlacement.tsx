@@ -5,6 +5,9 @@ export type NetworkPlacement = "PUBLIC_INGRESS" | "PUBLIC_FRONTEND" | "PRIVATE_I
 /** Service names describe intended placement, not observed AWS resources. */
 export function networkPlacement(node: ArchitectureNode): NetworkPlacement {
   const service = node.service;
+  // A CloudFormation resource family can contain configuration objects as well
+  // as workloads. Never infer subnet placement from its namespace alone.
+  if (/^AWS::/.test(service)) return "REVIEW";
   if (/s3 gateway vpc endpoint/i.test(service)) return "VPC_ENDPOINT";
   if (/\bs3\b.*private access/i.test(service)) return "PRIVATE_MANAGED_STORAGE";
   // Ambiguous candidates must not be drawn as confirmed private workloads.

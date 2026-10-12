@@ -25,6 +25,8 @@ def failure_kind(status, payload):
         except (ValueError, TypeError, RecursionError):
             message += " " + raw.lower()
     if status in {400, 422}:
+        if any(word in message for word in ("json schema", "json_schema", "response_format", "additionalproperties")):
+            return "SCHEMA_CONFIGURATION"
         if "model" in message and any(word in message for word in ("required", "must specify", "missing")): return "REQUIRED_MODEL"
         if "model" in message and any(word in message for word in ("invalid", "unknown", "not found", "does not exist")): return "INVALID_MODEL"
         if any(word in message for word in ("max_tokens", "max_output_tokens", "max_completion_tokens", "output budget")): return "OUTPUT_BUDGET"
@@ -44,7 +46,7 @@ def failure_kind(status, payload):
         404: "NO_ENDPOINT", 408: "TIMEOUT", 413: "CONTEXT_LIMIT", 422: "REQUEST_REJECTED", 429: "RATE_LIMIT"}.get(status, "UPSTREAM_UNAVAILABLE")
 
 def failure_code(kind):
-    return {"SCOPE_REJECTED": "ARCHITECTURE_AI_SCOPE_REJECTED", "AUTH_FAILED": "ARCHITECTURE_AI_AUTH_FAILED", "CREDIT_LIMIT": "ARCHITECTURE_AI_CREDIT_LIMIT",
+    return {"SCHEMA_CONFIGURATION": "ARCHITECTURE_AI_SCHEMA_CONFIGURATION", "SCOPE_REJECTED": "ARCHITECTURE_AI_SCOPE_REJECTED", "AUTH_FAILED": "ARCHITECTURE_AI_AUTH_FAILED", "CREDIT_LIMIT": "ARCHITECTURE_AI_CREDIT_LIMIT",
         "NO_ENDPOINT": "ARCHITECTURE_AI_NO_ENDPOINT", "PRIVACY_FILTER": "ARCHITECTURE_AI_PRIVACY_FILTER",
         "RATE_LIMIT": "ARCHITECTURE_AI_RATE_LIMIT", "TIMEOUT": "ARCHITECTURE_AI_TIMEOUT",
         "FREE_ALLOWANCE_EXHAUSTED": "ARCHITECTURE_AI_FREE_ALLOWANCE_EXHAUSTED",

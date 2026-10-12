@@ -50,6 +50,7 @@ import { privateStorageProposal, isS3Storage } from "./privateStorage";
 import { AwsServiceCatalog } from "./AwsServiceCatalog";
 import { ArchitectEditScope, type ArchitectScope } from "./ArchitectEditScope";
 import { GraphChangeReview } from "./GraphChangeReview";
+import { newComponentPosition } from "./manualPlacement";
 import { ArchitectQuestions, type ArchitectQuestion } from "./ArchitectQuestions";
 import { ArchitectureHistory } from "./ArchitectureHistory";
 import { RequestFlows } from "./RequestFlows";
@@ -555,8 +556,7 @@ export function ArchitectureCanvas() {
             const id = `node-${crypto.randomUUID().slice(0, 8)}`;
             setGraph(current => {
               if (current.nodes.length >= 80) return current;
-              const maxY = Math.max(150, ...current.nodes.map(item => item.y + 180));
-              return { ...current, nodes: [...current.nodes, { ...node, id, x: 150, y: Math.min(5800, maxY) }] };
+              return { ...current, nodes: [...current.nodes, { ...node, id, ...newComponentPosition(current) }] };
             });
             setArrangedView(false); setView("cloud"); setSelected(id); setChatVisible(true); setAssistantMinimized(false); autoFit.current = true;
           }} />

@@ -315,7 +315,8 @@ async def provider_refine(graph, evidence, message, history, aws_references=None
     scope = (planning_context or {}).get("edit_scope", {"mode": "REVIEW", "node_ids": []})
     read_only = scope["mode"] == "REVIEW" or explanation_only(message)
     answer_model = ExplanationAnswer if read_only else ScopedAnswer
-    schema = answer_model.model_json_schema()
+    from app.services.architecture.response_schema import scoped_schema
+    schema = scoped_schema(answer_model.model_json_schema(), scope)
     instructions = (
         "You are an architecture design assistant. Return JSON matching the supplied response schema. All cloud nodes are PROPOSALS, never deployed or verified. "
         "Use AWS cloud services only. Frontend hosting stays on AWS as customer-selected public-subnet containers; backend containers remain private, accessible only via reviewed HTTPS ingress and security groups. WAF filters web requests at CloudFront/ALB and is not a VPC bridge or replacement for TLS/auth. Do not choose external hosting providers. If essential service purpose, consumers or integration options are missing, return up to three questions with short options (each under 80 characters) and preserve the graph. The customer can select or type answers. Use an empty questions list when no clarification is needed; do not ask again for choices already supplied. "
@@ -352,6 +353,7 @@ async def provider_refine(graph, evidence, message, history, aws_references=None
     )
     if not read_only:
         instructions += " Return only the edit operations in the schema, NOT a replacement graph. node_updates contain only changed fields and the existing ID. Keep all edit arrays empty when asking questions or when no change is needed. Do not resend unchanged nodes or edges. removed_edges must match an existing flow's source, target and label exactly. New node IDs must be unique."
+    instructions += " Supply every property required by the response schema. Use null for unchanged nullable node update attributes and empty arrays for unused edit operations. Never fill unrequested attributes with invented defaults."
     context = json.dumps({"draft": graph, "source_evidence": evidence, "recent_conversation": [] if read_only else history[-6:],
         "request": message, "aws_documentation_references": aws_references, "customer_requirements": requirements,
         "planning_context": planning_context, "selected_components": [node for node in graph["nodes"] if node["id"] in scope["node_ids"]]})
@@ -362,7 +364,7 @@ async def provider_refine(graph, evidence, message, history, aws_references=None
             else:
                 response = await client.post("https://api.openai.com/v1/responses",
                     headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}"},
-                    json={"model": settings.ARCHITECTURE_AI_MODEL, "store": False, "max_output_tokens": 8192 if read_only else 16000,
+                    json={"model": settings.ARCHITECTURE_AI_MODEL, "store": False, "max_output_tokens": 8192,
                         "instructions": instructions, "input": context,
                         "text": {"format": {"type": "json_schema", "name": "architecture_proposal", "strict": True, "schema": schema}}})
             if response.status_code != 200:
@@ -400,7 +402,7 @@ async def openrouter_proposal(client, instructions, context, schema, answer_mode
             candidates = models + ([FREE_ROUTER] if FREE_ROUTER in models else [])
             for index, candidate in enumerate(candidates):
                 repair = index == len(models)
-                if repair and (not attempts or attempts[-1]["kind"] not in {"SCOPE_REJECTED", "INVALID_RESPONSE", "TRUNCATED_RESPONSE"}):
+                if repair and (not attempts or attempts[-1]["kind"] not in {"SCOPE_REJECTED", "INVALID_RESPONSE", "TRUNCATED_RESPONSE", "SCHEMA_CONFIGURATION", "OUTPUT_BUDGET", "REQUEST_REJECTED"}):
                     continue
                 # Reserve a full final attempt instead of spending the entire
                 # deadline on slow preferred models. Account policy blocks stop.
@@ -419,10 +421,10 @@ async def openrouter_proposal(client, instructions, context, schema, answer_mode
                         correction = (
                             " The previous response failed server validation: " + attempts[-1].get("validation_code", attempts[-1]["kind"]) + ". "
                             "Correct the edit list. Use EXACT existing IDs from selected_components for node_updates; never put existing nodes in new_nodes. "
-                            "Send only fields requested by the customer. Keep every unrelated edit array empty. Omit or use null for unchanged optional fields. "
+                            "Send only changes requested by the customer. Keep every unrelated edit array empty. Use null for unchanged nullable attributes. "
                             "The original graph and edit scope remain authoritative; do not expand permissions."
                         )
-                    request_body = {"model": used, "max_tokens": 8192 if fixed_graph is not None else 16000,
+                    request_body = {"model": used, "max_tokens": 4096 if repair and attempts[-1]["kind"] == "OUTPUT_BUDGET" else 8192,
                         "stream": False, "provider": dict(provider), "messages": provider_messages(instructions + correction, context)}
                     if candidate == FREE_ROUTER:
                         request_body["provider"]["require_parameters"] = True

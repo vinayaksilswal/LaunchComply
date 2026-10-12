@@ -53,11 +53,21 @@ The provider returns bounded edit operations rather than resending the complete
 graph. The server materializes, checks scope, validates graph references and applies
 the existing request-path policy before creating a proposal. Incompatible free
 provider responses can fall through the existing bounded routing chain.
-The free router can make one corrective attempt after schema, truncation or scope
-failure within the original deadline. Selected components and exact IDs are supplied
+The free router can make one corrective attempt after response, scope, schema,
+output-budget or request-format failure within the original deadline. Selected components and exact IDs are supplied
 explicitly; the correction never expands edit permissions. Authentication, policy
 and rate-limit outcomes do not trigger this corrective replay. Diagnostics retain
 fixed validation categories, not model output, source text or secret values.
+The strict wire schema requires every object property, uses nullable attributes for
+unchanged fields and constrains update/removal IDs to the selected IDs. Unused edit
+arrays are constrained by action. Compact edit responses use an 8,192-token output
+budget; an output-budget corrective attempt can reduce it to 4,096. Local validation
+and scope checks remain mandatory even when an endpoint advertises schema support.
+
+New cards use an unoccupied grid slot when the diagram is tall, preserving existing
+positions. Raw `AWS::` resource types start with placement requiring review: an EC2
+namespace can describe a VPC or configuration object, not just a virtual machine.
+Use the component controls to resolve actual intended placement.
 
 Clarification answers are tied to the original request receipt, intent and scope.
 Expired questions are rejected. Proposed changes show exact fields and flows;
@@ -74,3 +84,4 @@ closed until an authenticated, reviewed execution workflow is implemented.
 
 Sources: [AWS CloudFormation resource specification](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/cfn-resource-specification.html),
 [regional resource provider schemas](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/resource-type-schemas.html).
+Provider guidance: [OpenRouter structured outputs](https://openrouter.ai/docs/guides/features/structured-outputs).
