@@ -103,7 +103,7 @@ interface Draft {
   version: string;
   graph: Graph;
   evidence: Evidence;
-  messages: { role: string; content: string; version?: string; scope?: ArchitectScope }[];
+  messages: { role: string; content: string; version?: string; scope?: ArchitectScope; proposal_status?: string }[];
   ai_request?: { id: string };
   last_ai_scope?: ArchitectScope;
   proposal: { id: string; graph: Graph } | null;
@@ -1265,7 +1265,7 @@ export function ArchitectureCanvas() {
                   className={`rounded-xl p-3 text-xs leading-5 break-words ${message.role === "user" ? "bg-slate-100 ml-5" : "border border-indigo-100 bg-indigo-50/30"}`}
                 >
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 mb-1">
-                    {message.role === "user" ? "You" : "Architecture assistant"}{message.version ? ` · ${message.version} · ${message.scope?.mode.toLowerCase() || "review"}` : " · earlier conversation"}
+                    {message.role === "user" ? "You" : "Architecture assistant"}{message.version ? ` · ${message.version} · ${message.scope?.mode.toLowerCase() || "review"}` : " · earlier conversation"}{message.proposal_status ? ` · ${message.proposal_status.replaceAll("_", " ").toLowerCase()}` : ""}
                   </p>
                   <div className="space-y-2">{message.content.split(/\n\s*\n/).filter(Boolean).map((paragraph, part) => <p key={part} className="whitespace-pre-wrap">{paragraph}</p>)}</div>
                 </div>

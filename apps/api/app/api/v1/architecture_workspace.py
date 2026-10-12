@@ -53,6 +53,11 @@ def pending_proposal(spec):
     proposal = spec.get("proposal")
     return proposal if proposal and proposal.get("graph") != spec.get("graph") else None
 
+def decision_messages(spec, proposal, decision):
+    request_id = proposal.get("request_id") or (spec.get("ai_request") or {}).get("id")
+    return [{**message, "proposal_status": decision} if request_id and message.get("request_id") == request_id else message
+            for message in spec.get("messages", [])]
+
 def output(arch):
     if not arch:
         return None
@@ -379,7 +384,8 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
         raise HTTPException(failure.status_code, {"code": code, "request_id": request_id, "message": "AI tried to change components outside your selected scope. Your saved design is unchanged. Narrow the request or select the required components." if code == "ARCHITECTURE_AI_SCOPE_REJECTED" else "The architecture request failed. Your saved design is unchanged."})
     spec.pop("last_ai_failure", None)
     spec["ai_request"] = {**spec["ai_request"], "status": "COMPLETED", "finished_at": finished}
-    metadata = {"version": arch.version, "scope": scope, "request_id": request_id}
+    metadata = {"version": arch.version, "scope": scope, "request_id": request_id,
+                "proposal_status": "PROPOSED" if answer["graph"] != spec["graph"] else "NO_CHANGES"}
     spec["messages"] = (spec["messages"] + [{"role": "user", "content": payload.message, **metadata}, {"role": "assistant", "content": answer["message"], **metadata}])[-20:]
     # An explanation with no diagram edits must not block requirement entry or
     # make the customer apply an unchanged graph. Existing versions stay intact.
@@ -387,7 +393,7 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
     spec["last_ai_questions"] = answer.get("questions", [])
     spec["last_ai_scope"] = scope
     spec["last_ai_intent"] = message[:4000]
-    spec["proposal"] = {"id": str(uuid.uuid4()), "graph": answer["graph"], "scope": scope,
+    spec["proposal"] = {"id": str(uuid.uuid4()), "graph": answer["graph"], "scope": scope, "request_id": request_id,
                         "base_fingerprint": knowledge.fingerprint(spec["graph"])} if graph_changed else None
     spec["last_ai_at"] = now.isoformat()
     if answer.get("ai_model"): spec["last_ai_model"] = answer["ai_model"]
@@ -428,7 +434,8 @@ async def apply(application_id: str, payload: Apply, membership=Depends(editor),
         enforce_scope(arch.spec_json["graph"], proposal["graph"], proposal["scope"])
     except ScopeViolation:
         raise HTTPException(409, "The proposal exceeds its approved edit scope. Discard it.") from None
-    return await save_version(db, membership, app, arch, proposal["graph"], "ARCHITECTURE_AI_PROPOSAL_APPLIED")
+    return await save_version(db, membership, app, arch, proposal["graph"], "ARCHITECTURE_AI_PROPOSAL_APPLIED",
+                              {"messages": decision_messages(arch.spec_json, proposal, "APPLIED")})
 
 @router.post("/{application_id}/discard-proposal")
 async def discard_proposal(application_id: str, payload: Apply, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
@@ -437,7 +444,8 @@ async def discard_proposal(application_id: str, payload: Apply, membership=Depen
     proposal = arch.spec_json.get("proposal")
     if not proposal or proposal["id"] != payload.proposal_id:
         raise HTTPException(409, "This proposal has expired. Reload the design.")
-    arch.spec_json = {**arch.spec_json, "proposal": None, "last_ai_questions": []}
+    arch.spec_json = {**arch.spec_json, "proposal": None, "last_ai_questions": [],
+                     "messages": decision_messages(arch.spec_json, proposal, "DISCARDED")}
     await audit(db, membership, app, "ARCHITECTURE_AI_PROPOSAL_DISCARDED", {"proposal_id": payload.proposal_id})
     await db.commit()
     return output(arch)

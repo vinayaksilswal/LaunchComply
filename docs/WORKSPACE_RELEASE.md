@@ -174,3 +174,34 @@ Final renderer review separates incident edge ports and preserves word boundarie
 
 
 Final live verification: Vercel reported renderer release 6ad5b24 successful. The saved targets remained v14 (500 requests/minute, 100 concurrent users, Mumbai, multi-AZ, no throughput benchmark). The actual final exported SVG contains 15 inspectable service cards and 15 numbered flows; visual inspection confirmed separated attachment ports and readable proxy/internal-ALB captions. Mobile policy settings measured 358px dialog width inside a 390px viewport with no horizontal clipping. Valid scaling thresholds were not fabricated or saved during review. The actual SVG export and browser screenshots are local review artifacts, not AWS deployment evidence.
+
+
+## Architecture editor acceptance - 12 October 2026
+
+- AWS planning catalog: 264 regional CloudFormation resource families and 1,748
+  resource types (Mumbai specification 267.0.0), plus 25 common service guides.
+  Desktop search was checked after fixing duplicate React list identities;
+  Bedrock returned three families and SQS returned the common service/family pair.
+  Mobile dialog bounds at 390px were left 16px/right 374.4px, without horizontal clip.
+- Direct insertion created one unconnected SQS card (15 to 16 components). Ctrl+Z
+  restored 15 and cleared dirty state. Connection purpose editing and reversal were
+  checked independently, then undone; the original saved graph was restored.
+- Live AI request a8a49deb was scope-rejected; b8222919 was provider-request-rejected.
+  Neither changed the saved graph. Strict wire properties, selected-ID enums,
+  compact operations, bounded correction and validated JSON transport were added.
+- Live request 841f14aa succeeded through openrouter/free, selecting
+  dots-studio/dots-3-note-preview:free (provider HTTP 200, 10.7 seconds).
+  Review showed exactly one CloudWatch description change. Applying created v15.
+  Comparison of exported v14/v15 JSON verified all 15 node identities and positions,
+  15 ordered flows, and requirements were identical except logs.description.
+  Mumbai multi-AZ, 500 peak requests/minute and 100 concurrent users were preserved.
+- Offline contract exercises checked scope enforcement, one corrective invalid-ID
+  recovery, schema-transport recovery, preservation of privacy/zero-price rules,
+  no authentication/rate-limit replay, and 80 non-overlapping card insertions.
+  This is not a live 80-node performance or universal AWS deployment acceptance.
+- Production web build generated 105 routes and passed lint/types. Python syntax
+  checks passed. Manual browser checks were used; no automated browser suite ran.
+- Current delivery limits: 80 components/160 flows; raw CloudFormation types require
+  placement/configuration review. Automatic AWS provisioning remains unavailable,
+  and no AWS resources, runtime proxy code, infrastructure plan or independent
+  security/compliance acceptance were created by these checks.
