@@ -94,7 +94,7 @@ function lines(value: string, limit: number, maxLines = 2) {
       break;
     }
     const space = rest.lastIndexOf(" ", limit);
-    const length = space > limit / 2 ? space : limit;
+    const length = space > 0 ? space : limit;
     chunks.push(rest.slice(0, length));
     rest = rest.slice(length).trimStart();
     if (chunks.length === maxLines)
@@ -456,7 +456,7 @@ export const CloudDiagram = forwardRef<
               ))}
             </text>
             <text x={node.x + 16} y={node.y + 75} fontSize={compact ? 15 : 13} fill="#475569">
-              {lines(node.service, compact ? 32 : 34, 1).map((line, i) => (
+              {lines(!code && /fargate/i.test(node.service) && /public frontend.*proxy/i.test(node.service) ? "ECS Fargate · frontend proxy" : !code && networkPlacement(node) === "PRIVATE_INGRESS" && /application load balancer|\balb\b/i.test(node.service) ? "Internal ALB · HTTPS" : node.service, compact ? 32 : 34, 1).map((line, i) => (
                 <tspan key={i} x={node.x + 16} dy={i ? 17 : 0}>
                   {line}
                 </tspan>
