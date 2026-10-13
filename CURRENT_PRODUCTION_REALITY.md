@@ -9,7 +9,9 @@ reporting and a version/checksum audit receipt. Empty first designs and resource
 property comparisons in History are implemented. AI sees these properties as
 read-only context and cannot change configured service identities.
 
-43 focused tests and four representative cfn-lint validations pass. Frontend
+50 focused tests and five template cfn-lint validations pass, including an exact
+production-downloaded S3 subset. Live v16 configuration persisted while all 15
+components, 15 flows, requirements and source evidence remained unchanged. Frontend
 production build/type/lint checks pass. This is not AWS API validation, a change
 set, a deployed application, a live network/security assessment or enterprise GA.
 No AWS resources were provisioned. Automatic execution remains gated. See

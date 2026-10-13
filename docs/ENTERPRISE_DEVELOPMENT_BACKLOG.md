@@ -27,7 +27,7 @@ status. Historical GA documents and simulated service paths are not acceptance.
 | Date | Delivered | Evidence and limits |
 | --- | --- | --- |
 | 2026-10-12 | Scoped AI operations, full change review, broad catalog, manual connection editing | Live v15 changed only CloudWatch's description; IDs, positions and ordered flows preserved. 80/160 graph limit retained. |
-| 2026-10-13 | Resource property schema v1, four typed AWS definitions, deterministic CloudFormation export, empty first design and property comparisons in History | 43 focused tests, frontend checks, four representative cfn-lint validations. No AWS provisioning; see RESOURCE_CONFIGURATION.md for exact coverage. |
+| 2026-10-13 | Resource property schema v1, four typed AWS definitions, deterministic CloudFormation export, empty first design and property comparisons in History | 50 focused tests, frontend checks, four representative plus production-downloaded template cfn-lint validations. Live v16 S3 configuration persisted while all v15 graph/evidence/targets remained unchanged. Whole-diagram export correctly blocked; explicit subset identified 14 omitted components. No AWS provisioning; see RESOURCE_CONFIGURATION.md for exact coverage. |
 
 ## Prioritized work
 

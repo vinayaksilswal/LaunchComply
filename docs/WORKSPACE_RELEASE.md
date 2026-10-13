@@ -205,3 +205,8 @@ Final live verification: Vercel reported renderer release 6ad5b24 successful. Th
   placement/configuration review. Automatic AWS provisioning remains unavailable,
   and no AWS resources, runtime proxy code, infrastructure plan or independent
   security/compliance acceptance were created by these checks.
+
+
+## 2026-10-13 resource configuration and export
+
+Implemented typed canonical properties for VPC, Subnet, S3 Bucket and Logs LogGroup, versioned owner/admin saves, deterministic offline CloudFormation export, explicit subset omissions, empty first designs and property comparisons in History. Initial implementation pushed as b705f82. Live S3 save created v16 while all 15 nodes/15 flows/targets/evidence stayed unchanged; reloaded settings and History comparison passed. Production subset template passed cfn-lint. Follow-up adds directly tested AI resource-identity enforcement and late export-result guards. 50 focused tests, frontend type/lint/build and Python syntax checks pass. No AWS API calls, live AI requests, cloud provisioning or enterprise GA acceptance. Full report: docs/ENGINEERING_REPORT_2026-10-13.md; continuation: docs/ENTERPRISE_DEVELOPMENT_BACKLOG.md.

@@ -26,6 +26,19 @@ class ScopeViolation(ValueError):
         self.code = code
 
 
+def enforce_resource_identity(original, proposed, configurations):
+    """Diagram edits cannot silently reinterpret a saved AWS resource definition.
+
+    Explicit scoped removals are handled separately by enforce_scope; removing a
+    node also removes its configuration when the new version is persisted.
+    """
+    services = {node["id"]: node["service"] for node in original["nodes"]}
+    for node in proposed["nodes"]:
+        if node["id"] in configurations and node["service"] != services.get(node["id"]):
+            raise ScopeViolation("Configured resource service types are read-only in AI diagram edits.")
+    return proposed
+
+
 def apply_operations(original, answer):
     """Materialize a bounded edit list without replacing unrelated graph content."""
     nodes = {node["id"]: dict(node) for node in original["nodes"]}

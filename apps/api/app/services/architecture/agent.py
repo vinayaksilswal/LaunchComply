@@ -60,11 +60,8 @@ def validate_proposal(state: ArchitectState):
         parsed["graph"] = state["graph"]
     from app.services.architecture.edit_scope import enforce_scope
     parsed["graph"] = enforce_scope(state["graph"], parsed["graph"], state["edit_scope"])
-    from app.services.architecture.edit_scope import ScopeViolation
-    saved_services = {node["id"]: node["service"] for node in state["graph"]["nodes"]}
-    for node in parsed["graph"]["nodes"]:
-        if node["id"] in state.get("resource_configurations", {}) and node["service"] != saved_services.get(node["id"]):
-            raise ScopeViolation("Configured resource service types are read-only in AI diagram edits.")
+    from app.services.architecture.edit_scope import enforce_resource_identity
+    parsed["graph"] = enforce_resource_identity(state["graph"], parsed["graph"], state.get("resource_configurations", {}))
     from app.services.architecture.proposal_policy import check_transition
     check_transition(state["graph"], parsed["graph"], state["message"])
     if answer.get("ai_model"): parsed["ai_model"] = answer["ai_model"]

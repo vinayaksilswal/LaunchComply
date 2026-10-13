@@ -77,7 +77,8 @@ No AWS client, model call, deployment job or payment is invoked by these endpoin
 
 ## Verification
 
-43 focused tests pass: pure property/reference/compiler contracts and production
+50 focused tests pass: pure property/reference/compiler and AI resource-identity
+scope contracts, plus production
 handler bodies executed with isolated storage/access adapters. The handler tests
 do not establish real PostgreSQL concurrency, full tenant-isolation acceptance or
 hosted deployment behavior. They import no owner settings, credentials or database.
@@ -85,7 +86,7 @@ hosted deployment behavior. They import no owner settings, credentials or databa
 Run from `apps/api`:
 
 ```powershell
-python -m pytest tests/unit/test_resource_configuration.py tests/unit/test_resource_configuration_handlers.py --confcutdir=tests/unit -q
+python -m pytest tests/unit/test_resource_configuration.py tests/unit/test_resource_configuration_handlers.py tests/unit/test_resource_identity_scope.py --confcutdir=tests/unit -q
 ```
 
 Four generated representative templates (combined foundation, VPC/subnet, private
@@ -97,6 +98,37 @@ AWS ValidateTemplate, a change set, provisioning, health checks or a recovery te
 Frontend production build, type checks and lint pass. Browser acceptance and
 release identity are recorded separately when observed; local build alone does
 not prove Vercel/Render release parity.
+
+### Hosted acceptance, 2026-10-13
+
+The released resource controls were exercised in the signed-in Techinvenso
+workspace. Saving the existing private S3 card with versioning enabled created
+v16 from v15. Downloaded before/after draft JSON comparisons showed every original
+field unchanged: all 15 nodes, coordinates, 15 ordered flows, requirements and
+evidence were preserved. Only the resource schema version/configuration fields
+were added. The revision and checked versioning value persisted after reload.
+History preview of v15 showed zero configured resources and one property change
+from v16; no historical revision was restored during verification.
+
+A whole-diagram export was rejected because 14 components lacked supported
+configurations. Explicit configured-only export returned two CloudFormation
+resources (bucket and TLS policy), clearly listed the 14 omissions, and downloaded
+the exact v16 JSON. That production-downloaded template passed cfn-lint for
+ap-south-1 with no errors/warnings. SHA-256:
+`c5974cfd17a489510fb4f9856a261a7c7c014fd2f263778876ed339e2cdd409d`.
+No AWS API, live AI request or provisioning was performed.
+
+The resource dialog was checked at 1280x800 and 390x844. At the narrow viewport
+its bounds remained inside the screen and its content had no horizontal overflow;
+the selected S3 form and versioning control remained accessible. The temporary
+viewport was reset. This does not establish mobile usability for the full canvas.
+
+Subsequent hardening rejects late export results if the architecture revision or
+region changes during the request, and prevents switching resource/subset inputs
+while a save/export is running. Seven direct production scope-helper tests cover
+configured resource identity and unrelated-content preservation. Hosted acceptance
+above proves the initial released feature; the additional late-result guard is
+covered by type/lint/build checks, not an injected live network-race rehearsal.
 
 ## Official references
 

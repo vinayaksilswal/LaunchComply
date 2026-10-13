@@ -27,9 +27,10 @@ export function ResourceConfigurationPanel({ appId, draftId, graph, configuratio
   const [working, setWorking] = useState(false);
   const [subset, setSubset] = useState(false);
   const [result, setResult] = useState<ExportResult | null>(null);
+  const exportEpoch = useRef(0);
   const node = graph.nodes.find(item => item.id === nodeId);
   const definition = schemas.find(item => item.resource_type === type);
-  useEffect(() => { setResult(null); }, [draftId, region]);
+  useEffect(() => { exportEpoch.current += 1; setResult(null); }, [appId, draftId, region]);
   useEffect(() => {
     let active = true;
     apiClient<{ resources: ResourceSchema[] }>("/architecture/workspace/resource-schemas").then(data => { if (active) setSchemas(data.resources); }).catch(failure => { if (active) setError(failure.message); });
@@ -50,9 +51,13 @@ export function ResourceConfigurationPanel({ appId, draftId, graph, configuratio
     finally { setWorking(false); }
   };
   const prepare = async () => {
+    const epoch = exportEpoch.current;
     setWorking(true); setResult(null); setError("");
-    try { setResult(await apiClient<ExportResult>(`/architecture/workspace/${appId}/cloudformation-export`, { method: "POST", body: JSON.stringify({ expected_id: draftId, ...(subset ? { resource_ids: known } : {}) }) })); }
-    catch (failure) { setError(failure instanceof Error ? failure.message : "Unable to generate the infrastructure definitions."); }
+    try {
+      const prepared = await apiClient<ExportResult>(`/architecture/workspace/${appId}/cloudformation-export`, { method: "POST", body: JSON.stringify({ expected_id: draftId, ...(subset ? { resource_ids: known } : {}) }) });
+      if (epoch === exportEpoch.current && prepared.architecture_id === draftId) setResult(prepared);
+    }
+    catch (failure) { if (epoch === exportEpoch.current) setError(failure instanceof Error ? failure.message : "Unable to generate the infrastructure definitions."); }
     finally { setWorking(false); }
   };
   const download = () => {
@@ -65,11 +70,11 @@ export function ResourceConfigurationPanel({ appId, draftId, graph, configuratio
     <dialog ref={dialog} aria-labelledby="resource-config-title" className="m-auto w-[calc(100%_-_2rem)] max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border bg-white p-5 text-slate-900 shadow-xl backdrop:bg-slate-900/40">
       <div className="flex justify-between gap-3"><div><h2 id="resource-config-title" className="text-lg font-bold">Resource configuration & infrastructure export</h2><p className="mt-1 text-xs text-slate-500">Saved resource properties · {region || "Choose an AWS region in architecture settings"}</p></div><button aria-label="Close resource configuration" onClick={() => dialog.current?.close()}><X className="h-5 w-5" /></button></div>
       {(error || errorMessage) && <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-xs text-red-800">{error || errorMessage}</p>}
-      {disabled && <p className="mt-3 text-xs text-amber-800">Save diagram edits and resolve pending AI proposals before configuring or exporting resources.</p>}
+      {disabled && !working && <p className="mt-3 text-xs text-amber-800">Save diagram edits and resolve pending AI proposals before configuring or exporting resources.</p>}
       {notice && <p role="status" className="mt-3 text-xs text-emerald-800">{notice}</p>}
       <div className="mt-4 grid gap-5 md:grid-cols-2">
         <section className="rounded-xl border p-4 space-y-3">
-          <label className="block text-xs font-semibold">Component<select aria-label="Configured component" value={nodeId} onChange={event => { setNodeId(event.target.value); setNotice(""); }} className="mt-1 w-full rounded-lg border p-2 font-normal">{graph.nodes.map(item => <option key={item.id} value={item.id}>{item.label} · {item.service}</option>)}</select></label>
+          <label className="block text-xs font-semibold">Component<select aria-label="Configured component" disabled={working} value={nodeId} onChange={event => { setNodeId(event.target.value); setNotice(""); setError(""); }} className="mt-1 w-full rounded-lg border p-2 font-normal">{graph.nodes.map(item => <option key={item.id} value={item.id}>{item.label} · {item.service}</option>)}</select></label>
           {definition ? <form onSubmit={event => { event.preventDefault(); void doSave({ resource_type: type, properties: values }); }} className="space-y-3">
             <strong className="block text-sm">{definition.label}</strong><p className="text-xs text-slate-500">{definition.resource_type}</p>
             {Object.entries(definition.schema.properties).map(([key, field]) => <label key={key} className="block text-xs font-semibold">{field.title || key}
@@ -86,7 +91,7 @@ export function ResourceConfigurationPanel({ appId, draftId, graph, configuratio
         </section>
         <section className="rounded-xl border p-4 space-y-3"><h3 className="text-sm font-semibold">CloudFormation resource definitions</h3><p className="text-xs leading-5 text-slate-600">{known.length} of {graph.nodes.length} components configured. This creates an offline template for the selected resources. Account permissions, AWS validation and actual deployment remain separate.</p>
           {!!review?.issues.length && <ul className="space-y-2 text-xs text-red-800">{review.issues.map((issue, index) => <li key={index}>{graph.nodes.find(item => item.id === issue.node_id)?.label || issue.node_id}: {issue.message}</li>)}</ul>}
-          <label className="flex items-start gap-2 text-xs leading-5"><input type="checkbox" checked={subset} onChange={event => { setSubset(event.target.checked); setResult(null); }} />Explicitly export configured resources only. Other components and application flows will be omitted.</label>
+          <label className="flex items-start gap-2 text-xs leading-5"><input type="checkbox" disabled={working} checked={subset} onChange={event => { setSubset(event.target.checked); setResult(null); setError(""); }} />Explicitly export configured resources only. Other components and application flows will be omitted.</label>
           {subset && <p className="text-xs text-amber-800">{graph.nodes.length - known.length} components will be omitted. This is a resource subset, not the complete application infrastructure.</p>}
           <button disabled={locked || !region || !graph.nodes.length || (subset && !known.length)} onClick={() => void prepare()} className="rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-40">{working ? "Working…" : "Validate & prepare export"}</button>
           {result && <div className="space-y-3 rounded-lg bg-slate-50 p-3"><strong className="block text-xs">{result.version} · {result.generated_resource_count} CloudFormation resources · AWS validation not run</strong><p className="break-all text-[10px] text-slate-500">SHA-256: {result.sha256}</p>{result.notes.map(note => <p key={note} className="text-xs leading-5 text-slate-600">{note}</p>)}{!!result.omitted_node_ids.length && <details className="text-xs"><summary>Omitted components ({result.omitted_node_ids.length})</summary><ul className="mt-2 space-y-1">{result.omitted_node_ids.map(id => <li key={id}>{graph.nodes.find(item => item.id === id)?.label || id}</li>)}</ul></details>}<details className="text-xs"><summary>Inspect exact template</summary><pre className="mt-2 max-h-56 overflow-auto text-[10px]">{JSON.stringify(result.template, null, 2)}</pre></details><button onClick={download} className="inline-flex items-center gap-2 rounded-lg bg-cyan-800 px-3 py-2 text-xs font-semibold text-white"><Download className="h-4 w-4" />Download CloudFormation JSON</button></div>}
