@@ -123,6 +123,10 @@ failure recovery. No backend environment key was changed in this pass.
   change appeared first in the floating AI window. Apply created local v4;
   History preview identified one difference and restoring v3 created v5.
   This fixture tests the actual UI/API workflow without a live model request.
+- Hosted rollout after push: Vercel commit status reports deployment complete;
+  authenticated production catalog shows 15 configurable types. The customer's
+  saved Techinvenso design remains v16. No customer graph/property edit or model
+  request was performed during this hosted check.
 
 Browser evidence is local acceptance. No live provider quality benchmark,
 PostgreSQL concurrency rehearsal, independent security audit, real AWS runtime
