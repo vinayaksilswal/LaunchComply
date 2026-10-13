@@ -7,17 +7,18 @@ LaunchComply is an independent B2B SaaS platform and professional services ecosy
 ---
 
 ## Capabilities Overview
-1. **Application Analysis**: Framework, runtime, dependency, database, storage, worker, and security surface detection.
-2. **Visual Architecture Canvas**: Interactive multi-tier AWS topology visualization with public/private network boundaries and component inspector.
-3. **Downloadable Architecture Package**: Terraform IaC, architecture diagrams, data flow specs, and subprocessor registers.
-4. **AWS Deployment Engine**: Secure STS cross-account IAM role assumption with least privilege, automated ECS/RDS/CloudFront orchestration, and streaming logs.
-5. **Domain & TLS Management**: Route 53 DNS verification, ACM certificate provisioning, and HTTPS enforcement.
-6. **Security Center & Controls**: Continuous monitoring across identity, network, encryption, database, secrets, and container posture.
-7. **VAPT Lifecycle**: Automated security assessments combined with professional penetration testing workflows, CVSS 3.1 scoring, and "Fix with AI" patch recommendations.
-8. **Compliance Readiness Hub**: Implementation workflows, evidence collection, and gap analysis for DPDP (India), ISO/IEC 27001, and SOC 2 Type II.
-9. **Backup & Disaster Recovery**: Policy enforcement, RPO/RTO tracking, and automated restore verification logging.
-10. **Evidence Vault & Subprocessor Registry**: Cryptographically verified audit artifacts and vendor risk tracking.
-11. **Professional Services Marketplace**: High-touch architecture reviews, cloud migration, VAPT execution, and compliance advisory.
+1. **Source evidence**: Multiple GitHub repositories or uploaded code, bounded dependency/source inspection and explicit inferred connections.
+2. **Architecture workspace**: Editable AWS diagrams, network planning, workload scaling decisions, undo/redo and saved versions. Current graph limits are 80 components and 160 connections.
+3. **AI review and scoped edits**: LangGraph/LangChain, selected-component permissions, exact proposed changes, explicit Apply/Discard and version conflict protection.
+4. **Resource properties and infrastructure export**: Validated VPC, Subnet, private S3 Bucket and CloudWatch LogGroup definitions; deterministic offline CloudFormation export with explicit omissions. Other catalog resources remain visual/planning support. See [resource coverage](docs/RESOURCE_CONFIGURATION.md).
+5. **Business workflows**: Repository management, teams, service requests, customer reports, support and operator administration.
+6. **Security/compliance records**: Separate readiness/evidence workflows. Recorded readiness is not an assessment result, audit or certification.
+
+Automatic customer AWS deployment, verified runtime monitoring and drift management,
+recovery acceptance and enterprise general availability remain incomplete. Historical
+infrastructure, build, release and assurance modules include simulation paths; their
+presence is not proof of real execution. Use [current production evidence](CURRENT_PRODUCTION_REALITY.md)
+and the [persistent development backlog](docs/ENTERPRISE_DEVELOPMENT_BACKLOG.md).
 
 ---
 

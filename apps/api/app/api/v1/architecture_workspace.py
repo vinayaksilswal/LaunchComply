@@ -21,7 +21,8 @@ from app.services.architecture.environment_connections import Connection, map_co
 from app.services.architecture.capacity_planning import plan_capacity
 from app.services.architecture.deployment_planning import WorkloadPolicy, policy_issues
 from app.services.architecture.edit_scope import EditScope
-from typing import Literal
+from app.services.architecture.resource_configuration import ResourceConfiguration, schemas as resource_schemas, validate_resources, compile_template
+from typing import Annotated, Literal
 from app.services.architecture.repository_links import linked_repositories
 
 router = APIRouter(prefix="/architecture/workspace", tags=["Architecture Workspace"])
@@ -65,6 +66,7 @@ def output(arch):
     spec = arch.spec_json
     return {"id": arch.id, "version": arch.version, "created_at": arch.created_at,
             **spec, "proposal": pending_proposal(spec),
+            "resource_review": validate_resources(spec["graph"], spec.get("resource_configurations", {}), (spec.get("requirements") or {}).get("region")),
             "design_review": build_review(spec["graph"], spec.get("evidence"), spec.get("requirements"), spec.get("source_changed", False))}
 
 def design_is_approved(arch):
@@ -84,13 +86,35 @@ async def audit(db, membership, app, action, details=None):
     db.add(AuditEvent(organization_id=membership.organization_id, actor_id=membership.user_id,
         actor_email=user.email, action=action, entity_type="application", entity_id=app.id, details={"application_name": app.name, **(details or {})}))
 
+@router.get("/resource-schemas")
+async def configuration_schemas(membership=Depends(member)):
+    return resource_schemas()
+
 @router.get("/{application_id}")
 async def read(application_id: str, membership=Depends(member), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership)
     arch = await latest(db, app)
     return {"application_id": app.id, "application_name": app.name, "architecture": output(arch),
         "capabilities": {"repository_analysis": service.github_available(), "ai_chat": service.ai_available(),
-                         "aws_references": knowledge.available(), "workload_scaling": True, "scoped_ai_edits": True}}
+                         "aws_references": knowledge.available(), "workload_scaling": True, "scoped_ai_edits": True,
+                         "resource_configuration": True, "cloudformation_export": True, "empty_canvas": True}}
+
+@router.post("/{application_id}/initialize")
+async def initialize(application_id: str, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
+    app = await application(db, application_id, membership, lock=True)
+    if await latest(db, app):
+        raise HTTPException(409, "This asset already has a saved architecture. Open it or use its version history.")
+    spec = {"format": "repository-draft-v1", "revision": 1, "graph": {"nodes": [], "edges": []},
+            "resource_schema_version": 1, "resource_configurations": {}, "messages": [], "proposal": None,
+            "deployment_status": "NOT_DEPLOYED", "evidence": {"scope": "Manual design; no repository inspection.",
+                "repository": "", "branch": "", "commit": "", "files": [], "components": [], "repositories": []}}
+    arch = Architecture(application_id=app.id, organization_id=membership.organization_id, name=app.name,
+                        version="v1", status="DRAFT", spec_json=spec)
+    db.add(arch)
+    await audit(db, membership, app, "ARCHITECTURE_EMPTY_CREATED")
+    await db.commit()
+    await db.refresh(arch)
+    return output(arch)
 
 @router.get("/{application_id}/versions")
 async def versions(application_id: str, offset: int = Query(default=0, ge=0, le=10000),
@@ -102,6 +126,7 @@ async def versions(application_id: str, offset: int = Query(default=0, ge=0, le=
         .order_by(Architecture.created_at.desc(), Architecture.id.desc()).offset(offset).limit(21))).scalars().all()
     return {"versions": [{"id": item.id, "version": item.version, "created_at": item.created_at,
         "components": len((item.spec_json.get("graph") or {}).get("nodes", [])),
+        "configured_resources": len(item.spec_json.get("resource_configurations", {})),
         "source_commit": (item.spec_json.get("evidence") or {}).get("commit"),
         "restored_from": item.spec_json.get("restored_from")} for item in rows[:20]],
         "has_more": len(rows) > 20, "offset": offset}
@@ -262,6 +287,9 @@ async def current(db, app, expected_id):
 
 async def save_version(db, membership, app, arch, graph, action, updates=None):
     spec = {**arch.spec_json, "revision": arch.spec_json["revision"] + 1, "graph": graph, "proposal": None, **(updates or {})}
+    if "resource_configurations" in spec:
+        ids = {node["id"] for node in graph["nodes"]}
+        spec["resource_configurations"] = {key: value for key, value in spec["resource_configurations"].items() if key in ids}
     # Approval belongs to one saved version; editing never authorizes deployment.
     spec.pop("design_approval", None)
     spec.pop("ai_request", None)
@@ -281,6 +309,67 @@ async def save(application_id: str, payload: Save, membership=Depends(editor), d
     app = await application(db, application_id, membership, lock=True)
     arch = await current(db, app, payload.expected_id)
     return await save_version(db, membership, app, arch, payload.graph.model_dump(), "ARCHITECTURE_DRAFT_SAVED")
+
+
+class ConfigureResource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_id: str = Field(max_length=36)
+    node_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")
+    configuration: ResourceConfiguration | None
+
+
+@router.post("/{application_id}/resource-configuration")
+async def configure_resource(application_id: str, payload: ConfigureResource,
+                             membership=Depends(editor), db: AsyncSession = Depends(get_db)):
+    app = await application(db, application_id, membership, lock=True)
+    arch = await current(db, app, payload.expected_id)
+    if pending_proposal(arch.spec_json):
+        raise HTTPException(409, "Apply or discard the pending proposal before configuring resources.")
+    if arch.spec_json.get("resource_schema_version") not in (None, 1):
+        raise HTTPException(409, "This resource schema needs an explicit migration before editing.")
+    if payload.node_id not in {node["id"] for node in arch.spec_json["graph"]["nodes"]}:
+        raise HTTPException(422, "Select a component in this saved architecture.")
+    configs = dict(arch.spec_json.get("resource_configurations", {}))
+    if payload.configuration is None:
+        configs.pop(payload.node_id, None)
+    else:
+        configs[payload.node_id] = payload.configuration.model_dump()
+        review = validate_resources(arch.spec_json["graph"], configs, (arch.spec_json.get("requirements") or {}).get("region"))
+        # Validate all configured resources: a VPC resize must not invalidate
+        # already configured children or introduce overlapping subnet ranges.
+        if review["issues"]:
+            raise HTTPException(422, {"code": "RESOURCE_CONFIGURATION_INVALID", "message": " ".join(issue["message"] for issue in review["issues"][:5])})
+    if configs == arch.spec_json.get("resource_configurations", {}):
+        return output(arch)
+    return await save_version(db, membership, app, arch, arch.spec_json["graph"], "ARCHITECTURE_RESOURCE_CONFIGURED",
+                              {"resource_schema_version": 1, "resource_configurations": configs})
+
+
+class ExportResources(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_id: str = Field(max_length=36)
+    resource_ids: list[Annotated[str, Field(pattern=r"^[a-zA-Z0-9_-]{1,64}$")]] | None = Field(default=None, max_length=80)
+
+
+@router.post("/{application_id}/cloudformation-export")
+async def export_cloudformation(application_id: str, payload: ExportResources,
+                               membership=Depends(member), db: AsyncSession = Depends(get_db)):
+    app = await application(db, application_id, membership, lock=True)
+    arch = await current(db, app, payload.expected_id)
+    if pending_proposal(arch.spec_json):
+        raise HTTPException(409, "Apply or discard the pending proposal before exporting saved infrastructure definitions.")
+    if arch.spec_json.get("resource_schema_version") not in (None, 1):
+        raise HTTPException(409, "This resource schema needs an explicit migration before export.")
+    try:
+        result = compile_template(arch.spec_json["graph"], arch.spec_json.get("resource_configurations", {}),
+                                  (arch.spec_json.get("requirements") or {}).get("region"), payload.resource_ids)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from None
+    await audit(db, membership, app, "ARCHITECTURE_CLOUDFORMATION_EXPORTED", {"architecture_id": arch.id,
+        "version": arch.version, "sha256": result["sha256"], "included_node_ids": result["included_node_ids"],
+        "omitted_count": len(result["omitted_node_ids"])})
+    await db.commit()
+    return {**result, "architecture_id": arch.id, "version": arch.version}
 
 @router.post("/{application_id}/approve-design")
 async def approve_design(application_id: str, payload: ApplyReferences,
@@ -348,7 +437,7 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
     failure = None
     answer = None
     try:
-        answer = await service.refine(spec["graph"], spec["evidence"], message, spec["messages"], references, spec.get("requirements"), scope)
+        answer = await service.refine(spec["graph"], spec["evidence"], message, spec["messages"], references, spec.get("requirements"), scope, spec.get("resource_configurations", {}))
     except ScopeViolation:
         failure = HTTPException(422, {"code": "ARCHITECTURE_AI_SCOPE_REJECTED", "message": "AI tried to change components outside your selected scope. Your saved design is unchanged. Narrow the request or choose the required components."})
     except HTTPException as error:

@@ -18,6 +18,7 @@ class ArchitectState(TypedDict, total=False):
     references: dict | None
     requirements: dict | None
     edit_scope: dict
+    resource_configurations: dict
     context: dict
     answer: dict
     workflow: dict
@@ -34,6 +35,7 @@ def prepare_context(state: ArchitectState):
         "source_coverage": state["evidence"].get("source_coverage"),
         "source_repositories": state["evidence"].get("repositories", []),
         "approval_required": True, "edit_scope": state["edit_scope"], "network_design_guidance": NETWORK_GUIDANCE,
+        "resource_configurations": state.get("resource_configurations", {}),
         "planning_review": build_review(graph, state["evidence"], state.get("requirements"))}, "workflow": {"framework": "LangGraph / LangChain",
         "stages": ["source_context_prepared"], "missing_requirements": missing}}
 
@@ -58,6 +60,11 @@ def validate_proposal(state: ArchitectState):
         parsed["graph"] = state["graph"]
     from app.services.architecture.edit_scope import enforce_scope
     parsed["graph"] = enforce_scope(state["graph"], parsed["graph"], state["edit_scope"])
+    from app.services.architecture.edit_scope import ScopeViolation
+    saved_services = {node["id"]: node["service"] for node in state["graph"]["nodes"]}
+    for node in parsed["graph"]["nodes"]:
+        if node["id"] in state.get("resource_configurations", {}) and node["service"] != saved_services.get(node["id"]):
+            raise ScopeViolation("Configured resource service types are read-only in AI diagram edits.")
     from app.services.architecture.proposal_policy import check_transition
     check_transition(state["graph"], parsed["graph"], state["message"])
     if answer.get("ai_model"): parsed["ai_model"] = answer["ai_model"]
@@ -80,12 +87,12 @@ def architect_workflow():
     # No shared memory/checkpointer and no cloud/code execution tools.
     return builder.compile()
 
-async def run(graph, evidence, message, history, references=None, requirements=None, edit_scope=None):
+async def run(graph, evidence, message, history, references=None, requirements=None, edit_scope=None, resource_configurations=None):
     with tracing_context(enabled=False):
         async with asyncio.timeout(95):
             result = await architect_workflow().ainvoke({"graph": graph, "evidence": evidence,
                 "message": message, "history": history[-6:], "references": references, "requirements": requirements,
-                "edit_scope": edit_scope or {"mode": "REVIEW", "node_ids": []}},
+                "edit_scope": edit_scope or {"mode": "REVIEW", "node_ids": []}, "resource_configurations": resource_configurations or {}},
                 config={"recursion_limit": 8, "callbacks": []})
     return result["answer"]
 

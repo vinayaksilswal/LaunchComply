@@ -1,5 +1,21 @@
 # Current production reality
 
+## 2026-10-13 resource-definition update
+
+The architecture revision now supports versioned, schema-validated properties for
+four resource types: VPC, Subnet, private S3 Bucket and CloudWatch LogGroup. Exact
+offline CloudFormation export includes typed VPC references, explicit omission
+reporting and a version/checksum audit receipt. Empty first designs and resource
+property comparisons in History are implemented. AI sees these properties as
+read-only context and cannot change configured service identities.
+
+43 focused tests and four representative cfn-lint validations pass. Frontend
+production build/type/lint checks pass. This is not AWS API validation, a change
+set, a deployed application, a live network/security assessment or enterprise GA.
+No AWS resources were provisioned. Automatic execution remains gated. See
+[resource coverage and verification](docs/RESOURCE_CONFIGURATION.md) and
+[the prioritized backlog](docs/ENTERPRISE_DEVELOPMENT_BACKLOG.md).
+
 ## 2026-10-10 live update
 
 The older 2026-10-07 startup failure below is historical. The signed-in live System operations page now observes **4 passing checks out of 12 gates**: migration revision `ad0e4f5a6b7c`, hosted configuration, real-business mode and the latest schema-valid architecture model response. GitHub credentials are configured; actual source findings and editable architecture were reviewed in the browser. Service-request conversation and a labelled browser-workflow report were delivered and downloaded; that record is not an actual compliance assessment or customer deployment.

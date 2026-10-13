@@ -48,6 +48,7 @@ import { AssistantWindow } from "./AssistantWindow";
 import { ArchitectureSettings, type EnvironmentConnection } from "./ArchitectureSettings";
 import { privateStorageProposal, isS3Storage } from "./privateStorage";
 import { AwsServiceCatalog } from "./AwsServiceCatalog";
+import { ResourceConfigurationPanel, type ResourceConfiguration } from "./ResourceConfigurationPanel";
 import { ArchitectEditScope, type ArchitectScope } from "./ArchitectEditScope";
 import { GraphChangeReview } from "./GraphChangeReview";
 import { newComponentPosition } from "./manualPlacement";
@@ -94,6 +95,9 @@ interface Evidence {
   }[];
 }
 interface Draft {
+  resource_schema_version?: number;
+  resource_configurations?: Record<string, ResourceConfiguration>;
+  resource_review?: { issues: { node_id: string; message: string }[]; unconfigured_node_ids: string[] };
   last_ai_questions?: ArchitectQuestion[];
   design_review?: SavedDesignReview;
   last_ai_workflow?: { framework: string; stages: string[]; missing_requirements: string[]; status: string };
@@ -115,7 +119,7 @@ interface Workspace {
   application_id: string;
   application_name: string;
   architecture: Draft | null;
-  capabilities: { repository_analysis: boolean; ai_chat: boolean; aws_references?: boolean; workload_scaling?: boolean; scoped_ai_edits?: boolean };
+  capabilities: { repository_analysis: boolean; ai_chat: boolean; aws_references?: boolean; workload_scaling?: boolean; scoped_ai_edits?: boolean; resource_configuration?: boolean; empty_canvas?: boolean };
 }
 const zones: { id: Zone; name: string; color: string; icon: typeof Globe }[] = [
   { id: "EDGE", name: "Public entry", color: "#0891b2", icon: Globe },
@@ -442,6 +446,8 @@ export function ArchitectureCanvas() {
             status: !dirty && draft.design_approval ? "DESIGN_APPROVED_NOT_DEPLOYED" : "DRAFT_NOT_DEPLOYED",
             application: workspace?.application_name,
             graph,
+            resource_schema_version: draft.resource_schema_version,
+            resource_configurations: draft.resource_configurations,
             requirements: draft.requirements,
             evidence: draft.evidence,
             aws_references: dirty ? undefined : draft.aws_references,
@@ -478,7 +484,7 @@ export function ArchitectureCanvas() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {draft && <ArchitectureHistory applicationId={appId} currentId={draft.id} dirty={dirty} disabled={!!busy} canRestore={canEdit} onRestore={versionId => operation("restore", "restore", { expected_id: draft.id, version_id: versionId })} />}
+          {draft && <ArchitectureHistory applicationId={appId} currentId={draft.id} currentConfigurations={draft.resource_configurations} dirty={dirty} disabled={!!busy} canRestore={canEdit} onRestore={versionId => operation("restore", "restore", { expected_id: draft.id, version_id: versionId })} />}
           {draft && <ArchitectureSettings key={appId} graph={graph} requirements={draft.requirements} scalingAvailable={!!workspace?.capabilities.workload_scaling} version={draft.version} connections={draft.evidence.environment_connections || noConnections} modules={draft.evidence.modules || []} disabled={!canEditGraph || !!busy} proposalPending={!!draft.proposal} saving={!!busy} errorMessage={error} blockedReason={dirty ? "Save your diagram changes before saving settings." : draft.proposal ? "Apply the pending AI proposal before saving settings." : undefined} onRequirements={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} onConnections={bindings => operation("environment", "environment-connections", { expected_id: draft.id, bindings })} onGraph={value => { setGraph(value); setArrangedView(false); setView("cloud"); }} />}
           <select
             aria-label="Business asset for architecture"
@@ -560,6 +566,7 @@ export function ArchitectureCanvas() {
             });
             setArrangedView(false); setView("cloud"); setSelected(id); setChatVisible(true); setAssistantMinimized(false); autoFit.current = true;
           }} />
+          {draft && workspace?.capabilities.resource_configuration && <ResourceConfigurationPanel key={appId} appId={appId} draftId={draft.id} graph={draft.graph} configurations={draft.resource_configurations} review={draft.resource_review} region={draft.requirements?.region} selectedId={selected} errorMessage={error} disabled={dirty || preview || !!busy || !!draft.proposal || !!draft.source_changed} canEdit={canEdit} onSave={(nodeId, configuration) => operation("configure-resource", "resource-configuration", { expected_id: draft.id, node_id: nodeId, configuration })} />}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs">
           {draft && <button disabled={!!busy || dirty || !canRefresh} onClick={() => operation("analyze", "analyze")} className="font-semibold text-cyan-700 disabled:opacity-40">{busy === "analyze" ? "Inspecting source…" : "Refresh code findings"}</button>}
@@ -702,12 +709,13 @@ export function ArchitectureCanvas() {
                   <Network className="w-12 h-12 text-cyan-600" />
                 </span>
                 <h2 className="text-xl font-bold">
-                  Start with your repository
+                  Start your cloud architecture
                 </h2>
                 <p className="text-sm text-slate-500 max-w-md mt-3 leading-6">
                   Analyze dependency manifests at a specific commit, then review
                   a cloud proposal based on those findings.
                 </p>
+                {apps.length > 0 && workspace?.capabilities.empty_canvas && <button disabled={!!busy || !canEdit} onClick={() => operation("initialize", "initialize")} className="mt-4 rounded-lg border px-5 py-3 text-sm font-semibold disabled:opacity-40">Start with an empty canvas</button>}
                 {apps.length ? (
                   <button
                     disabled={
