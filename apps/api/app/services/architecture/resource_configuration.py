@@ -8,9 +8,10 @@ import hashlib
 import ipaddress
 import json
 import re
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, TypeAdapter, field_validator, model_validator
+from app.services.architecture.network_resources import NETWORK_CONFIGURATIONS, NETWORK_MODELS, NETWORK_ALIASES, validate_network, compile_network
 
 
 class Properties(BaseModel):
@@ -80,7 +81,7 @@ class LogConfiguration(Properties):
     properties: LogProperties
 
 
-ResourceConfiguration = Annotated[VpcConfiguration | SubnetConfiguration | BucketConfiguration | LogConfiguration, Field(discriminator="resource_type")]
+ResourceConfiguration = Annotated[Union[tuple([VpcConfiguration, SubnetConfiguration, BucketConfiguration, LogConfiguration, *NETWORK_CONFIGURATIONS])], Field(discriminator="resource_type")]
 ADAPTER = TypeAdapter(ResourceConfiguration)
 MODELS = {
     "AWS::EC2::VPC": (VpcProperties, "ec2-vpc", "VPC", "CIDR changes require replacement. Routes, endpoints and security groups are not generated."),
@@ -88,9 +89,11 @@ MODELS = {
     "AWS::S3::Bucket": (BucketProperties, "s3-bucket", "Private S3 bucket", "Public access blocked; AES256 encryption and TLS-only bucket policy. IAM grants, VPC endpoints and backups require separate configuration."),
     "AWS::Logs::LogGroup": (LogProperties, "logs-loggroup", "CloudWatch log group", "Retention is configured; application emitters, IAM permissions and alarms are not generated."),
 }
+MODELS.update(NETWORK_MODELS)
 SERVICE_ALIASES = {"AWS::EC2::VPC": {"Amazon VPC", "VPC"}, "AWS::EC2::Subnet": {"Subnet"},
                    "AWS::S3::Bucket": {"S3", "Amazon S3", "S3 · private access"},
                    "AWS::Logs::LogGroup": {"CloudWatch Logs", "CloudWatch log group"}}
+SERVICE_ALIASES.update(NETWORK_ALIASES)
 
 
 def schemas():
@@ -147,6 +150,7 @@ def validate_resources(graph, configurations, region=None):
             if network.overlaps(sibling):
                 issue(node_id, "SUBNET_OVERLAP", f"The subnet CIDR overlaps component {sibling_id} in the same VPC.")
         siblings.append((node_id, network))
+    issues.extend(validate_network(parsed))
     return {"schema_version": 1, "issues": issues, "configured_count": len(parsed),
             "unconfigured_node_ids": [node_id for node_id in nodes if node_id not in configurations],
             "aws_validation": "NOT_RUN", "deployment": "NOT_IMPLEMENTED"}
@@ -172,10 +176,12 @@ def compile_template(graph, configurations, region, resource_ids=None):
     if review["issues"]:
         raise ValueError("Resolve selected resource configuration and VPC reference issues before exporting.")
     resources, parameters = {}, {}
+    parsed = {node_id: ADAPTER.validate_python(raw) for node_id, raw in chosen.items()}
     for node_id, raw in chosen.items():
-        config = ADAPTER.validate_python(raw)
+        config = parsed[node_id]
         properties = config.properties
         tags = [{"Key": "LaunchComplyNodeId", "Value": node_id}]
+        depends = []
         if isinstance(config, VpcConfiguration):
             values = {"CidrBlock": properties.cidr, "EnableDnsSupport": properties.dns_support,
                       "EnableDnsHostnames": properties.dns_hostnames, "Tags": tags}
@@ -195,12 +201,19 @@ def compile_template(graph, configurations, region, resource_ids=None):
                     "Sid": "DenyInsecureTransport", "Effect": "Deny", "Principal": "*", "Action": "s3:*",
                     "Resource": [{"Fn::GetAtt": [logical_id(node_id), "Arn"]}, {"Fn::Sub": ["${BucketArn}/*", {"BucketArn": {"Fn::GetAtt": [logical_id(node_id), "Arn"]}}]}],
                     "Condition": {"Bool": {"aws:SecureTransport": "false", "aws:PrincipalIsAWSService": "false"}}}]}}}
-        else:
+        elif isinstance(config, LogConfiguration):
             values = {"RetentionInDays": properties.retention_days, "Tags": tags}
+        else:
+            values, depends = compile_network(node_id, config, parsed, logical_id, tags)
+        # Retaining a replaced permission rule would leave the obsolete grant
+        # active outside stack management. Data/foundation resources stay retained.
+        lifecycle = "Delete" if config.resource_type in {"AWS::EC2::SecurityGroupIngress", "AWS::EC2::SecurityGroupEgress"} else "Retain"
         resources[logical_id(node_id)] = {"Type": config.resource_type, "Properties": values,
-                                        "DeletionPolicy": "Retain", "UpdateReplacePolicy": "Retain"}
+                                        "DeletionPolicy": lifecycle, "UpdateReplacePolicy": lifecycle}
+        if depends:
+            resources[logical_id(node_id)]["DependsOn"] = depends
     template = {"AWSTemplateFormatVersion": "2010-09-09", "Description": "LaunchComply explicitly configured resources. Not an application deployment.",
-                "Metadata": {"LaunchComply": {"schema_version": 1, "region": region, "node_ids": sorted(selected)}}, "Resources": resources}
+                "Metadata": {"LaunchComply": {"schema_version": 1, "compiler_version": 2, "region": region, "node_ids": sorted(selected)}}, "Resources": resources}
     if parameters:
         template["Parameters"] = parameters
     digest = hashlib.sha256(json.dumps(template, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
@@ -208,6 +221,6 @@ def compile_template(graph, configurations, region, resource_ids=None):
             "omitted_node_ids": sorted(set(nodes) - selected), "generated_resource_count": len(resources),
             "aws_validation": "NOT_RUN", "deployment": "NOT_IMPLEMENTED",
             "notes": ["Offline property/reference checks only; AWS account, region availability, quotas and permissions remain unverified.",
-                      "Diagram arrows are not infrastructure routes or access grants. No workload, HTTPS ingress, security group or scaling policy is created.",
-                      "Resources use Retain on deletion/replacement. Retained resources continue to incur applicable costs and need an explicit recovery/cleanup plan.",
+                      "Only explicitly configured resource properties create routes or security rules. Diagram arrows do not grant access. No workload, load balancer, TLS certificate or scaling policy is created.",
+                      "Security rule resources use Delete on removal/replacement to revoke obsolete grants. Other resources use Retain and require a reviewed recovery/cleanup plan; retained resources can incur charges.",
                       "Review and validate the template in the selected AWS account before a separately approved CloudFormation change set."]}

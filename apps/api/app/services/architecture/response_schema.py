@@ -19,6 +19,10 @@ def scoped_schema(schema, scope):
     mode = scope["mode"]
     if mode == "EDIT" and "NodeUpdate" in result.get("$defs", {}):
         result["$defs"]["NodeUpdate"]["properties"]["id"] = {"type": "string", "enum": scope["node_ids"]}
+    if mode == "EDIT" and "ResourceUpdate" in result.get("$defs", {}):
+        result["$defs"]["ResourceUpdate"]["properties"]["node_id"] = {"type": "string", "enum": scope["node_ids"]}
+    if mode != "EDIT" and "resource_updates" in properties:
+        properties["resource_updates"]["maxItems"] = 0
     if mode == "REMOVE" and "removed_node_ids" in properties:
         properties["removed_node_ids"]["items"] = {"type": "string", "enum": scope["node_ids"]}
     empty = {"ADD": ["node_updates", "removed_node_ids", "removed_edges"],

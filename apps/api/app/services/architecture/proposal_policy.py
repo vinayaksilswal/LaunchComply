@@ -1,5 +1,7 @@
 """Conservative diagram-transition checks. These do not validate deployed infrastructure."""
 import re
+import json
+from collections import Counter
 
 
 def frontend(node):
@@ -23,6 +25,17 @@ def check_transition(original, proposed, request):
         return
     old = {node["id"]: node for node in original["nodes"]}
     nodes = {node["id"]: node for node in proposed["nodes"]}
+    old_flows = Counter(json.dumps(edge, sort_keys=True) for edge in original["edges"])
+    changed_flows = []
+    for edge in proposed["edges"]:
+        identity = json.dumps(edge, sort_keys=True)
+        if old_flows[identity]:
+            old_flows[identity] -= 1
+        else:
+            changed_flows.append(edge)
+    affected = {node["id"] for node in proposed["nodes"] if node["id"] not in old or
+        any(node.get(field) != old[node["id"]].get(field) for field in ("service", "zone"))}
+    affected.update(endpoint for edge in changed_flows for endpoint in (edge["source"], edge["target"]))
     # Component identity/removal is enforced by the server-owned edit scope.
     for node in proposed["nodes"]:
         previous = old.get(node["id"])
@@ -32,11 +45,17 @@ def check_transition(original, proposed, request):
             raise ValueError("WORKLOAD_ROLE_CHANGED")
         if previous and previous.get("zone") == "DATA" and node.get("zone") != "DATA":
             raise ValueError("DATA_ROLE_CHANGED")
+        # Unchanged legacy gaps must not force an unrelated scope expansion.
+        # New/changed services and endpoints of new/changed flows still fail closed.
+        if node["id"] not in affected:
+            continue
         if frontend(node) and (not re.search(r"fargate|ecs|ec2|eks|container", node.get("service", ""), re.I) or not re.search(r"public frontend", node.get("service", ""), re.I)):
             raise ValueError("FRONTEND_PLACEMENT_UNRESOLVED")
         if node.get("zone") == "APPLICATION" and not frontend(node) and re.search(r"public frontend|public backend|public api|public ip", node.get("service", ""), re.I):
             raise ValueError("BACKEND_PUBLIC_EXPOSURE")
     for edge in proposed["edges"]:
+        if edge["source"] not in affected and edge["target"] not in affected:
+            continue
         source, target = nodes[edge["source"]], nodes[edge["target"]]
         if internal_ingress(target):
             if source.get("zone") != "APPLICATION":

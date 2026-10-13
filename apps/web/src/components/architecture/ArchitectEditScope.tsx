@@ -1,12 +1,12 @@
 "use client";
 import type { ArchitectureGraph } from "./CloudDiagram";
 export interface ArchitectScope { mode: "REVIEW" | "ADD" | "EDIT" | "REMOVE"; node_ids: string[] }
-export function ArchitectEditScope({ graph, value, onChange, disabled }: { graph: ArchitectureGraph; value: ArchitectScope; onChange: (scope: ArchitectScope) => void; disabled: boolean }) {
+export function ArchitectEditScope({ graph, value, onChange, disabled, resourceEdits = false }: { graph: ArchitectureGraph; value: ArchitectScope; onChange: (scope: ArchitectScope) => void; disabled: boolean; resourceEdits?: boolean }) {
   const selection = value.mode === "EDIT" || value.mode === "REMOVE";
   return <div className="rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-2">
     <label className="flex items-center gap-2 text-xs font-semibold">AI action<select aria-label="AI edit scope" disabled={disabled} value={value.mode} onChange={event => onChange({ mode: event.target.value as ArchitectScope["mode"], node_ids: [] })} className="min-w-0 flex-1 rounded-md border bg-white p-1.5 font-normal"><option value="REVIEW">Review only · no changes</option><option value="ADD">Add services · preserve existing</option><option value="EDIT">Edit selected components</option><option value="REMOVE">Remove selected components</option></select></label>
     {selection && <details open className="text-xs"><summary className="cursor-pointer font-semibold">{value.node_ids.length} selected components</summary><div className="mt-2 max-h-28 overflow-y-auto space-y-1">{graph.nodes.map(node => <label key={node.id} className="flex gap-2 items-center"><input type="checkbox" disabled={disabled} checked={value.node_ids.includes(node.id)} onChange={event => onChange({ ...value, node_ids: event.target.checked ? [...value.node_ids, node.id] : value.node_ids.filter(id => id !== node.id) })} />{node.label}</label>)}</div></details>}
     <p className="text-[11px] leading-4 text-slate-500">{value.mode === "REVIEW" ? "Ask questions or review implementation. Your diagram stays unchanged." : value.mode === "ADD" ? "New services and their connections only. Existing components and flows are locked." : value.mode === "REMOVE" ? "Only selected components and their connections can be removed. Review before applying." : "Only selected components and their connections can change. Unrelated components and positions are locked."}</p>
-    <p className="text-[11px] leading-4 text-slate-500">AI edits the diagram. Use Resource configuration for validated infrastructure properties; editing a description does not configure AWS.</p>
+    <p className="text-[11px] leading-4 text-slate-500">{resourceEdits ? "Edit selected can propose supported resource settings with an exact before-and-after review. Applying saves a version; AWS stays unchanged." : "AI edits the diagram. Use Resource configuration for validated infrastructure properties; editing a description does not configure AWS."}</p>
   </div>;
 }

@@ -51,6 +51,7 @@ import { AwsServiceCatalog } from "./AwsServiceCatalog";
 import { ResourceConfigurationPanel, type ResourceConfiguration } from "./ResourceConfigurationPanel";
 import { ArchitectEditScope, type ArchitectScope } from "./ArchitectEditScope";
 import { GraphChangeReview } from "./GraphChangeReview";
+import { ResourceChangeReview } from "./ResourceChangeReview";
 import { newComponentPosition } from "./manualPlacement";
 import { ArchitectQuestions, type ArchitectQuestion } from "./ArchitectQuestions";
 import { ArchitectureHistory } from "./ArchitectureHistory";
@@ -110,7 +111,7 @@ interface Draft {
   messages: { role: string; content: string; version?: string; scope?: ArchitectScope; proposal_status?: string }[];
   ai_request?: { id: string };
   last_ai_scope?: ArchitectScope;
-  proposal: { id: string; graph: Graph } | null;
+  proposal: { id: string; graph: Graph; resource_configurations?: Record<string, ResourceConfiguration> } | null;
   created_at: string;
   aws_references?: AwsReferenceReview;
   design_approval?: { approved_at: string; version: string; scope: string; graph_fingerprint: string };
@@ -119,7 +120,7 @@ interface Workspace {
   application_id: string;
   application_name: string;
   architecture: Draft | null;
-  capabilities: { repository_analysis: boolean; ai_chat: boolean; aws_references?: boolean; workload_scaling?: boolean; scoped_ai_edits?: boolean; resource_configuration?: boolean; empty_canvas?: boolean };
+  capabilities: { repository_analysis: boolean; ai_chat: boolean; aws_references?: boolean; workload_scaling?: boolean; scoped_ai_edits?: boolean; resource_configuration?: boolean; resource_ai_edits?: boolean; empty_canvas?: boolean };
 }
 const zones: { id: Zone; name: string; color: string; icon: typeof Globe }[] = [
   { id: "EDGE", name: "Public entry", color: "#0891b2", icon: Globe },
@@ -981,6 +982,40 @@ export function ArchitectureCanvas() {
 
             </div>
             <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-4">
+              {draft?.proposal && (
+                <div className="p-4 rounded-xl border border-cyan-200 bg-cyan-50 space-y-3">
+                  <p className="text-sm font-semibold text-cyan-900">
+                    Proposed architecture changes
+                  </p>
+                  <GraphChangeReview before={graph} after={draft.proposal.graph} />
+                  <ResourceChangeReview graph={draft.proposal.graph} before={draft.resource_configurations || {}} after={draft.proposal.resource_configurations || draft.resource_configurations || {}} />
+                  <button
+                    disabled={dirty || !!busy}
+                    onClick={() => {
+                      setPreview((value) => !value);
+                      setView("cloud");
+                      setSelected(null);
+                    }}
+                    className="text-xs font-semibold underline text-cyan-800 disabled:opacity-40"
+                  >
+                    {preview ? "Return to saved draft" : "Preview proposal"}
+                  </button>
+                  <button
+                    disabled={dirty || !!busy || !canEdit}
+                    onClick={() =>
+                      operation("apply", "apply", {
+                        expected_id: draft.id,
+                        proposal_id: draft.proposal!.id,
+                      })
+                    }
+                    className="w-full bg-cyan-700 text-white rounded-lg px-3 py-2 text-xs font-semibold inline-flex gap-2 items-center justify-center disabled:opacity-40"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    Apply to draft
+                  </button>
+                  <button disabled={dirty || !!busy || !canEdit} onClick={() => { setPreview(false); void operation("discard", "discard-proposal", { expected_id: draft.id, proposal_id: draft.proposal!.id }); }} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-40">Discard proposal · keep saved design</button>
+                </div>
+              )}
               {draft && requirementsVisible && <div ref={requirementsPanel}><RequirementsForm key={appId} value={draft.requirements} disabled={!!busy || !canEdit} saveBlockedReason={dirty ? "Save your diagram changes before saving targets." : draft.proposal ? "Apply the pending AI proposal before saving targets." : undefined} saving={busy === "requirements"} onSave={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} /></div>}
               {draft && !requirementsVisible && draft.requirements && <div className="rounded-xl border p-3 text-xs leading-5 text-slate-600"><strong className="text-slate-900">Deployment targets</strong><br />{draft.requirements.region} · {draft.requirements.availability.replaceAll("_", " ").toLowerCase()}<br />{draft.requirements.peak_requests_per_minute.toLocaleString()} requests/min · {draft.requirements.concurrent_users.toLocaleString()} users</div>}
               {draft && view === "cloud" && <NetworkReview graph={fullDesign} />}
@@ -1279,39 +1314,6 @@ export function ArchitectureCanvas() {
                 </div>
               ))}
               {!!draft?.last_ai_questions?.length && <ArchitectQuestions key={`${draft.id}-${draft.messages.length}`} questions={draft.last_ai_questions} disabled={!!busy || dirty || !canEdit || !workspace?.capabilities.ai_chat || !workspace?.capabilities.scoped_ai_edits || !draft.ai_request?.id} onAnswer={message => void operation("chat", "chat", { expected_id: draft.id, message, answer_to: draft.ai_request?.id })} />}
-              {draft?.proposal && (
-                <div className="p-4 rounded-xl border border-cyan-200 bg-cyan-50 space-y-3">
-                  <p className="text-sm font-semibold text-cyan-900">
-                    Proposed diagram changes
-                  </p>
-                  <GraphChangeReview before={graph} after={draft.proposal.graph} />
-                  <button
-                    disabled={dirty || !!busy}
-                    onClick={() => {
-                      setPreview((value) => !value);
-                      setView("cloud");
-                      setSelected(null);
-                    }}
-                    className="text-xs font-semibold underline text-cyan-800 disabled:opacity-40"
-                  >
-                    {preview ? "Return to saved draft" : "Preview proposal"}
-                  </button>
-                  <button
-                    disabled={dirty || !!busy || !canEdit}
-                    onClick={() =>
-                      operation("apply", "apply", {
-                        expected_id: draft.id,
-                        proposal_id: draft.proposal!.id,
-                      })
-                    }
-                    className="w-full bg-cyan-700 text-white rounded-lg px-3 py-2 text-xs font-semibold inline-flex gap-2 items-center justify-center disabled:opacity-40"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    Apply to draft
-                  </button>
-                  <button disabled={dirty || !!busy || !canEdit} onClick={() => { setPreview(false); void operation("discard", "discard-proposal", { expected_id: draft.id, proposal_id: draft.proposal!.id }); }} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-40">Discard proposal · keep saved design</button>
-                </div>
-              )}
               {busy && (
                 <p
                   role="status"
@@ -1332,7 +1334,7 @@ export function ArchitectureCanvas() {
               }}
               className="border-t p-3 shrink-0 space-y-2 max-h-[60%] overflow-y-auto"
             >
-              <ArchitectEditScope graph={graph} value={aiScope} onChange={setAiScope} disabled={!!busy || dirty || !!draft?.proposal || !canEdit || !workspace?.capabilities.scoped_ai_edits} />
+              <ArchitectEditScope graph={graph} value={aiScope} onChange={setAiScope} resourceEdits={!!workspace?.capabilities.resource_ai_edits} disabled={!!busy || dirty || !!draft?.proposal || !canEdit || !workspace?.capabilities.scoped_ai_edits} />
               {selected && graph.nodes.some(node => node.id === selected) && <button type="button" disabled={!!busy || dirty || !!draft?.proposal || !canEdit} onClick={() => setAiScope({ mode: "EDIT", node_ids: [selected] })} className="text-xs font-semibold text-cyan-700 disabled:opacity-40">Edit selected: {graph.nodes.find(node => node.id === selected)?.label}</button>}
               <div className="rounded-xl border border-slate-200 focus-within:border-cyan-400 p-3">
                 <textarea

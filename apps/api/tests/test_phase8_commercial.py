@@ -313,11 +313,19 @@ async def test_team_invitations_lifecycle():
         await db.commit()
 
         # Create invite
+        actor = User(email="inviting.owner@launchcomply.io", hashed_password=get_password_hash("Password123!"), full_name="Business Owner", is_active=True)
+        db.add(actor)
+        await db.flush()
+        db.add(OrganizationMembership(organization_id=org.id, user_id=actor.id, role=MembershipRole.OWNER, is_active=True))
+        await db.commit()
+        with pytest.raises(ValueError, match="owner or administrator"):
+            await onboarding_invitation_service.create_invitation(db, org.id, user.email, MembershipRole.DEVELOPER)
         invite_data = await onboarding_invitation_service.create_invitation(
             db=db,
             organization_id=org.id,
             email="invited.dev@launchcomply.io",
-            role=MembershipRole.DEVELOPER
+            role=MembershipRole.DEVELOPER,
+            invited_by_user_id=actor.id,
         )
         raw_token = invite_data["invite_token"]
 
@@ -493,9 +501,11 @@ async def test_launch_readiness_checklist():
     """Validates the 12-point commercial launch blocker assessment."""
     async with AsyncSessionLocal() as db:
         readiness = await launch_readiness_service.evaluate_launch_readiness(db)
-        assert readiness["readiness_state"] in ["COMMERCIAL_READY", "READY_WITH_WARNINGS"]
-        assert readiness["passed_checks"] == readiness["total_checks"]
-        assert readiness["score_percentage"] == 100.0
+        assert readiness["readiness_state"] == "BLOCKED"
+        assert readiness["passed_checks"] < readiness["total_checks"]
+        assert readiness["score_percentage"] < 100.0
+        deployment = next(check for check in readiness["checklist"] if check["item"] == "Automatic infrastructure deployment")
+        assert deployment["status"] == "NOT_IMPLEMENTED"
 
 
 @pytest.mark.asyncio

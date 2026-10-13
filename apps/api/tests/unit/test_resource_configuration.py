@@ -123,7 +123,7 @@ def test_connections_never_become_unreviewed_routes_or_iam():
 
 def test_schema_catalog_marks_capabilities_honestly():
     result = schemas()
-    assert result["schema_version"] == 1 and len(result["resources"]) == 4
+    assert result["schema_version"] == 1 and len(result["resources"]) == 15
     for item in result["resources"]:
         assert item["capabilities"]["cloudformation_export"] is True
         assert item["capabilities"]["verified_deployment"] is False

@@ -5,6 +5,7 @@
 
 // Only known service codes receive specific messages; raw server errors stay private.
 const serviceMessages: Record<string, string> = {
+  RESOURCE_CONFIGURATION_INVALID: "Resource settings failed validation. Check resource references, CIDRs, region and ports. Private backend/data inbound access must use an authorized security-group peer.",
   GITHUB_APP_NOT_CONFIGURED: "GitHub connection needs to be configured by the platform administrator. Contact workspace support to continue.",
   ARCHITECTURE_AI_NOT_CONFIGURED: "The architecture assistant is not enabled. Ask your platform administrator to configure it.",
   ARCHITECTURE_AI_MODEL_CONFIG: "The architecture model configuration needs attention. Ask your platform administrator to check the configured free models.",

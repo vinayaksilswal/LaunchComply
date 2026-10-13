@@ -2,7 +2,17 @@
 
 ## 2026-10-13 resource-definition update
 
-The architecture revision now supports versioned, schema-validated properties for
+Latest development expands the four initial types below to **15 configurable
+resource types**: explicit route tables/associations, gateways/routes, security
+groups/rules and bucket-scoped S3 gateway endpoints. AI can propose selected
+existing-resource property changes with exact review, scope/schema checks and
+version/fingerprint protection; it cannot execute AWS changes. The catalog now
+distinguishes supported configuration/export from broad diagram-only coverage.
+Local browser acceptance and full isolated pytest/build checks pass. AWS account
+validation, workload compilation, deployment/rollback and enterprise acceptance
+remain incomplete. See [the network and AI follow-up report](docs/ENGINEERING_REPORT_2026-10-13_NETWORK_AI.md).
+
+Earlier this day, the architecture revision added versioned, schema-validated properties for
 four resource types: VPC, Subnet, private S3 Bucket and CloudWatch LogGroup. Exact
 offline CloudFormation export includes typed VPC references, explicit omission
 reporting and a version/checksum audit receipt. Empty first designs and resource

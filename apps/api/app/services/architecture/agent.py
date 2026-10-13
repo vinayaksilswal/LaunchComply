@@ -27,6 +27,7 @@ def prepare_context(state: ArchitectState):
     from app.services.architecture.workspace import Graph
     from app.services.architecture.network_guidance import NETWORK_GUIDANCE
     from app.services.architecture.design_review import build_review
+    from app.services.architecture.resource_edits import selected_schemas
     graph = Graph.model_validate(state["graph"]).model_dump()
     required = ("peak_requests_per_minute", "concurrent_users", "region", "availability")
     missing = [key for key in required if not (state.get("requirements") or {}).get(key)]
@@ -36,6 +37,7 @@ def prepare_context(state: ArchitectState):
         "source_repositories": state["evidence"].get("repositories", []),
         "approval_required": True, "edit_scope": state["edit_scope"], "network_design_guidance": NETWORK_GUIDANCE,
         "resource_configurations": state.get("resource_configurations", {}),
+        "selected_resource_schemas": selected_schemas(graph, state["edit_scope"]),
         "planning_review": build_review(graph, state["evidence"], state.get("requirements"))}, "workflow": {"framework": "LangGraph / LangChain",
         "stages": ["source_context_prepared"], "missing_requirements": missing}}
 
@@ -54,16 +56,24 @@ def validate_proposal(state: ArchitectState):
     answer = state["answer"]
     # Schema validation is not a claim of AWS deployability or sufficient capacity.
     parsed = PydanticOutputParser(pydantic_object=AIAnswer).parse(json.dumps({
-        "message": answer["message"], "graph": answer["graph"], "questions": answer.get("questions", [])})).model_dump()
+        "message": answer["message"], "graph": answer["graph"], "questions": answer.get("questions", []),
+        "resource_updates": answer.get("resource_updates", [])})).model_dump()
     # Clarification is not permission to rewrite a design while choices are missing.
     if parsed["questions"]:
         parsed["graph"] = state["graph"]
+        parsed["resource_updates"] = []
     from app.services.architecture.edit_scope import enforce_scope
     parsed["graph"] = enforce_scope(state["graph"], parsed["graph"], state["edit_scope"])
     from app.services.architecture.edit_scope import enforce_resource_identity
     parsed["graph"] = enforce_resource_identity(state["graph"], parsed["graph"], state.get("resource_configurations", {}))
     from app.services.architecture.proposal_policy import check_transition
     check_transition(state["graph"], parsed["graph"], state["message"])
+    from app.services.architecture.resource_edits import apply_resource_updates
+    # Remove configurations only for explicitly removed diagram nodes, as manual saves do.
+    remaining = {node["id"] for node in parsed["graph"]["nodes"]}
+    configs = {key: value for key, value in state.get("resource_configurations", {}).items() if key in remaining}
+    parsed["resource_configurations"] = apply_resource_updates(parsed["graph"], configs,
+        parsed["resource_updates"], state["edit_scope"], (state.get("requirements") or {}).get("region"))
     if answer.get("ai_model"): parsed["ai_model"] = answer["ai_model"]
     if answer.get("provider_attempts"): parsed["provider_attempts"] = answer["provider_attempts"]
     parsed["agent_workflow"] = {**state["workflow"], "stages": state["workflow"]["stages"] + ["graph_schema_validated", "request_path_policy_checked"],

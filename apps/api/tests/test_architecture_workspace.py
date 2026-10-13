@@ -60,10 +60,11 @@ async def test_repository_analysis_is_scoped_and_persists_only_dependency_eviden
     result = await client.post(url + "/analyze", headers=headers)
     assert result.status_code == 200, result.text
     arch = result.json()
-    assert arch["evidence"]["commit"] == "a" * 40
+    assert arch["evidence"]["repositories"][0]["commit"] == "a" * 40
+    assert len(arch["evidence"]["commit"]) == 64  # Aggregate pinned multi-repository identity.
     assert arch["deployment_status"] == "NOT_DEPLOYED"
     assert arch["evidence"]["files"][0]["dependencies"] == ["fastapi", "next", "pg", "redis"]
-    assert {node["id"] for node in arch["graph"]["nodes"]} == {"edge", "web", "api", "postgres", "redis"}
+    assert {node["service"] for node in arch["graph"]["nodes"]} >= {"ECS Fargate", "RDS PostgreSQL", "ElastiCache Redis"}
     assert "SENSITIVE_MANIFEST_VALUE" not in result.text
     assert ".env.production" not in result.text
     assert len(analysis_calls) == 4
@@ -89,6 +90,7 @@ async def test_ai_proposal_requires_explicit_apply_and_invalid_provider_response
     arch = (await client.post(url + "/analyze", headers=headers)).json()
     monkeypatch.setattr(settings, "OPENAI_API_KEY", "fixture-ai-key")
     monkeypatch.setattr(settings, "ENABLE_AI_COPILOT", True)
+    monkeypatch.setattr(settings, "ARCHITECTURE_AI_PROVIDER", "openai")
     proposed = json.loads(json.dumps(arch["graph"]))
     proposed["nodes"][0]["label"] = "AI proposed entry point"
     def respond(request):
@@ -98,9 +100,9 @@ async def test_ai_proposal_requires_explicit_apply_and_invalid_provider_response
         assert data["text"]["format"]["strict"] is True
         assert "SENSITIVE_MANIFEST_VALUE" not in str(data)
         return httpx.Response(200, json={"status": "completed", "output": [{"content": [
-            {"type": "output_text", "text": json.dumps({"message": "Here is a proposal to review. Nothing is deployed.", "graph": proposed})}]}]})
+            {"type": "output_text", "text": json.dumps({"message": "Here is a proposal to review. Nothing is deployed.", "node_updates": [{"id": arch["graph"]["nodes"][0]["id"], "label": "AI proposed entry point"}]})}]}]})
     monkeypatch.setattr(service, "http_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(respond)))
-    chat = await client.post(url + "/chat", headers=headers, json={"expected_id": arch["id"], "message": "Refine the entry point"})
+    chat = await client.post(url + "/chat", headers=headers, json={"expected_id": arch["id"], "message": "Refine the entry point", "edit_scope": {"mode": "EDIT", "node_ids": [arch["graph"]["nodes"][0]["id"]]}})
     assert chat.status_code == 200, chat.text
     assert chat.json()["graph"] == arch["graph"]
     assert chat.json()["proposal"]["graph"] == proposed

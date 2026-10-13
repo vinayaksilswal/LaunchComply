@@ -3,10 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { Download, Settings2, X } from "lucide-react";
 import { apiClient } from "@/lib/api/client";
 import type { ArchitectureGraph } from "./CloudDiagram";
-
-export interface ResourceConfiguration { resource_type: string; properties: Record<string, string | number | boolean> }
-interface FieldSchema { title?: string; description?: string; type: string; default?: string | number | boolean; enum?: number[]; reference_type?: string; maxLength?: number; pattern?: string }
-interface ResourceSchema { resource_type: string; label: string; documentation: string; limitations: string; service_aliases: string[]; schema: { properties: Record<string, FieldSchema>; required?: string[] } }
+import { ResourcePropertyFields, type ResourceConfiguration, type ResourceSchema } from "./ResourcePropertyFields";
+export type { ResourceConfiguration } from "./ResourcePropertyFields";
 interface ExportResult { template: object; sha256: string; version: string; architecture_id: string; included_node_ids: string[]; omitted_node_ids: string[]; generated_resource_count: number; notes: string[] }
 interface Review { issues: { node_id: string; message: string }[]; unconfigured_node_ids: string[] }
 const EMPTY_CONFIGURATIONS: Record<string, ResourceConfiguration> = {};
@@ -47,7 +45,7 @@ export function ResourceConfigurationPanel({ appId, draftId, graph, configuratio
   const known = Object.keys(configurations).filter(id => graph.nodes.some(item => item.id === id));
   const doSave = async (configuration: ResourceConfiguration | null) => {
     setWorking(true); setError(""); setNotice("");
-    try { if (await onSave(nodeId, configuration)) { setNotice(configuration ? "Configuration saved as a new architecture revision." : "Configuration removed from the new revision."); setResult(null); } }
+    try { if (await onSave(nodeId, configuration)) { setNotice(configuration ? "Resource configuration saved." : "Saved configuration removed."); setResult(null); } }
     finally { setWorking(false); }
   };
   const prepare = async () => {
@@ -77,16 +75,10 @@ export function ResourceConfigurationPanel({ appId, draftId, graph, configuratio
           <label className="block text-xs font-semibold">Component<select aria-label="Configured component" disabled={working} value={nodeId} onChange={event => { setNodeId(event.target.value); setNotice(""); setError(""); }} className="mt-1 w-full rounded-lg border p-2 font-normal">{graph.nodes.map(item => <option key={item.id} value={item.id}>{item.label} · {item.service}</option>)}</select></label>
           {definition ? <form onSubmit={event => { event.preventDefault(); void doSave({ resource_type: type, properties: values }); }} className="space-y-3">
             <strong className="block text-sm">{definition.label}</strong><p className="text-xs text-slate-500">{definition.resource_type}</p>
-            {Object.entries(definition.schema.properties).map(([key, field]) => <label key={key} className="block text-xs font-semibold">{field.title || key}
-              {field.reference_type ? <select required disabled={locked || !canEdit} value={String(values[key] || "")} onChange={event => setValues(current => ({ ...current, [key]: event.target.value }))} className="mt-1 block w-full rounded-lg border p-2 font-normal"><option value="">Select configured VPC</option>{graph.nodes.filter(item => configurations[item.id]?.resource_type === field.reference_type).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
-                : field.enum ? <select disabled={locked || !canEdit} value={String(values[key] ?? field.default ?? "")} onChange={event => setValues(current => ({ ...current, [key]: Number(event.target.value) }))} className="mt-1 block w-full rounded-lg border p-2 font-normal">{field.enum.map(value => <option key={value} value={value}>{value}</option>)}</select>
-                : field.type === "boolean" ? <input type="checkbox" disabled={locked || !canEdit} checked={values[key] === true} onChange={event => setValues(current => ({ ...current, [key]: event.target.checked }))} className="ml-3 align-middle" />
-                : <input required={definition.schema.required?.includes(key)} disabled={locked || !canEdit} maxLength={field.maxLength} value={String(values[key] ?? "")} onChange={event => setValues(current => ({ ...current, [key]: event.target.value }))} className="mt-1 block w-full rounded-lg border p-2 font-normal" />}
-              {field.description && <span className="mt-1 block text-[11px] font-normal text-slate-500">{field.description}</span>}
-            </label>)}
+            <ResourcePropertyFields definition={definition} values={values} configurations={configurations} graph={graph} disabled={locked || !canEdit} onChange={setValues} />
             <p className="text-xs leading-5 text-slate-600">{definition.limitations}</p><a href={definition.documentation} target="_blank" rel="noreferrer" className="block text-xs text-cyan-800 underline">AWS property reference</a>
             <button type="submit" disabled={locked || !canEdit} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">Save resource configuration</button>
-          </form> : <p className="text-sm leading-6 text-slate-600">This service currently supports visual modeling. Validated properties and CloudFormation export are available for VPC, Subnet, S3 Bucket and Logs LogGroup resource types. Add the exact resource type from the AWS catalog to configure it.</p>}
+          </form> : <div className="space-y-2 text-sm leading-6 text-slate-600"><p>This card supports visual modeling. Validated resource definitions are available for the types below; add their exact resource type from AWS services.</p><ul className="max-h-40 overflow-auto text-xs">{schemas.map(item => <li key={item.resource_type}>{item.label} · {item.resource_type}</li>)}</ul></div>}
           {configurations[nodeId] && <button disabled={locked || !canEdit} onClick={() => void doSave(null)} className="text-xs text-red-700 underline disabled:opacity-40">Remove saved configuration</button>}
         </section>
         <section className="rounded-xl border p-4 space-y-3"><h3 className="text-sm font-semibold">CloudFormation resource definitions</h3><p className="text-xs leading-5 text-slate-600">{known.length} of {graph.nodes.length} components configured. This creates an offline template for the selected resources. Account permissions, AWS validation and actual deployment remain separate.</p>

@@ -16,10 +16,23 @@ function loadConfig(overrides = {}) {
 
 function assertRewrites(result, origin) {
   assert.equal(result.status, 0, result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout), [
+  const rewrites = JSON.parse(result.stdout);
+  assert.deepEqual(rewrites.filter(rule => rule.source.includes(":path*")), [
     { source: "/api/backend/:path*", destination: `${origin}/api/v1/:path*` },
     { source: "/api/v1/:path*", destination: `${origin}/api/v1/:path*` },
   ]);
+  assert.equal(new Set(rewrites.map(rule => rule.source)).size, rewrites.length);
+  assert.ok(rewrites.every(rule => new URL(rule.destination).origin === origin));
+  // FastAPI redirects collection paths without their slash. The explicit proxy
+  // must keep authenticated requests on the web origin for both input spellings.
+  for (const prefix of ["/api/backend", "/api/v1"]) {
+    for (const collection of ["applications", "architecture", "audit-events", "deployments"]) {
+      for (const suffix of ["", "/"]) {
+        const rule = rewrites.find(item => item.source === `${prefix}/${collection}${suffix}`);
+        assert.equal(rule?.destination, `${origin}/api/v1/${collection}/`);
+      }
+    }
+  }
 }
 
 test("production Vercel build uses the owner's configured Render API", () => {

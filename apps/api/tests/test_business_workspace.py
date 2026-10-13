@@ -48,7 +48,9 @@ async def test_assessment_apply_track_publish_and_view_report(business_client):
     assert item["organization_name"] == "Case Sensitive Owner Business"
     status_url = f"/api/v1/admin/operations-queue/{request_id}"
     assert (await client.patch(status_url, headers=operator, json={"expected_status": "REQUESTED", "status": "DELIVERED"})).status_code == 409
-    assert (await client.patch(status_url, headers=operator, json={"expected_status": "REQUESTED", "status": "IN_PROGRESS", "note": "Scope review"})).status_code == 200
+    assert (await client.patch(status_url, headers=operator, json={"expected_status": "REQUESTED", "status": "IN_PROGRESS", "note": "Skip review"})).status_code == 409
+    assert (await client.patch(status_url, headers=operator, json={"expected_status": "REQUESTED", "status": "REVIEWING", "note": "Scope review"})).status_code == 200
+    assert (await client.patch(status_url, headers=operator, json={"expected_status": "REVIEWING", "status": "IN_PROGRESS", "note": "Scope agreed"})).status_code == 200
     assert (await client.patch(status_url, headers=operator, json={"expected_status": "REQUESTED", "status": "CLOSED"})).status_code == 409
     report_payload = {"report_id": str(uuid.uuid4()), "title": "Completed scope review", "content": "Actual operator deliverable. Scope and findings require customer review."}
     assert (await client.post(status_url + "/reports", headers=owner, json=report_payload)).status_code == 403
