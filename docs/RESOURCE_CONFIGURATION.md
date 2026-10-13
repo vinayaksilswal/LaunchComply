@@ -1,5 +1,47 @@
 # Resource configuration and CloudFormation export
 
+## Configured network map
+
+Open **Business architecture -> Network map** to inspect configured VPC, subnet,
+AZ, IPv4 routing and resource relationships. The API derives this projection from
+validated typed references, never node labels or application arrows. A subnet
+with an explicit route-table association is classified from its configured IGW
+or NAT routes; without an association its deployed main route table is unknown.
+`ISOLATED` describes the supported configured IPv4 routing only, not proof of
+security, runtime reachability or deployment.
+
+When a VPC definition exists, Arranged view and Arrange layers use typed groups.
+AZs are separate bands and subnet ownership uses IDs, so identically named VPCs
+or AZs cannot merge different VPCs. S3 remains a regional managed resource outside
+subnet ownership. Unconfigured workloads remain explicitly unassigned. Designs
+without a configured VPC retain the earlier planning layout; no migration or
+automatic saved-graph rewrite occurs.
+
+Select a configured resource to show its dotted/dashed gray reference links;
+**Resource links** toggles all references. These are parent references, route
+targets, security peers, associations or endpoint-policy references. They are
+not copied into `graph.edges` and do not grant permissions, attach applications
+or represent HTTP request forwarding. The card reports flows and references
+separately. Network map resource buttons focus the canvas at a readable scale.
+
+The inspector shows actual configured parent/AZ references instead of changing
+service names to imply placement. Change the references through **Resource
+configuration**; dragging a card moves its saved coordinates only. The AI receives
+selected topology relationships alongside existing typed schemas and properties,
+while the existing scope, review, Apply/Discard and revision protections remain.
+Future property schema versions are not interpreted as current topology.
+
+Invalid references and their dependent resources are excluded from established
+placement and reported for correction. No public cloud account ID is invented,
+and no AWS API discovery, security verdict or active connection is inferred.
+The canonical 80-node / 160-flow limits remain.
+
+AWS references: [VPCs, subnets and routing](https://docs.aws.amazon.com/vpc/latest/userguide/how-it-works.html)
+and [S3 gateway endpoints](https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints-s3.html).
+AWS distinguishes explicit subnet associations from the main route table;
+S3 gateway endpoints apply to regional service routes and policies, not bucket
+containment inside a subnet.
+
 Implemented 2026-10-13. This is a bounded infrastructure-definition feature,
 not a customer deployment engine or enterprise launch acceptance.
 

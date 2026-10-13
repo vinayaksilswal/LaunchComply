@@ -11,6 +11,7 @@ LaunchComply is an independent B2B SaaS platform and professional services ecosy
 2. **Architecture workspace**: Editable AWS diagrams, network planning, workload scaling decisions, undo/redo and saved versions. Current graph limits are 80 components and 160 connections.
 3. **AI review and scoped edits**: LangGraph/LangChain, selected-component permissions, exact proposed changes, explicit Apply/Discard and version conflict protection.
 4. **Resource properties and infrastructure export**: Fifteen validated types covering VPC/subnets, explicit routes/gateways, security groups/rules, scoped S3 gateway access, private S3 and log groups. Selected-resource AI property patches require exact review and explicit Apply. Deterministic offline CloudFormation export identifies omissions; other catalog types remain visual/planning support. See [resource coverage](docs/RESOURCE_CONFIGURATION.md).
+   Configured network maps now derive VPC/subnet/AZ ownership and routing from these resource settings. Configuration references are shown separately from application flows; unknown workload attachment stays unresolved. This is configured intent, not discovered AWS state or verified reachability.
 5. **Business workflows**: Repository management, teams, service requests, customer reports, support and operator administration.
 6. **Security/compliance records**: Separate readiness/evidence workflows. Recorded readiness is not an assessment result, audit or certification.
 

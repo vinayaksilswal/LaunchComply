@@ -3,6 +3,7 @@ import { forwardRef, useId } from "react";
 import { routeFlow, flowEvidence, flowPorts } from "./flowRouting";
 import { networkPlacement } from "./networkPlacement";
 import type { WorkloadPolicy } from "./ProductionDiagram";
+import { routingLabels, type ResourceTopology } from "./resourceTopology";
 import {
   Globe,
   Server,
@@ -133,6 +134,8 @@ export const CloudDiagram = forwardRef<
     code?: boolean;
     boundaries?: DiagramBoundary[];
     workloadPolicies?: WorkloadPolicy[];
+    resourceTopology?: ResourceTopology;
+    showResourceLinks?: boolean;
     onSelect: (id: string) => void;
     onNodePointerDown?: (
       event: React.PointerEvent<SVGGElement>,
@@ -150,6 +153,8 @@ export const CloudDiagram = forwardRef<
     code,
     boundaries,
     workloadPolicies,
+    resourceTopology,
+    showResourceLinks,
     onSelect,
     onNodePointerDown,
     onPointerMove,
@@ -180,6 +185,8 @@ export const CloudDiagram = forwardRef<
       .filter((e) => e.source === selected || e.target === selected)
       .flatMap((e) => [e.source, e.target]),
   );
+  const resourceRelations = resourceTopology?.relations.filter(r => showResourceLinks || r.source === selected || r.target === selected) || [];
+  resourceRelations.forEach(r => { if (r.source === selected || r.target === selected) { related.add(r.source); related.add(r.target); } });
   return (
     <svg
       ref={ref}
@@ -308,6 +315,15 @@ export const CloudDiagram = forwardRef<
             </g>
           );
         })}
+      {resourceRelations.map((edge, i) => {
+        const from = graph.nodes.find(n => n.id === edge.source), to = graph.nodes.find(n => n.id === edge.target);
+        if (!from || !to) return null;
+        const routed = routeFlow(from, to, graph.nodes, i, captionObstacles);
+        return <g key={`resource-${edge.source}-${edge.target}-${edge.field}`} opacity={selected && edge.source !== selected && edge.target !== selected ? 0.2 : 0.85}>
+          <title>Configuration reference: {from.label} → {to.label} · {edge.label} ({edge.kind}). Not an application request flow.</title>
+          <path d={routed.path} fill="none" stroke="#64748b" strokeWidth="1.5" strokeDasharray="3 5" markerEnd={`url(#${id}-arrow)`} />
+        </g>;
+      })}
       {graph.edges.map((edge, i) => {
         const from = graph.nodes.find((n) => n.id === edge.source),
           to = graph.nodes.find((n) => n.id === edge.target);
@@ -477,7 +493,10 @@ export const CloudDiagram = forwardRef<
               fontWeight="600"
               fill={layer.color}
             >
-              {code ? "STATIC SOURCE" : /Proposed (\d+) replicas/i.test(node.description) ? `${/Proposed (\d+) replicas/i.exec(node.description)?.[1]} REPLICAS · PLAN` : ({ PUBLIC_FRONTEND: "PUBLIC FRONTEND", PUBLIC_INGRESS: "HTTPS INGRESS", PRIVATE_INGRESS: "INTERNAL HTTPS INGRESS", PRIVATE_COMPUTE: "PRIVATE COMPUTE", PRIVATE_DATA: "ISOLATED DATA", VPC_ENDPOINT: "PRIVATE SERVICE ROUTE", PRIVATE_MANAGED_STORAGE: "PRIVATE MANAGED STORAGE", OUTSIDE_VPC: "MANAGED / GLOBAL", REVIEW: "PLACEMENT TO CONFIRM" }[networkPlacement(node)])}
+              {code ? "STATIC SOURCE" : resourceTopology?.placements.some(p => p.node_id === node.id) ? (() => {
+                const p = resourceTopology.placements.find(p => p.node_id === node.id)!;
+                return p.routing ? routingLabels[p.routing].toUpperCase() : "CONFIGURED · NOT VERIFIED";
+              })() : /Proposed (\d+) replicas/i.test(node.description) ? `${/Proposed (\d+) replicas/i.exec(node.description)?.[1]} REPLICAS · PLAN` : ({ PUBLIC_FRONTEND: "PUBLIC FRONTEND", PUBLIC_INGRESS: "HTTPS INGRESS", PRIVATE_INGRESS: "INTERNAL HTTPS INGRESS", PRIVATE_COMPUTE: "PRIVATE COMPUTE", PRIVATE_DATA: "ISOLATED DATA", VPC_ENDPOINT: "PRIVATE SERVICE ROUTE", PRIVATE_MANAGED_STORAGE: "PRIVATE MANAGED STORAGE", OUTSIDE_VPC: "MANAGED / GLOBAL", REVIEW: "PLACEMENT TO CONFIRM" }[networkPlacement(node)])}
             </text>
             <text
               x={node.x + cardWidth - 16}
@@ -490,8 +509,7 @@ export const CloudDiagram = forwardRef<
                 graph.edges.filter(
                   (e) => e.source === node.id || e.target === node.id,
                 ).length
-              }{" "}
-              links
+              } {code ? "links" : "flows"}{resourceTopology?.relations.some(r => r.source === node.id || r.target === node.id) ? ` · ${resourceTopology.relations.filter(r => r.source === node.id || r.target === node.id).length} refs` : ""}
             </text>
           </g>
         );

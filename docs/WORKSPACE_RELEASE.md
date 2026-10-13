@@ -214,3 +214,8 @@ Implemented typed canonical properties for VPC, Subnet, S3 Bucket and Logs LogGr
 
 2026-10-13 network/AI follow-up: Fifteen validated resource types, explicit network/security definitions, reviewed selected-resource property patches, immutable identities, fingerprints and History. Full isolated pytest: 319 passed, 4 external checks skipped; 104 focused tests and 24 frontend contracts passed; Next production build/type/lint passed. Offline cfn-lint passed for fixture and browser-downloaded v3 network artifact. No live AWS or provider-quality acceptance. See ENGINEERING_REPORT_2026-10-13_NETWORK_AI.md.
 Final follow-up verification: 320 pytest tests passed, 4 external checks skipped, 24 frontend contracts passed. Pending AI review moved above generic context. Future-schema clarification cannot bypass migration.
+
+
+## 13 October 2026 - configured architecture topology
+
+Read-only typed VPC/subnet/AZ routing and reference projection now feeds the canvas, network map, inspector, pending proposals and scoped AI context. Existing designs without a configured VPC keep their prior layout. Local verification: 330 pytest passed, 4 external checks skipped; 28 frontend tests passed; optimized build, TypeScript and lint passed. Synthetic browser design v5 stayed unchanged; 23 configured resources and 31 references inspected, NAT focus at 95 percent showed exact ownership. No AWS calls/provisioning or live model acceptance. Report: docs/ENGINEERING_REPORT_2026-10-13_TOPOLOGY.md. Research prompt: docs/ENTERPRISE_ARCHITECTURE_RESEARCH_PROMPT.md. Hosted rollout and whole-platform enterprise readiness remain unverified.

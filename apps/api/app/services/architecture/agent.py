@@ -19,6 +19,7 @@ class ArchitectState(TypedDict, total=False):
     requirements: dict | None
     edit_scope: dict
     resource_configurations: dict
+    resource_schema_version: int | None
     context: dict
     answer: dict
     workflow: dict
@@ -28,7 +29,15 @@ def prepare_context(state: ArchitectState):
     from app.services.architecture.network_guidance import NETWORK_GUIDANCE
     from app.services.architecture.design_review import build_review
     from app.services.architecture.resource_edits import selected_schemas
+    from app.services.architecture.resource_topology import build_topology
     graph = Graph.model_validate(state["graph"]).model_dump()
+    topology = build_topology(graph, state.get("resource_configurations", {}), (state.get("requirements") or {}).get("region"), state.get("resource_schema_version", 1))
+    scope_ids = set(state["edit_scope"].get("node_ids", []))
+    if scope_ids:
+        relations = [r for r in topology["relations"] if r["source"] in scope_ids or r["target"] in scope_ids]
+        context_ids = scope_ids | {node for r in relations for node in (r["source"], r["target"])}
+        topology = {**topology, "placements": [p for p in topology["placements"] if p["node_id"] in context_ids], "relations": relations,
+                    "issues": [issue for issue in topology["issues"] if not issue["node_id"] or issue["node_id"] in context_ids]}
     required = ("peak_requests_per_minute", "concurrent_users", "region", "availability")
     missing = [key for key in required if not (state.get("requirements") or {}).get(key)]
     return {"graph": graph, "context": {"missing_requirements": missing,
@@ -37,6 +46,7 @@ def prepare_context(state: ArchitectState):
         "source_repositories": state["evidence"].get("repositories", []),
         "approval_required": True, "edit_scope": state["edit_scope"], "network_design_guidance": NETWORK_GUIDANCE,
         "resource_configurations": state.get("resource_configurations", {}),
+        "configured_network": topology,
         "selected_resource_schemas": selected_schemas(graph, state["edit_scope"]),
         "planning_review": build_review(graph, state["evidence"], state.get("requirements"))}, "workflow": {"framework": "LangGraph / LangChain",
         "stages": ["source_context_prepared"], "missing_requirements": missing}}
@@ -94,12 +104,12 @@ def architect_workflow():
     # No shared memory/checkpointer and no cloud/code execution tools.
     return builder.compile()
 
-async def run(graph, evidence, message, history, references=None, requirements=None, edit_scope=None, resource_configurations=None):
+async def run(graph, evidence, message, history, references=None, requirements=None, edit_scope=None, resource_configurations=None, resource_schema_version=1):
     with tracing_context(enabled=False):
         async with asyncio.timeout(95):
             result = await architect_workflow().ainvoke({"graph": graph, "evidence": evidence,
                 "message": message, "history": history[-6:], "references": references, "requirements": requirements,
-                "edit_scope": edit_scope or {"mode": "REVIEW", "node_ids": []}, "resource_configurations": resource_configurations or {}},
+                "edit_scope": edit_scope or {"mode": "REVIEW", "node_ids": []}, "resource_configurations": resource_configurations or {}, "resource_schema_version": resource_schema_version},
                 config={"recursion_limit": 8, "callbacks": []})
     return result["answer"]
 

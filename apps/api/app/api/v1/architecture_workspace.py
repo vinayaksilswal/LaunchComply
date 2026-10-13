@@ -23,6 +23,7 @@ from app.services.architecture.deployment_planning import WorkloadPolicy, policy
 from app.services.architecture.edit_scope import EditScope
 from app.services.architecture.resource_configuration import ResourceConfiguration, schemas as resource_schemas, validate_resources, compile_template
 from app.services.architecture.resource_edits import apply_resource_updates, fingerprint as resource_fingerprint
+from app.services.architecture.resource_topology import build_topology
 from typing import Annotated, Literal
 from app.services.architecture.repository_links import linked_repositories
 
@@ -66,8 +67,12 @@ def output(arch):
         return None
     from app.services.architecture.design_review import build_review
     spec = arch.spec_json
+    region = (spec.get("requirements") or {}).get("region")
+    proposal = pending_proposal(spec)
+    topology = lambda graph, configs: build_topology(graph, configs, region, spec.get("resource_schema_version", 1))
     return {"id": arch.id, "version": arch.version, "created_at": arch.created_at,
-            **spec, "proposal": pending_proposal(spec),
+            **spec, "proposal": {**proposal, "resource_topology": topology(proposal["graph"], proposal.get("resource_configurations", spec.get("resource_configurations", {})))} if proposal else None,
+            "resource_topology": topology(spec["graph"], spec.get("resource_configurations", {})),
             "resource_review": validate_resources(spec["graph"], spec.get("resource_configurations", {}), (spec.get("requirements") or {}).get("region")),
             "design_review": build_review(spec["graph"], spec.get("evidence"), spec.get("requirements"), spec.get("source_changed", False))}
 
@@ -441,7 +446,7 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
     failure = None
     answer = None
     try:
-        answer = await service.refine(spec["graph"], spec["evidence"], message, spec["messages"], references, spec.get("requirements"), scope, spec.get("resource_configurations", {}))
+        answer = await service.refine(spec["graph"], spec["evidence"], message, spec["messages"], references, spec.get("requirements"), scope, spec.get("resource_configurations", {}), spec.get("resource_schema_version", 1))
     except ScopeViolation:
         failure = HTTPException(422, {"code": "ARCHITECTURE_AI_SCOPE_REJECTED", "message": "AI tried to change components outside your selected scope. Your saved design is unchanged. Narrow the request or choose the required components."})
     except HTTPException as error:

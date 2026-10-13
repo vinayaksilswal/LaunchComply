@@ -37,11 +37,27 @@ def model_reply(monkeypatch, updates, questions=None):
         assert str(request.url) == "https://api.openai.com/v1/responses"
         supplied = json.loads(json.loads(request.content)["input"])
         assert [item["resource_type"] for item in supplied["planning_context"]["selected_resource_schemas"]] == ["AWS::Logs::LogGroup"]
+        network = supplied["planning_context"]["configured_network"]
+        assert network["deployment_state"] == "NOT_VERIFIED"
+        assert [p["node_id"] for p in network["placements"]] == ["logs"]
+        assert network["relations"] == []
         answer = {"message": "Review the proposed retention change. No cloud changes.", "resource_updates": updates, "questions": questions or []}
         return httpx.Response(200, json={"status": "completed", "output": [{"content": [{"type": "output_text", "text": json.dumps(answer)}]}]})
     monkeypatch.setattr(service, "http_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(reply)))
 
 CHANGE = {"node_id": "logs", "resource_type": "AWS::Logs::LogGroup", "changes": [{"name": "retention_days", "value": 90}]}
+
+
+@pytest.mark.asyncio
+async def test_future_schema_is_not_interpreted_as_current_network_in_ai_context(configured_asset):
+    from app.services.architecture.agent import prepare_context
+    _, _, _, saved = configured_asset
+    result = prepare_context({"graph": saved["graph"], "evidence": saved["evidence"],
+        "resource_configurations": saved["resource_configurations"], "resource_schema_version": 2,
+        "edit_scope": {"mode": "REVIEW", "node_ids": ["logs"]}})
+    network = result["context"]["configured_network"]
+    assert network["placements"] == [] and network["relations"] == []
+    assert network["issues"][0]["code"] == "UNSUPPORTED_SCHEMA"
 
 @pytest.mark.asyncio
 async def test_property_only_proposal_requires_apply_is_versioned_and_can_restore(configured_asset, monkeypatch):
@@ -50,6 +66,9 @@ async def test_property_only_proposal_requires_apply_is_versioned_and_can_restor
     response = await client.post(url + "/chat", headers=headers, json={"expected_id": original["id"], "message": "Set selected log retention to 90 days only.", "edit_scope": {"mode": "EDIT", "node_ids": ["logs"]}})
     assert response.status_code == 200, response.text
     pending = response.json()
+    assert original["resource_topology"]["placements"][0]["location"] == "OPERATIONS"
+    assert pending["proposal"]["resource_topology"]["deployment_state"] == "NOT_VERIFIED"
+    assert pending["resource_topology"] == original["resource_topology"]
     assert pending["graph"] == original["graph"] == pending["proposal"]["graph"]
     assert pending["resource_configurations"] == original["resource_configurations"]
     assert pending["proposal"]["resource_configurations"]["logs"]["properties"]["retention_days"] == 90

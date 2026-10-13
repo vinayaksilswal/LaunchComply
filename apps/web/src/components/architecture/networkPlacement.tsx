@@ -1,4 +1,5 @@
 import type { ArchitectureGraph, ArchitectureNode } from "./CloudDiagram";
+import type { ResourceTopology } from "./resourceTopology";
 
 export type NetworkPlacement = "PUBLIC_INGRESS" | "PUBLIC_FRONTEND" | "PRIVATE_INGRESS" | "PRIVATE_COMPUTE" | "PRIVATE_DATA" | "VPC_ENDPOINT" | "PRIVATE_MANAGED_STORAGE" | "OUTSIDE_VPC" | "REVIEW";
 
@@ -22,7 +23,13 @@ export function networkPlacement(node: ArchitectureNode): NetworkPlacement {
   return "REVIEW";
 }
 
-export function NetworkReview({ graph }: { graph: ArchitectureGraph }) {
+export function NetworkReview({ graph, topology }: { graph: ArchitectureGraph; topology?: ResourceTopology }) {
+  if (topology?.placements.length) return <section aria-label="Network design review" className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+    <h3 className="text-sm font-semibold">Configured public & private network</h3>
+    <p className="text-xs leading-5 text-slate-600">The network map uses saved resource identities: {topology.placements.filter(p => p.resource_type === "AWS::EC2::VPC").length} VPCs, {topology.placements.filter(p => p.resource_type === "AWS::EC2::Subnet").length} subnets and {topology.relations.length} configuration references. Subnet routing describes configured IPv4 routes; it does not verify deployed access.</p>
+    <p className="text-xs leading-5 text-slate-600">Unconfigured workloads remain outside established subnet ownership. Select a resource to see its dashed configuration links, or open Network map. S3 is regional storage outside the VPC; endpoints describe the configured private route and policy. Security-group references do not attach workloads or prove TLS/authentication.</p>
+    {!!topology.issues.length && <ul className="text-xs text-amber-800 space-y-2">{topology.issues.map((item, i) => <li key={i}>{graph.nodes.find(n => n.id === item.node_id)?.label || "Settings"}: {item.message}</li>)}</ul>}
+  </section>;
   const counts = (placement: NetworkPlacement) => graph.nodes.filter(node => networkPlacement(node) === placement);
   const unresolved = counts("REVIEW");
   const privateWorkloads = counts("PRIVATE_COMPUTE").length + counts("PRIVATE_DATA").length;

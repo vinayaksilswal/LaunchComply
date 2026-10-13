@@ -305,10 +305,10 @@ def draft_graph(evidence):
         add("logs", "Application monitoring", "Amazon CloudWatch", "SUPPORT", 1140, 270, "Proposed logs and monitoring. Retention, alarms and data redaction require configuration.")
     return Graph(nodes=nodes, edges=edges).model_dump()
 
-async def refine(graph, evidence, message, history, aws_references=None, requirements=None, edit_scope=None, resource_configurations=None):
+async def refine(graph, evidence, message, history, aws_references=None, requirements=None, edit_scope=None, resource_configurations=None, resource_schema_version=1):
     from app.services.architecture.agent import run
     try:
-        return await run(graph, evidence, message, history, aws_references, requirements, edit_scope, resource_configurations)
+        return await run(graph, evidence, message, history, aws_references, requirements, edit_scope, resource_configurations, resource_schema_version)
     except TimeoutError:
         raise HTTPException(504, {"code": "ARCHITECTURE_AI_TIMEOUT", "message": "The architecture assistant timed out. Your saved design is unchanged."}) from None
 

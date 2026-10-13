@@ -56,6 +56,8 @@ import { newComponentPosition } from "./manualPlacement";
 import { ArchitectQuestions, type ArchitectQuestion } from "./ArchitectQuestions";
 import { ArchitectureHistory } from "./ArchitectureHistory";
 import { RequestFlows } from "./RequestFlows";
+import { arrangeResourceTopology, resourceBoundaries, visibleTopology, routingLabels, type ResourceTopology } from "./resourceTopology";
+import { ResourceTopologyMap } from "./ResourceTopologyMap";
 const noConnections: EnvironmentConnection[] = [];
 
 type Zone = "EDGE" | "APPLICATION" | "DATA" | "SUPPORT";
@@ -96,6 +98,7 @@ interface Evidence {
   }[];
 }
 interface Draft {
+  resource_topology?: ResourceTopology;
   resource_schema_version?: number;
   resource_configurations?: Record<string, ResourceConfiguration>;
   resource_review?: { issues: { node_id: string; message: string }[]; unconfigured_node_ids: string[] };
@@ -111,7 +114,7 @@ interface Draft {
   messages: { role: string; content: string; version?: string; scope?: ArchitectScope; proposal_status?: string }[];
   ai_request?: { id: string };
   last_ai_scope?: ArchitectScope;
-  proposal: { id: string; graph: Graph; resource_configurations?: Record<string, ResourceConfiguration> } | null;
+  proposal: { id: string; graph: Graph; resource_configurations?: Record<string, ResourceConfiguration>; resource_topology?: ResourceTopology } | null;
   created_at: string;
   aws_references?: AwsReferenceReview;
   design_approval?: { approved_at: string; version: string; scope: string; graph_fingerprint: string };
@@ -146,6 +149,7 @@ export function ArchitectureCanvas() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const { graph, setGraph, resetGraph, beginEdit, endEdit, undo, redo, canUndo, canRedo } = useGraphHistory();
   const [arrangedView, setArrangedView] = useState(true);
+  const [showResourceLinks, setShowResourceLinks] = useState(false);
   const [cloudFocus, setCloudFocus] = useState<string | null>(null);
   const [view, setView] = useState<"cloud" | "code" | "inventory">(["approval", "review"].includes(query.get("step") || "") ? "inventory" : "cloud");
   const [codeMode, setCodeMode] = useState<"overview" | "files">("overview");
@@ -379,14 +383,20 @@ export function ArchitectureCanvas() {
     codeGraph.edges = sourceDesign.graph.edges;
   }
   const fullDesign = preview && draft?.proposal ? draft.proposal.graph : graph;
+  const rawTopology = preview && draft?.proposal ? draft.proposal.resource_topology : draft?.resource_topology;
+  const topology = visibleTopology(rawTopology, fullDesign, preview && draft?.proposal ? draft.proposal.graph : draft?.graph || fullDesign);
+  const hasTopology = !!topology?.placements.length;
+  const hasNetworkTopology = !!topology?.placements.some(p => p.resource_type === "AWS::EC2::VPC");
   const neighborhood = new Set(fullDesign.edges.filter(edge => edge.source === cloudFocus || edge.target === cloudFocus).flatMap(edge => [edge.source, edge.target]));
+  topology?.relations.filter(edge => edge.source === cloudFocus || edge.target === cloudFocus).forEach(edge => { neighborhood.add(edge.source); neighborhood.add(edge.target); });
   if (cloudFocus) neighborhood.add(cloudFocus);
   const focusedDesign = cloudFocus ? { nodes: fullDesign.nodes.filter(node => neighborhood.has(node.id)), edges: fullDesign.edges.filter(edge => neighborhood.has(edge.source) && neighborhood.has(edge.target)) } : fullDesign;
   const shown =
     view === "code"
       ? codeGraph
-      : (arrangedView || cloudFocus) ? arrangeBusinessArchitecture(focusedDesign) : fullDesign;
+      : (arrangedView || cloudFocus) ? (hasNetworkTopology ? arrangeResourceTopology(focusedDesign, topology!) : arrangeBusinessArchitecture(focusedDesign)) : fullDesign;
   const node = shown.nodes.find((item) => item.id === selected);
+  const selectedPlacement = topology?.placements.find(p => p.node_id === selected);
   const editableLayout = () => {
     const positions = new Map(shown.nodes.map(item => [item.id, { x: item.x, y: item.y }]));
     return (current: Graph): Graph => ({
@@ -394,7 +404,7 @@ export function ArchitectureCanvas() {
       nodes: current.nodes.map(item => ({ ...item, ...positions.get(item.id) })),
     });
   };
-  const boundaries = view === "code" ? sourceDesign.boundaries : businessBoundaries(shown, draft?.requirements);
+  const boundaries = view === "code" ? sourceDesign.boundaries : hasNetworkTopology ? resourceBoundaries(shown, topology!) : businessBoundaries(shown, draft?.requirements);
   const { width, height } = diagramBounds(shown, view !== "code", boundaries);
   const updateNode = (change: Partial<Node>) => {
     if (!node || !canEditGraph || busy || view === "code" || preview) return;
@@ -414,6 +424,14 @@ export function ArchitectureCanvas() {
       );
       canvas.current.scrollTo({ top: 0, left: 0 });
     }
+  };
+  const focusConfiguredResource = (id: string) => {
+    setSelected(id); setChatVisible(true); setAssistantMinimized(false);
+    const instance = shown.nodes.find(item => item.id === id);
+    if (!instance || !canvas.current) return;
+    autoFit.current = false; setZoom(0.95);
+    const container = canvas.current;
+    requestAnimationFrame(() => container.scrollTo({ left: Math.max(0, instance.x * 0.95 - container.clientWidth / 2 + 130), top: Math.max(0, instance.y * 0.95 - container.clientHeight / 2 + 65), behavior: "smooth" }));
   };
   const layoutKey = `${draftId}:${view}:${codeMode}:${codeFocus}:${cloudFocus}:${arrangedView}:${preview}`;
   useEffect(() => {
@@ -627,6 +645,8 @@ export function ArchitectureCanvas() {
                 }
               }} className="mr-2 max-w-48 border rounded-lg p-1.5 text-xs bg-white"><option value="">Find a component</option>{shown.nodes.map(item => <option key={item.id} value={item.id}>{view === "code" ? draft?.evidence.modules?.find(module => module.id === item.id)?.path || item.label : `${item.label} · ${item.service}`}</option>)}</select>}
               {view === "cloud" && <>
+                {topology && <ResourceTopologyMap graph={fullDesign} topology={topology} onSelect={focusConfiguredResource} />}
+                {hasTopology && <button aria-pressed={showResourceLinks} onClick={() => setShowResourceLinks(value => !value)} className="rounded-lg border px-2 py-1.5 text-xs">{showResourceLinks ? "Hide resource links" : "Resource links"}</button>}
                 <RequestFlows graph={shown} onFocus={id => { setSelected(id); setChatVisible(true); setAssistantMinimized(false); }} />
                 <SecureTrafficDesign graph={graph} disabled={!draft || !!busy || preview || !canEdit || !!draft.proposal} onApply={next => { setGraph(next); setArrangedView(false); setCloudFocus(null); setSelected(null); autoFit.current = true; }} />
                 <button aria-label="Undo architecture change" title="Undo · Ctrl+Z / Cmd+Z" disabled={!canUndo || !!busy || preview || !canEditGraph} onClick={() => restoreHistory("undo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Undo2 className="w-4 h-4" /></button>
@@ -639,7 +659,7 @@ export function ArchitectureCanvas() {
                   !draft || view === "code" || preview || !!busy || !canEditGraph
                 }
                 onClick={() => {
-                  setGraph(arrangeBusinessArchitecture(graph));
+                  setGraph(hasNetworkTopology ? arrangeResourceTopology(graph, topology!) : arrangeBusinessArchitecture(graph));
                   setArrangedView(false);
                   setCloudFocus(null);
                   autoFit.current = true;
@@ -854,6 +874,8 @@ export function ArchitectureCanvas() {
                   selected={selected}
                   code={view === "code"}
                   boundaries={boundaries.length ? boundaries : undefined}
+                  resourceTopology={view === "cloud" ? topology : undefined}
+                  showResourceLinks={showResourceLinks}
                   workloadPolicies={draft.requirements?.workload_policies}
                   onSelect={(id) => {
                     setSelected(id);
@@ -1018,7 +1040,7 @@ export function ArchitectureCanvas() {
               )}
               {draft && requirementsVisible && <div ref={requirementsPanel}><RequirementsForm key={appId} value={draft.requirements} disabled={!!busy || !canEdit} saveBlockedReason={dirty ? "Save your diagram changes before saving targets." : draft.proposal ? "Apply the pending AI proposal before saving targets." : undefined} saving={busy === "requirements"} onSave={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} /></div>}
               {draft && !requirementsVisible && draft.requirements && <div className="rounded-xl border p-3 text-xs leading-5 text-slate-600"><strong className="text-slate-900">Deployment targets</strong><br />{draft.requirements.region} · {draft.requirements.availability.replaceAll("_", " ").toLowerCase()}<br />{draft.requirements.peak_requests_per_minute.toLocaleString()} requests/min · {draft.requirements.concurrent_users.toLocaleString()} users</div>}
-              {draft && view === "cloud" && <NetworkReview graph={fullDesign} />}
+              {draft && view === "cloud" && <NetworkReview graph={fullDesign} topology={topology} />}
               {draft && (
                 <AwsReferences review={draft.aws_references}
                   enabled={!!workspace?.capabilities.aws_references} canEdit={canEdit}
@@ -1064,7 +1086,7 @@ export function ArchitectureCanvas() {
                           value={node.service}
                           onFocus={beginEdit}
                           onBlur={endEdit}
-                          disabled={!!busy}
+                          disabled={!!busy || !!draft?.resource_configurations?.[node.id]}
                           onChange={(event) =>
                             updateNode({ service: event.target.value })
                           }
@@ -1087,6 +1109,14 @@ export function ArchitectureCanvas() {
                         />
                       </label>
                       <div className="rounded-lg border border-cyan-100 bg-cyan-50/40 p-3">
+                        {selectedPlacement ? <div className="text-xs leading-5 text-slate-700">
+                          <p className="font-semibold">Configured network placement</p>
+                          <p>{selectedPlacement.vpc_node_id ? `VPC: ${fullDesign.nodes.find(n => n.id === selectedPlacement.vpc_node_id)?.label || selectedPlacement.vpc_node_id}` : "Regional resource · outside VPC / assignment not set"}</p>
+                          {selectedPlacement.subnet_node_id && <p>Subnet: {fullDesign.nodes.find(n => n.id === selectedPlacement.subnet_node_id)?.label || selectedPlacement.subnet_node_id}</p>}
+                          {selectedPlacement.availability_zone && <p>AZ: {selectedPlacement.availability_zone}</p>}
+                          {selectedPlacement.routing && <p>{routingLabels[selectedPlacement.routing]} · {selectedPlacement.cidr}</p>}
+                          <p className="mt-2 text-slate-500">Change references through Resource configuration. Dragging or renaming this card does not reassign its network. AWS state remains unverified.</p>
+                        </div> : <>
                         <label className="block text-xs font-semibold text-slate-700">VPC placement
                           <select aria-label="VPC placement" disabled={!!busy} value={networkPlacement(node)} onChange={event => {
                             if (event.target.value === "PRIVATE_MANAGED_STORAGE") {
@@ -1104,6 +1134,7 @@ export function ArchitectureCanvas() {
                           </select>
                         </label>
                         <p className="mt-2 text-[10px] leading-4 text-slate-500">Public and private are subnet tiers inside a regional VPC. Managed services stay outside it. This edits the proposal; it does not change live access. Use Review secure traffic to route selected frontends through HTTPS API ingress.</p>
+                        </>}
                       </div>
                       <label className="block text-xs text-slate-500">
                         Architecture layer
