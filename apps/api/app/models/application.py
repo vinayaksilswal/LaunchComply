@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, String, Boolean, ForeignKey, Text, JSON, Enum
+from sqlalchemy import Column, String, Boolean, ForeignKey, Text, JSON, Enum, Index
 from sqlalchemy.orm import relationship
 from app.models.base import BaseModel
 
@@ -13,6 +13,7 @@ class AppStatus(str, enum.Enum):
 
 class Application(BaseModel):
     __tablename__ = "applications"
+    __table_args__ = (Index("uq_applications_org_id", "organization_id", "id", unique=True),)
     
     organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
@@ -40,6 +41,7 @@ class Application(BaseModel):
 
 class Environment(BaseModel):
     __tablename__ = "environments"
+    __table_args__ = (Index("uq_environments_org_app_id", "organization_id", "application_id", "id", unique=True),)
     
     application_id = Column(String(36), ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)
     organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)

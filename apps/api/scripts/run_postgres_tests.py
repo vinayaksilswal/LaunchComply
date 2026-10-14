@@ -62,7 +62,20 @@ def main():
                          email_verified,mfa_enabled,created_at,updated_at)
                         VALUES ('migration-user','migration@example.invalid','test-only',
                         'Migration fixture',true,false,false,false,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)""")
-                run("-m", "alembic", "upgrade", "head")
+                run("-m", "alembic", "upgrade", "ae1f5a6b7c8d")
+                from sqlalchemy import create_engine
+                from scripts.architecture_state_fixture import seed_legacy_architectures, assert_workspace_backfill, assert_workspace_constraints
+                fixture_engine = create_engine(runtime.set(drivername="postgresql+psycopg"))
+                try:
+                    with fixture_engine.begin() as connection:
+                        before = seed_legacy_architectures(connection)
+                    run("-m", "alembic", "upgrade", "head")
+                    with fixture_engine.begin() as connection:
+                        assert_workspace_backfill(connection, before)
+                        assert_workspace_constraints(connection)
+                    print("Workspace migration preserved history and enforced tenant/environment constraints.")
+                finally:
+                    fixture_engine.dispose()
                 run("-m", "alembic", "check")
                 run("-m", "pytest", "--confcutdir=postgres_tests", "postgres_tests", "-q", "-ra", "--junitxml=test-results/postgres.xml")
             finally:

@@ -69,9 +69,11 @@
         "A01"
       ],
       "release": "R1",
-      "status": "TODO",
-      "checkpoint": null,
-      "evidence": []
+      "status": "IN_PROGRESS",
+      "checkpoint": "Additive workspace-state model/migration and populated preservation/tenant/uniqueness tests implemented. Existing endpoints remain unchanged; state is NOT current authority until writer cutover and head reconciliation. Next: separate mutable records and adapt all readers/writers, then reviewable source refresh with head/epoch conflicts. See 2026-10-14-system-review.md.",
+      "evidence": [
+        "2026-10-14-system-review.md"
+      ]
     },
     {
       "id": "A03",
@@ -556,16 +558,16 @@
     }
   ],
   "handoff": {
-    "current_task": null,
+    "current_task": "A02",
     "next_task": "A02",
-    "next_action": "Read PROGRESS.md and A02. Implement preservation of manual work and immutable history during source/repository changes. Keep the customer-facing checklist updated alongside state.json. Incorporate the pending delivery-model answer before changing the sales/intake workflow.",
+    "next_action": "Read 2026-10-14-system-review.md. Complete A02 writer/read-adapter cutover and source proposal UI; reconcile legacy heads before making the additive state authoritative. Update PROGRESS.md with verified work.",
     "notes": [
       "A01 complete: all three Linux CI jobs passed at 97918cc.",
       "35-package programme and all release gates are not complete.",
-      "Customer direction expanded to new and mid-sized businesses needing websites/custom applications with AI features.",
-      "Preserve unrelated .artifacts/."
+      "Preserve unrelated .artifacts/.",
+      "Customer brings existing software; agency custom-development journey is superseded."
     ],
-    "uncommitted_scope": "Progress tracker and checkpoint documentation; inspect git status."
+    "uncommitted_scope": "Inspect git status; additive A02 migration/models/tests and system-review/checkpoint documentation."
   },
   "additional_requests": [
     {
@@ -576,9 +578,10 @@
     }
   ],
   "customer_direction": {
-    "segment": "New and mid-sized businesses needing websites or custom business applications with useful AI features",
-    "delivery_model": "Awaiting preference: team-delivered, self-service, or both",
+    "segment": "Businesses bringing existing production-ready websites or custom applications for secure AWS deployment and operations",
+    "delivery_model": "Confirmed: connect existing software, inspect evidence, review AWS design/security/cost, approve supported deployment, verify and operate",
     "request_tracker": "PROGRESS.md",
-    "rule": "Never delete completed requests; retain checked strikethrough items and evidence."
+    "rule": "Never delete completed requests; retain checked strikethrough items and evidence.",
+    "superseded_interpretation": "Team builds new websites/custom applications around business needs; superseded by explicit user clarification, not completed"
   }
 }

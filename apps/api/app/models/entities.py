@@ -1,9 +1,10 @@
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, JSON, Boolean
+from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey, JSON, Boolean, Index
 from app.models.base import BaseModel
 
 class Architecture(BaseModel):
     __tablename__ = "architectures"
+    __table_args__ = (Index("uq_architectures_org_app_id", "organization_id", "application_id", "id", unique=True),)
     
     application_id = Column(String(36), ForeignKey("applications.id", ondelete="CASCADE"), nullable=False, index=True)
     organization_id = Column(String(36), nullable=False, index=True)

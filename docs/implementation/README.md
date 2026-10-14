@@ -32,12 +32,15 @@ can be achieved in seven days.
 
 ## Product outcome
 
-Updated customer direction, 14 October 2026: serve new and mid-sized businesses
-that need websites or custom applications built around their operations, with
-useful AI features and ongoing hosting/support. The delivery model (team-delivered,
-self-service or both) awaits the user's preference. Track the customer journey
-and every prior request in PROGRESS.md. The engineering foundation below supports
-that service; customers should not need to understand AWS to describe their needs.
+Confirmed customer direction, 14 October 2026: customers bring their existing
+production-ready websites or custom software. LaunchComply understands their
+repositories, helps them review an AWS architecture, securely deploys supported
+workloads, and provides operating visibility and controlled changes. The primary
+journey is connect software -> inspect evidence -> resolve requirements -> review
+architecture and costs -> approve the exact deployment -> deploy and verify ->
+operate. Custom software development by our team is not the primary journey.
+The earlier agency-build interpretation is superseded by the user's explicit
+clarification, retained in PROGRESS.md. Enterprise scope grows only with evidence.
 
 The architecture workspace helps a SaaS team or delivery agency connect its repositories,
 understand its services and dependencies, create an editable AWS design, review

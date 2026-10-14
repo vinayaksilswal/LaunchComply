@@ -6,7 +6,7 @@ Updated: **14 October 2026**. This is the visible checklist for our ongoing work
 **[x] ~~Done~~** and retain its evidence. Never delete it to make the backlog shorter.
 An existing screen or a successful build alone does not make a whole request done.
 
-**Current work:** A01 is complete. A02 is next: preserve saved architecture,
+**Current work:** A01 is complete. A02 is in progress: preserve saved architecture,
 manual changes and history during source refreshes. Production readiness is still
 open; no release gate has been accepted yet.
 
@@ -30,25 +30,34 @@ open; no release gate has been accepted yet.
   This file is the customer-visible progress record; machine state remains in
   [state.json](state.json).
 
+## Current system review
+
+[Code-path review, remaining gaps and exact next steps](2026-10-14-system-review.md).
+The new workspace-state table is additive only; it does not yet change customer
+refresh behavior. A02 remains open until every writer and review flow is migrated.
+
 ## Your requested product direction
 
-- [ ] **Business websites and custom applications:** serve new and mid-sized
-  businesses that need software built around their own operations.
-- [ ] **Useful AI features for those businesses:** agree a specific business
-  problem and success measure for each feature, then build and verify it.
-- [ ] **Simple customer journey:** capture the business need, review scope and
-  pricing, show delivery progress, hand over the solution and provide support.
-  Team-delivered versus self-service delivery is awaiting your preference.
-- [ ] **Affordable, sustainable service:** define build fees, recurring support,
+- [ ] **Bring existing software:** customers connect production-ready websites
+  or custom applications; LaunchComply designs, deploys and operates them on AWS.
+- [ ] **Useful AI assistance:** understand source evidence, ask necessary
+  questions and propose exact reviewed architecture changes without replacing
+  unrelated customer decisions.
+- [ ] **Simple customer journey:** connect repositories, resolve requirements,
+  review architecture/security/costs, approve a deployment, verify health and
+  operate it. Clearly identify unsupported workloads and missing prerequisites.
+- [ ] **Affordable, sustainable service:** define platform fees, recurring support,
   infrastructure charges and AI usage limits before advertising a price.
 - [ ] **Market positioning and conversion:** apply the supplied research, explain
   concrete deliverables and test the inquiry-to-paying-customer journey.
 - [ ] **Readiness for first paying customers:** prove a supported end-to-end
   delivery on a test customer before claiming broader enterprise readiness.
 
-These additions expand the earlier agency/SaaS architecture-tool focus. They do
-not remove the architecture and deployment requirements below. No promise of
-profitability, certification or an untested deployment is implied.
+Clarification retained: an earlier interpretation was that our team would build
+new websites/custom applications around customer business needs, with business
+AI features. The user clarified that customers bring their software and the
+platform deploys it securely. That interpretation is **superseded, not completed**.
+No promise of profitability, certification or an untested deployment is implied.
 
 ## Architecture and source-code requests
 
@@ -136,7 +145,7 @@ one package does not automatically complete every customer request it supports.
 
 <!-- work-packages:start -->
 - [x] ~~A01 — Reproducible baseline and regression fixtures~~ — Done; verified in CI.
-- [ ] **A02 — Preserve saved work and immutable history** — Next.
+- [ ] **A02 — Preserve saved work and immutable history** — In progress. Additive state and migration tests implemented; writer cutover and reviewed source refresh remain.
 - [ ] **A03 — Canonical design v2 and compatibility**
 - [ ] **A04 — Effective GitHub refs, roots and snapshots**
 - [ ] **A05 — Evidence-backed workloads and connections**

@@ -1,4 +1,5 @@
 from app.models.base import BaseModel
+from app.models.architecture_state import ArchitectureWorkspaceState
 from app.models.auth import User, Organization, OrganizationMembership, MembershipRole
 from app.models.application import Application, Environment, AppStatus
 from app.models.audit import AuditEvent
@@ -99,6 +100,7 @@ __all__ = [
     "AppStatus",
     "AuditEvent",
     "Architecture",
+    "ArchitectureWorkspaceState",
     "CloudAccount",
     "Deployment",
     "SecurityFinding",

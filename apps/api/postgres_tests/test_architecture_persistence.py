@@ -69,3 +69,33 @@ async def test_postgres_row_lock_blocks_a_second_writer_until_commit():
             await second.commit()
     finally:
         await db.dispose()
+
+
+@pytest.mark.asyncio
+async def test_workspace_initialization_race_has_one_unassigned_winner():
+    from sqlalchemy import insert
+    from sqlalchemy.exc import DBAPIError, IntegrityError
+    from app.models import Application, ArchitectureWorkspaceState
+    asset_id = str(uuid.uuid4())
+    db = create_async_engine(os.environ["DATABASE_URL"])
+    try:
+        async with db.begin() as connection:
+            await connection.execute(insert(Application).values(
+                id=asset_id, organization_id="state-org-a", name="Concurrent initialization", slug=asset_id))
+        values = dict(organization_id="state-org-a", application_id=asset_id)
+        async with db.connect() as first, db.connect() as second:
+            await first.execute(insert(ArchitectureWorkspaceState).values(**values))
+            await second.execute(text("SET LOCAL lock_timeout='150ms'"))
+            with pytest.raises(DBAPIError) as error:
+                await second.execute(insert(ArchitectureWorkspaceState).values(**values))
+            assert error.value.orig.sqlstate == "55P03"
+            await second.rollback()
+            # A failed initializer does not strand the workspace identity.
+            await first.rollback()
+            await second.execute(insert(ArchitectureWorkspaceState).values(**values))
+            await second.commit()
+            with pytest.raises(IntegrityError):
+                await first.execute(insert(ArchitectureWorkspaceState).values(**values))
+            await first.rollback()
+    finally:
+        await db.dispose()
