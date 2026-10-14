@@ -70,9 +70,22 @@
       ],
       "release": "R1",
       "status": "IN_PROGRESS",
-      "checkpoint": "Additive workspace-state model/migration and populated preservation/tenant/uniqueness tests implemented. Existing endpoints remain unchanged; state is NOT current authority until writer cutover and head reconciliation. Next: separate mutable records and adapt all readers/writers, then reviewable source refresh with head/epoch conflicts. See 2026-10-14-system-review.md.",
+      "checkpoint": "Additive foundation verified at 129a575: full API 344 passed/4 live skipped; Linux API, PostgreSQL populated migration/constraints/concurrent initialization and browser jobs passed. Existing endpoints unchanged; new state is NOT authoritative until writer cutover and head reconciliation. Next: separately scoped mutable records, all reader/writer adapters, then reviewed source refresh with head/epoch conflict checks. See 2026-10-14-system-review.md.",
       "evidence": [
-        "2026-10-14-system-review.md"
+        {
+          "kind": "test",
+          "path_or_url": "2026-10-14-system-review.md",
+          "commit": "129a575",
+          "observed_at": "2026-10-14",
+          "summary": "Additive A02 workspace state and populated history/tenant preservation; full API and browser regression verified."
+        },
+        {
+          "kind": "migration",
+          "path_or_url": "https://github.com/vinayaksilswal/LaunchComply/actions/runs/38596994818",
+          "commit": "129a575e18cc47ac5b0aa101684c5102644c9ea1",
+          "observed_at": "2026-10-14",
+          "summary": "API, PostgreSQL and browser CI jobs succeeded, including serialized JSON preservation, scoped FKs, uniqueness and concurrent initialization."
+        }
       ]
     },
     {
@@ -567,7 +580,7 @@
       "Preserve unrelated .artifacts/.",
       "Customer brings existing software; agency custom-development journey is superseded."
     ],
-    "uncommitted_scope": "Inspect git status; additive A02 migration/models/tests and system-review/checkpoint documentation."
+    "uncommitted_scope": "Implementation pushed at 129a575; final evidence-only checkpoint follows. Preserve unrelated .artifacts/."
   },
   "additional_requests": [
     {

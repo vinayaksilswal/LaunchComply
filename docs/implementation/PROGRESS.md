@@ -36,6 +36,13 @@ open; no release gate has been accepted yet.
 The new workspace-state table is additive only; it does not yet change customer
 refresh behavior. A02 remains open until every writer and review flow is migrated.
 
+- [x] ~~Add and verify the separate workspace-state database foundation.~~
+  Migration preserves stored JSON/IDs/timestamps; tenant and environment references,
+  uniqueness and concurrent initialization verified in PostgreSQL. API, browser
+  and PostgreSQL CI passed at `129a575`.
+- [ ] Move current writers/readers to this state, preserving historical snapshots.
+- [ ] Review, apply or discard source refreshes without losing manual changes.
+
 ## Your requested product direction
 
 - [ ] **Bring existing software:** customers connect production-ready websites

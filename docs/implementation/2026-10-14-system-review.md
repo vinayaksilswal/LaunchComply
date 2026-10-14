@@ -79,7 +79,11 @@ All R0-R4 gates remain NOT_ACCEPTED. A02 remains IN_PROGRESS.
   Includes model drift checks, populated history preservation, deterministic head,
   stale source state, partial uniqueness and tenant/application/environment FKs.
 - Full API regression: **344 passed, 4 opt-in live checks skipped**, 145.99 seconds.
-  PostgreSQL CI remains pending for this change. No live AWS, paid AI or manual
-  production migration was performed.
+- Final serialized-JSON preservation test: **1 passed**, 33.04 seconds locally.
+- [Fresh Linux CI](https://github.com/vinayaksilswal/LaunchComply/actions/runs/38596994818)
+  at `129a575e18cc47ac5b0aa101684c5102644c9ea1`: **API, PostgreSQL and browser jobs
+  all passed**. Browser job includes type checking, lint, configuration tests,
+  production build and real local-API architecture-map journeys.
+- No live AWS, paid AI or manual production migration was performed.
 - PostgreSQL harness now rehearses the same populated backfill and constraints;
   a domain-row concurrent initialization test checks uniqueness/wait/rollback.
