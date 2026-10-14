@@ -5,6 +5,9 @@ Audited code baseline: `83a5d87`. This document is a plan, not a readiness certi
 
 ## Start here
 
+Open [your requests and visible progress checklist](PROGRESS.md) alongside the
+workspace. Keep completed requests checked and struck through, never deleted.
+
 This is the implementation entry point for subsequent development sessions,
 including GPT-6.1 Sol sessions. Read [continuation instructions](CONTINUE.md),
 [execution state](state.json), and the next eligible card in
@@ -29,7 +32,14 @@ can be achieved in seven days.
 
 ## Product outcome
 
-LaunchComply helps a small SaaS team or software agency connect its repositories,
+Updated customer direction, 14 October 2026: serve new and mid-sized businesses
+that need websites or custom applications built around their operations, with
+useful AI features and ongoing hosting/support. The delivery model (team-delivered,
+self-service or both) awaits the user's preference. Track the customer journey
+and every prior request in PROGRESS.md. The engineering foundation below supports
+that service; customers should not need to understand AWS to describe their needs.
+
+The architecture workspace helps a SaaS team or delivery agency connect its repositories,
 understand its services and dependencies, create an editable AWS design, review
 its security/cost/availability tradeoffs, and manage approved changes in its own
 AWS account. The product must answer:
@@ -40,7 +50,7 @@ AWS account. The product must answer:
 4. What is actually running, unhealthy or different from the saved design?
 5. How can I fix that safely, manually or with an AI proposal?
 
-The first customer segment is agencies and small B2B SaaS teams with several
+The original technical user segment was agencies and small B2B SaaS teams with several
 frontend/backend repositories and limited AWS operations capacity. Large,
 regulated enterprises are a later segment requiring independently demonstrated
 isolation, recovery, governance and support. The visual reference is a quality

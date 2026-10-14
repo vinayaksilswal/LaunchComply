@@ -52,11 +52,13 @@
       "order": 1,
       "dependencies": [],
       "release": "R1",
-      "status": "IN_PROGRESS",
-      "checkpoint": "Local baseline, synthetic fixtures, guarded PostgreSQL harness and CI jobs implemented. 343 pytest passed / 4 live skips; 28 frontend config checks; build/type/lint; 4 real API browser journeys passed. PostgreSQL and fresh-checkout CI remain unverified.",
+      "status": "DONE",
+      "checkpoint": "Completed at 97918cc: fresh Linux CI passed API, browser and PostgreSQL jobs, including populated migration rehearsal, model drift check, tenant isolation/history and row locking. Windows checks recorded separately. Release gates remain unaccepted.",
       "evidence": [
         "2026-10-14-dashboard-baseline.md",
-        "TEST_BASELINE.md"
+        "2026-10-14-ci-and-progress.md",
+        "TEST_BASELINE.md",
+        "https://github.com/vinayaksilswal/LaunchComply/actions/runs/38552779669"
       ]
     },
     {
@@ -554,16 +556,16 @@
     }
   ],
   "handoff": {
-    "current_task": "A01",
+    "current_task": null,
     "next_task": "A02",
-    "next_action": "Verify the new architecture CI workflow, especially PostgreSQL migrations and constraints on Linux; fix harness failures and complete fresh-checkout evidence. Then A02 immutable history/source-refresh preservation. Dashboard request is implemented and locally tested; confirm hosted frontend/API deployment separately.",
+    "next_action": "Read PROGRESS.md and A02. Implement preservation of manual work and immutable history during source/repository changes. Keep the customer-facing checklist updated alongside state.json. Incorporate the pending delivery-model answer before changing the sales/intake workflow.",
     "notes": [
-      "All release gates remain NOT_ACCEPTED.",
-      "343 pytest pass / 4 explicit live skips; 28 config tests; production build, typecheck, lint; 4 desktop/mobile browser journeys.",
-      "No local PostgreSQL/container service available; new PG suite not yet executed.",
+      "A01 complete: all three Linux CI jobs passed at 97918cc.",
+      "35-package programme and all release gates are not complete.",
+      "Customer direction expanded to new and mid-sized businesses needing websites/custom applications with AI features.",
       "Preserve unrelated .artifacts/."
     ],
-    "uncommitted_scope": "Inspect git status; dashboard map and A01 baseline files only."
+    "uncommitted_scope": "Progress tracker and checkpoint documentation; inspect git status."
   },
   "additional_requests": [
     {
@@ -572,5 +574,11 @@
       "description": "World map dashboard with saved AWS architecture locations, availability, connection details and Deploy application links. Runtime health remains unverified.",
       "evidence": "2026-10-14-dashboard-baseline.md"
     }
-  ]
+  ],
+  "customer_direction": {
+    "segment": "New and mid-sized businesses needing websites or custom business applications with useful AI features",
+    "delivery_model": "Awaiting preference: team-delivered, self-service, or both",
+    "request_tracker": "PROGRESS.md",
+    "rule": "Never delete completed requests; retain checked strikethrough items and evidence."
+  }
 }

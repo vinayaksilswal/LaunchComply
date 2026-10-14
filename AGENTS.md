@@ -34,4 +34,8 @@ authority. Inspect actual code before relying on an audit finding.
 
 Keep context efficient: read the next card and relevant source sections, batch
 independent reads, reuse valid evidence and checkpoint before session limits.
+Keep `docs/implementation/PROGRESS.md` updated alongside `state.json`. Retain
+every customer request; mark verified completion with checked strikethrough text
+and evidence instead of deleting it. Open this progress file in the side panel
+when resuming development if it is not already visible.
 Do not spawn/delegate agents unless current instructions authorize it.
