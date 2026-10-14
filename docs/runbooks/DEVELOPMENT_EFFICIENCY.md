@@ -1,12 +1,12 @@
 # Development tool and token use
 
-Updated 2026-10-10. This controls development work, not the customer architecture assistant's provider routing.
+Updated 2026-10-14. This controls development work, not the customer architecture assistant's provider routing. Resume architecture work through [the implementation runbook](../implementation/CONTINUE.md).
 
 ## Division of work
 
 Codex owns implementation, integration decisions, review of returned suggestions, commits, and browser verification. Antigravity is available for one bounded batch of small static reviews or documentation work per development cycle. Do not send the conversation history, customer repository contents, credentials, private keys, contact details, or production logs by default. Give it only the relevant non-secret excerpts and the expected output.
 
-The user's browser-only verification preference remains in force: do not delegate automated tests or run test suites. Production builds, type checks and Python syntax checks remain separate from user workflow verification.
+The user's later request for pytest and real workflow testing supersedes the earlier browser-only preference. Run focused automated tests and relevant release checks with isolated data, plus browser verification for interactive behavior. Builds and type checks complement these tests; they do not prove live provider behavior. Follow current session instructions for any delegation; Antigravity is not required for implementation sessions.
 
 ## Invocation and limits
 

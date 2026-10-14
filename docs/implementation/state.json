@@ -1,0 +1,565 @@
+{
+  "schema_version": 1,
+  "plan_version": "1.0",
+  "updated_at": "2026-10-14",
+  "audited_baseline_commit": "83a5d87",
+  "planning_complete": true,
+  "implementation_started_under_this_plan": false,
+  "scope": "LaunchComply architecture: GitHub evidence, editable AWS intent, scoped AI, controlled deployment and operations. Exclude unrelated HRMS CORS and marketing redesign.",
+  "source_research": {
+    "decoded_utf8_sha256": "bc90702145edcee3b11acdb936792c70fa94d3af0924ff767743f6ae129d21d4",
+    "assessment": "RESEARCH_AND_BASELINE.md"
+  },
+  "customer_targets": {
+    "aws_region": "ap-south-1",
+    "peak_requests_per_minute": 500,
+    "concurrent_users": 100,
+    "availability": "multi_az",
+    "status": "planning_targets_not_measured_capacity",
+    "placement_preference": "AWS public-subnet frontend; private API and data; secure server-side path or controlled ingress requires evidence."
+  },
+  "release_gates": {
+    "R0": {
+      "status": "NOT_ACCEPTED",
+      "evidence": [],
+      "reviewer": null
+    },
+    "R1": {
+      "status": "NOT_ACCEPTED",
+      "evidence": [],
+      "reviewer": null
+    },
+    "R2": {
+      "status": "NOT_ACCEPTED",
+      "evidence": [],
+      "reviewer": null
+    },
+    "R3": {
+      "status": "NOT_ACCEPTED",
+      "evidence": [],
+      "reviewer": null
+    },
+    "R4": {
+      "status": "NOT_ACCEPTED",
+      "evidence": [],
+      "reviewer": null
+    }
+  },
+  "tasks": [
+    {
+      "id": "A01",
+      "title": "Reproducible baseline and regression fixtures",
+      "order": 1,
+      "dependencies": [],
+      "release": "R1",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "A02",
+      "title": "Preserve saved work and immutable history",
+      "order": 2,
+      "dependencies": [
+        "A01"
+      ],
+      "release": "R1",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "A03",
+      "title": "Canonical design v2 and compatibility",
+      "order": 3,
+      "dependencies": [
+        "A02"
+      ],
+      "release": "R1",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "A04",
+      "title": "Effective GitHub refs, roots and snapshots",
+      "order": 4,
+      "dependencies": [
+        "A03"
+      ],
+      "release": "R1",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "A05",
+      "title": "Evidence-backed workloads and connections",
+      "order": 5,
+      "dependencies": [
+        "A04"
+      ],
+      "release": "R1",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "A06",
+      "title": "Editor commands and manual controls",
+      "order": 6,
+      "dependencies": [
+        "A03",
+        "A05"
+      ],
+      "release": "R1",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "A07",
+      "title": "Measured layout and renderer decision",
+      "order": 7,
+      "dependencies": [
+        "A06"
+      ],
+      "release": "R1",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "A08",
+      "title": "Professional hierarchy and accessible workspace",
+      "order": 8,
+      "dependencies": [
+        "A07"
+      ],
+      "release": "R1",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "A09",
+      "title": "Typed scoped AI and guided service addition",
+      "order": 9,
+      "dependencies": [
+        "A05",
+        "A06",
+        "A08"
+      ],
+      "release": "R1",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "A10",
+      "title": "AI reliability, free routing and evaluations",
+      "order": 10,
+      "dependencies": [
+        "A09"
+      ],
+      "release": "R1",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "A11",
+      "title": "Readiness, load targets and cost assumptions",
+      "order": 11,
+      "dependencies": [
+        "A05",
+        "A08"
+      ],
+      "release": "R1",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "A12",
+      "title": "Versioned handover and R1 decision",
+      "order": 12,
+      "dependencies": [
+        "A01",
+        "A02",
+        "A03",
+        "A04",
+        "A05",
+        "A06",
+        "A07",
+        "A08",
+        "A09",
+        "A10",
+        "A11"
+      ],
+      "release": "R1",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "B01",
+      "title": "Resource registry and capability levels",
+      "order": 13,
+      "dependencies": [
+        "A03",
+        "A11"
+      ],
+      "release": "R2",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "B02",
+      "title": "Ingress and network attachments",
+      "order": 14,
+      "dependencies": [
+        "B01"
+      ],
+      "release": "R2",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "B03",
+      "title": "Container workloads, images and IAM",
+      "order": 15,
+      "dependencies": [
+        "B02"
+      ],
+      "release": "R2",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "B04",
+      "title": "Persistent data and secret contracts",
+      "order": 16,
+      "dependencies": [
+        "B03"
+      ],
+      "release": "R2",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "B05",
+      "title": "Autoscaling, queues and health signals",
+      "order": 17,
+      "dependencies": [
+        "B03",
+        "B04"
+      ],
+      "release": "R2",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "B06",
+      "title": "Edge services and complete reference compiler",
+      "order": 18,
+      "dependencies": [
+        "B02",
+        "B03",
+        "B04",
+        "B05"
+      ],
+      "release": "R2",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "C01",
+      "title": "Tenant and deployment authorization",
+      "order": 19,
+      "dependencies": [
+        "A03",
+        "B01"
+      ],
+      "release": "R2",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "C02",
+      "title": "Durable jobs, outbox and restart safety",
+      "order": 20,
+      "dependencies": [
+        "C01",
+        "A04"
+      ],
+      "release": "R2",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "C03",
+      "title": "Artifacts and AWS target preflight",
+      "order": 21,
+      "dependencies": [
+        "B06",
+        "C01",
+        "C02"
+      ],
+      "release": "R2",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "C04",
+      "title": "Actual CloudFormation change-set plans",
+      "order": 22,
+      "dependencies": [
+        "C03"
+      ],
+      "release": "R2",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "C05",
+      "title": "Exact approvals and execution permissions",
+      "order": 23,
+      "dependencies": [
+        "C04"
+      ],
+      "release": "R2",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "C06",
+      "title": "Execution, reconciliation and health",
+      "order": 24,
+      "dependencies": [
+        "C05"
+      ],
+      "release": "R2",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "C07",
+      "title": "Isolated builds and recovery procedures",
+      "order": 25,
+      "dependencies": [
+        "C06",
+        "B03",
+        "B04"
+      ],
+      "release": "R2",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "C08",
+      "title": "Sandbox matrix and controlled R2 pilot",
+      "order": 26,
+      "dependencies": [
+        "C06",
+        "C07",
+        "A12"
+      ],
+      "release": "R2",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "D01",
+      "title": "Observed health, telemetry and alerts",
+      "order": 27,
+      "dependencies": [
+        "C08"
+      ],
+      "release": "R3",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "D02",
+      "title": "Drift, ownership and safe import",
+      "order": 28,
+      "dependencies": [
+        "D01"
+      ],
+      "release": "R3",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "D03",
+      "title": "Cost visibility, budgets and metering",
+      "order": 29,
+      "dependencies": [
+        "D01"
+      ],
+      "release": "R3",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "D04",
+      "title": "Operations runbooks and R3 acceptance",
+      "order": 30,
+      "dependencies": [
+        "D01",
+        "D02",
+        "D03"
+      ],
+      "release": "R3",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "E01",
+      "title": "Metered entitlements and paid design pilot",
+      "order": 31,
+      "dependencies": [
+        "A12"
+      ],
+      "release": "R4",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "E02",
+      "title": "Enterprise identity, access and audit",
+      "order": 32,
+      "dependencies": [
+        "C01",
+        "D04"
+      ],
+      "release": "R4",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "E03",
+      "title": "Enterprise scale, accounts and advanced patterns",
+      "order": 33,
+      "dependencies": [
+        "A08",
+        "B06",
+        "C08",
+        "D02"
+      ],
+      "release": "R4",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "E04",
+      "title": "Independent security and recovery acceptance",
+      "order": 34,
+      "dependencies": [
+        "E02",
+        "E03",
+        "D04"
+      ],
+      "release": "R4",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    },
+    {
+      "id": "E05",
+      "title": "Delivery, support capacity and R4 decision",
+      "order": 35,
+      "dependencies": [
+        "E01",
+        "E04",
+        "D03"
+      ],
+      "release": "R4",
+      "status": "TODO",
+      "checkpoint": null,
+      "evidence": []
+    }
+  ],
+  "external_prerequisites": [
+    {
+      "id": "live_ai",
+      "needed_by": [
+        "A10"
+      ],
+      "status": "NOT_VERIFIED_THIS_PLAN",
+      "requirement": "Working authorized free-only provider access and bounded redacted live evaluation; never print the key."
+    },
+    {
+      "id": "aws_sandbox",
+      "needed_by": [
+        "C03",
+        "C04",
+        "C06",
+        "C07",
+        "C08"
+      ],
+      "status": "NOT_AUTHORIZED_BY_THIS_PLAN",
+      "requirement": "Named account, region, allowed resources, owner-approved spend cap and time window; separate authority for plan versus execution."
+    },
+    {
+      "id": "customer_pilots",
+      "needed_by": [
+        "C08",
+        "E01",
+        "E05"
+      ],
+      "status": "NOT_VERIFIED",
+      "requirement": "Opted-in customer and explicit service/delivery scope; no unsolicited external messages."
+    },
+    {
+      "id": "enterprise_idp",
+      "needed_by": [
+        "E02"
+      ],
+      "status": "NOT_VERIFIED",
+      "requirement": "Authorized supported IdP test tenant and recovery owner."
+    },
+    {
+      "id": "independent_assessment",
+      "needed_by": [
+        "E04"
+      ],
+      "status": "NOT_SCHEDULED",
+      "requirement": "Independent reviewer and authorized security/recovery assessment scope."
+    }
+  ],
+  "handoff": {
+    "current_task": null,
+    "next_task": "A01",
+    "next_action": "Inspect current fixture safety and baseline commands, add synthetic architecture fixtures and reproducible CI/PostgreSQL harness. Then A02: reproduce and repair history/source-refresh preservation before renderer expansion.",
+    "notes": [
+      "All 35 cards are planned, not implemented.",
+      "Historical test totals belong to baseline reports, not fresh results.",
+      "Current .artifacts directory is unrelated untracked workspace data; do not stage or delete.",
+      "No active implementation server or provider job started by this planning work."
+    ],
+    "uncommitted_scope": "Implementation plan documents and entry-point updates only; inspect git status on resume."
+  }
+}

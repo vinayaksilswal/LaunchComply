@@ -1,5 +1,9 @@
 # Enterprise development backlog and implementation history
 
+For future implementation order, use the [14 October architecture programme](implementation/README.md)
+and its [execution state](implementation/state.json). This file retains historical
+delivery evidence; it is not the new session task queue.
+
 Last updated 2026-10-13. Re-read current source and runtime evidence before changing
 status. Historical GA documents and simulated service paths are not acceptance.
 

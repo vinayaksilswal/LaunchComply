@@ -1,4 +1,11 @@
 # LaunchComply
+
+Implementation entry point: [architecture programme](docs/implementation/README.md),
+[ordered work packages](docs/implementation/WORK_PACKAGES.md) and
+[continuation state](docs/implementation/state.json). The 14 October 2026 plan
+separates reviewed design, controlled AWS deployment, operations and enterprise
+release gates; it does not declare those releases complete.
+
 **"From Localhost to Real Business."**
 *Deploy. Secure. Audit. Comply.*
 
