@@ -1,0 +1,232 @@
+{
+  "fixture_version": 1,
+  "description": "Synthetic multi-repository preservation corpus. No actual customer code or credentials.",
+  "design": {
+    "format": "repository-draft-v1",
+    "revision": 1,
+    "graph": {
+      "nodes": [
+        {
+          "id": "vpc",
+          "label": "Business VPC",
+          "service": "AWS::EC2::VPC",
+          "zone": "DATA",
+          "description": "Synthetic configured intent, not deployed.",
+          "x": 80,
+          "y": 80
+        },
+        {
+          "id": "public",
+          "label": "Frontend subnet",
+          "service": "AWS::EC2::Subnet",
+          "zone": "DATA",
+          "description": "Synthetic configured intent, not deployed.",
+          "x": 440,
+          "y": 80
+        },
+        {
+          "id": "private",
+          "label": "API subnet",
+          "service": "AWS::EC2::Subnet",
+          "zone": "DATA",
+          "description": "Synthetic configured intent, not deployed.",
+          "x": 800,
+          "y": 80
+        },
+        {
+          "id": "route",
+          "label": "Frontend routes",
+          "service": "AWS::EC2::RouteTable",
+          "zone": "DATA",
+          "description": "Synthetic configured intent, not deployed.",
+          "x": 80,
+          "y": 300
+        },
+        {
+          "id": "association",
+          "label": "Frontend route binding",
+          "service": "AWS::EC2::SubnetRouteTableAssociation",
+          "zone": "DATA",
+          "description": "Synthetic configured intent, not deployed.",
+          "x": 440,
+          "y": 300
+        },
+        {
+          "id": "storage",
+          "label": "Private storage",
+          "service": "AWS::S3::Bucket",
+          "zone": "DATA",
+          "description": "Synthetic configured intent, not deployed.",
+          "x": 800,
+          "y": 300
+        },
+        {
+          "id": "logs",
+          "label": "Application monitoring",
+          "service": "AWS::Logs::LogGroup",
+          "zone": "SUPPORT",
+          "description": "Synthetic configured intent, not deployed.",
+          "x": 80,
+          "y": 520
+        },
+        {
+          "id": "web1",
+          "label": "Portal frontend",
+          "service": "Static hosting / container",
+          "zone": "APPLICATION",
+          "description": "Execution mode and reachability need confirmation.",
+          "x": 1200,
+          "y": 80
+        },
+        {
+          "id": "web2",
+          "label": "HR frontend",
+          "service": "Static hosting / container",
+          "zone": "APPLICATION",
+          "description": "Execution mode and reachability need confirmation.",
+          "x": 1560,
+          "y": 80
+        },
+        {
+          "id": "web3",
+          "label": "ERP frontend",
+          "service": "Static hosting / container",
+          "zone": "APPLICATION",
+          "description": "Execution mode and reachability need confirmation.",
+          "x": 1200,
+          "y": 300
+        },
+        {
+          "id": "web4",
+          "label": "Legal frontend",
+          "service": "Static hosting / container",
+          "zone": "APPLICATION",
+          "description": "Execution mode and reachability need confirmation.",
+          "x": 1560,
+          "y": 300
+        },
+        {
+          "id": "api",
+          "label": "Private API",
+          "service": "ECS Fargate",
+          "zone": "APPLICATION",
+          "description": "Execution mode and reachability need confirmation.",
+          "x": 1200,
+          "y": 520
+        }
+      ],
+      "edges": [
+        {
+          "source": "web1",
+          "target": "api",
+          "label": "Unresolved browser API request"
+        },
+        {
+          "source": "api",
+          "target": "storage",
+          "label": "Storage candidate"
+        }
+      ]
+    },
+    "resource_schema_version": 1,
+    "resource_configurations": {
+      "vpc": {
+        "resource_type": "AWS::EC2::VPC",
+        "properties": {
+          "cidr": "10.40.0.0/16"
+        }
+      },
+      "public": {
+        "resource_type": "AWS::EC2::Subnet",
+        "properties": {
+          "vpc_node_id": "vpc",
+          "cidr": "10.40.1.0/24",
+          "availability_zone": "ap-south-1a"
+        }
+      },
+      "private": {
+        "resource_type": "AWS::EC2::Subnet",
+        "properties": {
+          "vpc_node_id": "vpc",
+          "cidr": "10.40.2.0/24",
+          "availability_zone": "ap-south-1b"
+        }
+      },
+      "route": {
+        "resource_type": "AWS::EC2::RouteTable",
+        "properties": {
+          "vpc_node_id": "vpc"
+        }
+      },
+      "association": {
+        "resource_type": "AWS::EC2::SubnetRouteTableAssociation",
+        "properties": {
+          "subnet_node_id": "public",
+          "route_table_node_id": "route"
+        }
+      },
+      "storage": {
+        "resource_type": "AWS::S3::Bucket",
+        "properties": {
+          "versioning": true
+        }
+      },
+      "logs": {
+        "resource_type": "AWS::Logs::LogGroup",
+        "properties": {
+          "retention_days": 30
+        }
+      }
+    },
+    "evidence": {
+      "repository": "fixture/business",
+      "branch": "main",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "scope": "Synthetic evidence; runtime connections unverified.",
+      "files": [],
+      "components": [],
+      "repositories": []
+    },
+    "messages": [],
+    "proposal": null,
+    "deployment_status": "NOT_DEPLOYED"
+  },
+  "source_cases": [
+    {
+      "repository": "fixture/frontends",
+      "branch": "feature/portal",
+      "root_path": "apps/portal",
+      "commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "execution_mode": "UNKNOWN"
+    },
+    {
+      "repository": "fixture/frontends",
+      "branch": "main",
+      "root_path": "apps/hr",
+      "commit": "cccccccccccccccccccccccccccccccccccccccc",
+      "execution_mode": "BROWSER"
+    },
+    {
+      "repository": "fixture/api",
+      "branch": "main",
+      "root_path": "backend",
+      "commit": "dddddddddddddddddddddddddddddddddddddddd",
+      "execution_mode": "SERVER"
+    }
+  ],
+  "empty_graph": {
+    "nodes": [],
+    "edges": []
+  },
+  "invalid_case": {
+    "resource_id": "other",
+    "configuration": {
+      "resource_type": "AWS::EC2::VPC",
+      "properties": {
+        "cidr": "10.50.0.0/16"
+      }
+    },
+    "route_vpc": "other",
+    "expected_issue": "CROSS_VPC"
+  }
+}

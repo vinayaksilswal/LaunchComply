@@ -4,6 +4,8 @@ import os
 import httpx
 import pytest
 
+pytestmark = pytest.mark.live
+
 
 @pytest.mark.parametrize("path, expected_status", [
     ("/", "ONLINE"),

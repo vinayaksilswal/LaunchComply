@@ -4,13 +4,14 @@ import Link from "next/link";
 import {
   ArrowUpRight,
   Boxes,
-  Github,
-  Link2,
+  Globe2,
+  Layers3,
+  MapPin,
+  Rocket,
   ArrowRight,
   Activity,
 } from "lucide-react";
-import { ServiceRequests } from "@/components/workspace/ServiceRequests";
-import { DeploymentPreparation } from "@/components/workspace/DeploymentPreparation";
+import { ArchitectureMap, type MapAsset } from "@/components/workspace/ArchitectureMap";
 import { apiClient } from "@/lib/api";
 import { useAccount } from "@/components/auth/AccountProvider";
 
@@ -37,14 +38,26 @@ export default function DashboardOverviewPage() {
   const [data, setData] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const [assets, setAssets] = useState<MapAsset[] | null>(null);
   useEffect(() => {
     if (!organization || accountLoading) return;
     let active = true;
     setData(null);
+    setAssets(null);
     setError(null);
-    apiClient<Summary>("/dashboard/workspace-summary")
-      .then((result) => {
-        if (active) setData(result);
+    async function loadMap() {
+      const items: MapAsset[] = [];
+      let offset: number | null = 0;
+      while (offset !== null && active) {
+        const page: { items: MapAsset[]; next_offset: number | null } = await apiClient(`/dashboard/architecture-map?offset=${offset}`);
+        items.push(...page.items);
+        offset = page.next_offset;
+      }
+      return items;
+    }
+    Promise.all([apiClient<Summary>("/dashboard/workspace-summary"), loadMap()])
+      .then(([result, locations]) => {
+        if (active) { setData(result); setAssets(locations); }
       })
       .catch((failure) => {
         if (active)
@@ -65,21 +78,12 @@ export default function DashboardOverviewPage() {
       icon: Boxes,
       hint: "Workspaces in your business",
     },
-    {
-      label: "GitHub connections",
-      value: data?.connection_count,
-      icon: Link2,
-      hint: "Connected GitHub accounts",
-    },
-    {
-      label: "Repositories",
-      value: data?.repository_count,
-      icon: Github,
-      hint: "Accessible through your connections",
-    },
+    { label: "Regions planned", value: assets ? new Set(assets.flatMap(a => [a.region, a.secondary_region]).filter(Boolean)).size : undefined, icon: Globe2, hint: "From saved architecture settings" },
+    { label: "Resilient designs", value: assets?.filter(a => ["MULTI_AZ", "MULTI_REGION"].includes(a.availability || "")).length, icon: Layers3, hint: "Multi-AZ or multi-region targets" },
+    { label: "Region not set", value: assets?.filter(a => !a.region).length, icon: MapPin, hint: "Choose a location to map these assets" },
   ];
   return (
-    <div className="p-6 sm:p-8 max-w-7xl mx-auto space-y-7">
+    <div className="p-6 sm:p-8 max-w-[1800px] mx-auto space-y-7">
       <section className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs text-cyan-700 font-semibold tracking-widest uppercase">
@@ -89,15 +93,15 @@ export default function DashboardOverviewPage() {
             Welcome{user ? `, ${user.full_name.split(" ")[0]}` : ""}
           </h1>
           <p className="text-sm text-slate-500 mt-2">
-            Your business assets, connections, and latest workspace activity for{" "}
+            Architecture, availability planning and deployment preparation for{" "}
             {organization?.name || "your business"}.
           </p>
         </div>
         <Link
-          href="/onboarding"
+          href="/dashboard/deployments"
           className="inline-flex items-center gap-2 rounded-lg bg-slate-900 text-white px-5 py-3 text-sm font-semibold"
         >
-          Connect business asset
+          <Rocket className="w-4 h-4" /> Deploy application
           <ArrowRight className="w-4 h-4" />
         </Link>
       </section>
@@ -115,9 +119,8 @@ export default function DashboardOverviewPage() {
           </button>
         </div>
       )}
-      <DeploymentPreparation home />
       <section
-        className="grid sm:grid-cols-3 gap-4"
+        className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4"
         aria-label="Workspace totals"
       >
         {metrics.map((item) => {
@@ -146,7 +149,7 @@ export default function DashboardOverviewPage() {
           Loading your workspace…
         </p>
       )}
-      <ServiceRequests compact />
+      {assets && <ArchitectureMap assets={assets} />}
       {data && (
         <div className="grid gap-6">
           <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">

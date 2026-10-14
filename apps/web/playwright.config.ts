@@ -1,6 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000";
@@ -12,6 +12,16 @@ const testDirectory = resolve(apiDirectory, ".test_tmp");
 mkdirSync(testDirectory, { recursive: true });
 const testDatabase = resolve(testDirectory, `playwright-${randomUUID()}.db`).replaceAll("\\", "/");
 const python = resolve(apiDirectory, process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python");
+
+// Local browser origin alone is insufficient: Next rewrites may target production.
+if (!process.env.PLAYWRIGHT_WEB_COMMAND) {
+  const manifest = JSON.parse(readFileSync(resolve(__dirname, ".next/routes-manifest.json"), "utf8"));
+  const rewrites = Array.isArray(manifest.rewrites) ? manifest.rewrites : Object.values(manifest.rewrites).flat();
+  const backend = rewrites.find((r: { source: string }) => r.source === "/api/backend/:path*");
+  if (!backend || new URL(backend.destination).origin !== "http://127.0.0.1:8000") {
+    throw new Error("Build browser fixtures with BACKEND_URL=http://127.0.0.1:8000 before running this suite.");
+  }
+}
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -30,11 +40,11 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"], channel: "chrome" },
+      use: { ...devices["Desktop Chrome"], channel: process.env.CI ? undefined : "chrome" },
     },
     {
       name: "mobile-chrome",
-      use: { ...devices["Pixel 7"], channel: "chrome" },
+      use: { ...devices["Pixel 7"], channel: process.env.CI ? undefined : "chrome" },
     },
   ],
   webServer: [{
@@ -46,6 +56,7 @@ export default defineConfig({
     timeout: 120000,
   }, {
     command: process.env.PLAYWRIGHT_WEB_COMMAND || "npm run start",
+    env: { BACKEND_URL: "http://127.0.0.1:8000", NEXT_PUBLIC_API_URL: "/api/backend" },
     url: "http://localhost:3000",
     reuseExistingServer: false,
     timeout: 120000,

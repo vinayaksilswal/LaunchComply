@@ -4,7 +4,7 @@
   "updated_at": "2026-10-14",
   "audited_baseline_commit": "83a5d87",
   "planning_complete": true,
-  "implementation_started_under_this_plan": false,
+  "implementation_started_under_this_plan": true,
   "scope": "LaunchComply architecture: GitHub evidence, editable AWS intent, scoped AI, controlled deployment and operations. Exclude unrelated HRMS CORS and marketing redesign.",
   "source_research": {
     "decoded_utf8_sha256": "bc90702145edcee3b11acdb936792c70fa94d3af0924ff767743f6ae129d21d4",
@@ -52,9 +52,12 @@
       "order": 1,
       "dependencies": [],
       "release": "R1",
-      "status": "TODO",
-      "checkpoint": null,
-      "evidence": []
+      "status": "IN_PROGRESS",
+      "checkpoint": "Local baseline, synthetic fixtures, guarded PostgreSQL harness and CI jobs implemented. 343 pytest passed / 4 live skips; 28 frontend config checks; build/type/lint; 4 real API browser journeys passed. PostgreSQL and fresh-checkout CI remain unverified.",
+      "evidence": [
+        "2026-10-14-dashboard-baseline.md",
+        "TEST_BASELINE.md"
+      ]
     },
     {
       "id": "A02",
@@ -551,15 +554,23 @@
     }
   ],
   "handoff": {
-    "current_task": null,
-    "next_task": "A01",
-    "next_action": "Inspect current fixture safety and baseline commands, add synthetic architecture fixtures and reproducible CI/PostgreSQL harness. Then A02: reproduce and repair history/source-refresh preservation before renderer expansion.",
+    "current_task": "A01",
+    "next_task": "A02",
+    "next_action": "Verify the new architecture CI workflow, especially PostgreSQL migrations and constraints on Linux; fix harness failures and complete fresh-checkout evidence. Then A02 immutable history/source-refresh preservation. Dashboard request is implemented and locally tested; confirm hosted frontend/API deployment separately.",
     "notes": [
-      "All 35 cards are planned, not implemented.",
-      "Historical test totals belong to baseline reports, not fresh results.",
-      "Current .artifacts directory is unrelated untracked workspace data; do not stage or delete.",
-      "No active implementation server or provider job started by this planning work."
+      "All release gates remain NOT_ACCEPTED.",
+      "343 pytest pass / 4 explicit live skips; 28 config tests; production build, typecheck, lint; 4 desktop/mobile browser journeys.",
+      "No local PostgreSQL/container service available; new PG suite not yet executed.",
+      "Preserve unrelated .artifacts/."
     ],
-    "uncommitted_scope": "Implementation plan documents and entry-point updates only; inspect git status on resume."
-  }
+    "uncommitted_scope": "Inspect git status; dashboard map and A01 baseline files only."
+  },
+  "additional_requests": [
+    {
+      "id": "dashboard_map",
+      "status": "IMPLEMENTED_LOCAL_VERIFIED",
+      "description": "World map dashboard with saved AWS architecture locations, availability, connection details and Deploy application links. Runtime health remains unverified.",
+      "evidence": "2026-10-14-dashboard-baseline.md"
+    }
+  ]
 }

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -13,6 +13,45 @@ from app.models.audit import AuditEvent
 from app.core.config import settings
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+
+@router.get("/architecture-map")
+async def architecture_map(request: Request, offset: int = Query(0, ge=0),
+                           membership: OrganizationMembership = Depends(get_current_membership),
+                           db: AsyncSession = Depends(get_db)):
+    """Saved design intent only. No inferred live health or resource reachability."""
+    from app.models.entities import Architecture
+    org_id = membership.organization_id
+    if request.headers.get("X-Organization-ID") not in (None, org_id):
+        raise HTTPException(403, "You are not a member of this organization.")
+    latest_id = (select(Architecture.id).where(
+        Architecture.application_id == Application.id, Architecture.organization_id == org_id,
+        Architecture.spec_json["format"].as_string() == "repository-draft-v1")
+        .order_by(Architecture.created_at.desc(), Architecture.id.desc()).limit(1).correlate(Application).scalar_subquery())
+    rows = (await db.execute(select(Application, Architecture).outerjoin(Architecture, Architecture.id == latest_id)
+        .where(Application.organization_id == org_id).order_by(Application.id).offset(offset).limit(101))).all()
+    items = []
+    for app, architecture in rows[:100]:
+        spec = architecture.spec_json if architecture else {}
+        requirements = spec.get("requirements") or {}
+        graph = spec.get("graph") or {}
+        configurations = spec.get("resource_configurations") or {}
+        subnets = [c.get("properties", {}) for c in configurations.values() if c.get("resource_type") == "AWS::EC2::Subnet"]
+        labels = {node["id"]: node.get("label", node["id"]) for node in graph.get("nodes", [])}
+        edges = graph.get("edges", [])
+        items.append({"id": app.id, "name": app.name,
+            "version": architecture.version if architecture else None,
+            "saved_at": architecture.created_at if architecture else None,
+            "region": requirements.get("region"),
+            "secondary_region": requirements.get("secondary_region") if requirements.get("availability") == "MULTI_REGION" else None,
+            "availability": requirements.get("availability"),
+            "components": len(graph.get("nodes", [])), "connections": len(graph.get("edges", [])),
+            "connection_preview": [{"source": labels.get(edge["source"], edge["source"]),
+                "target": labels.get(edge["target"], edge["target"]), "label": edge.get("label", "Designed connection")} for edge in edges[:8]],
+            "connections_truncated": len(edges) > 8,
+            "availability_zones": sorted({s["availability_zone"] for s in subnets if s.get("availability_zone")}),
+            "source_changed": bool(spec.get("source_changed")),
+            "runtime_status": "NOT_VERIFIED"})
+    return {"items": items, "next_offset": offset + 100 if len(rows) > 100 else None}
 
 @router.get("/cloud-accounts")
 async def recorded_cloud_accounts(request: Request, membership: OrganizationMembership = Depends(get_current_membership), db: AsyncSession = Depends(get_db)):
