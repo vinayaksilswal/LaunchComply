@@ -28,7 +28,7 @@ def seed_legacy_architectures(connection):
 
 def snapshot(connection):
     # Raw JSON/text and timestamps: migration must not reserialize history.
-    return list(connection.execute(text("SELECT id, spec_json, created_at, updated_at FROM architectures WHERE id LIKE 'state-arch-%' ORDER BY id")).all())
+    return list(connection.execute(text("SELECT id, CAST(spec_json AS TEXT), created_at, updated_at FROM architectures WHERE id LIKE 'state-arch-%' ORDER BY id")).all())
 
 
 def assert_workspace_backfill(connection, before):
