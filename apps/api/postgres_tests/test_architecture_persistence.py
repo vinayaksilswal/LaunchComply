@@ -1,5 +1,6 @@
 """Real PostgreSQL API isolation/persistence, not AWS execution or RLS acceptance."""
 import os
+import asyncio
 import uuid
 
 import httpx
@@ -99,3 +100,46 @@ async def test_workspace_initialization_race_has_one_unassigned_winner():
             await first.rollback()
     finally:
         await db.dispose()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_repository_edits_have_one_winner_and_preserve_snapshot():
+    from sqlalchemy import insert, select, cast, String
+    from app.models import Architecture, ArchitectureWorkspaceState, SourceControlConnection, Repository
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            registered = await client.post("/api/v1/auth/register", json={
+                "email": f"source-race-{uuid.uuid4().hex}@example.com", "password": "TestOnlyPassword123!",
+                "full_name": "Source race", "organization_name": f"Source race {uuid.uuid4().hex}"})
+            assert registered.status_code == 200, registered.text
+            account = registered.json()
+            org = account["organization_id"]
+            headers = {"Authorization": f"Bearer {account['access_token']}", "X-Organization-ID": org}
+            created = await client.post("/api/v1/applications/", headers=headers, json={"name": "Source race fixture"})
+            assert created.status_code == 200, created.text
+            asset = created.json()["id"]
+            initialized = await client.post(f"/api/v1/architecture/workspace/{asset}/initialize", headers=headers)
+            assert initialized.status_code == 200, initialized.text
+            connection_id = str(uuid.uuid4())
+            repository_ids = [str(uuid.uuid4()), str(uuid.uuid4())]
+            snapshot_query = select(cast(Architecture.spec_json, String), Architecture.updated_at).where(Architecture.id == initialized.json()["id"])
+            async with engine.begin() as db:
+                await db.execute(insert(SourceControlConnection).values(id=connection_id, organization_id=org,
+                    provider_account_id="synthetic", provider_account_name="Synthetic", installation_id=connection_id))
+                for identifier in repository_ids:
+                    await db.execute(insert(Repository).values(id=identifier, organization_id=org,
+                        source_control_connection_id=connection_id, provider_repository_id=identifier,
+                        name=identifier, full_name=f"synthetic/{identifier}", owner="synthetic", html_url="https://example.invalid/source"))
+                before = (await db.execute(snapshot_query)).one()
+            responses = await asyncio.gather(*[
+                client.put(f"/api/v1/applications/{asset}/repositories", headers=headers,
+                    json={"repository_ids": [identifier], "expected_repository_ids": []}) for identifier in repository_ids])
+            assert sorted(response.status_code for response in responses) == [200, 409]
+            async with engine.connect() as db:
+                assert (await db.execute(snapshot_query)).one() == before
+                state = (await db.execute(select(ArchitectureWorkspaceState.source_epoch,
+                    ArchitectureWorkspaceState.analyzed_source_epoch).where(
+                    ArchitectureWorkspaceState.organization_id == org, ArchitectureWorkspaceState.application_id == asset))).one()
+                assert tuple(state) == (1, 0)
+    finally:
+        await engine.dispose()

@@ -26,6 +26,7 @@ from app.services.architecture.resource_edits import apply_resource_updates, fin
 from app.services.architecture.resource_topology import build_topology
 from typing import Annotated, Literal
 from app.services.architecture.repository_links import linked_repositories
+from app.services.architecture.workspace_state import read_state, source_stale, effective_spec, record_head
 
 router = APIRouter(prefix="/architecture/workspace", tags=["Architecture Workspace"])
 
@@ -48,9 +49,12 @@ async def application(db, application_id, membership, lock=False):
 
 async def latest(db, app):
     records = (await db.execute(select(Architecture).where(Architecture.application_id == app.id,
-        Architecture.organization_id == app.organization_id).order_by(Architecture.created_at.desc()).execution_options(populate_existing=True))).scalars().all()
+        Architecture.organization_id == app.organization_id).order_by(Architecture.created_at.desc(), Architecture.id.desc()).execution_options(populate_existing=True))).scalars().all()
     # Legacy sample topologies have no verified provenance; never present them as code analysis.
-    return next((item for item in records if (item.spec_json or {}).get("format") == "repository-draft-v1"), None)
+    arch = next((item for item in records if (item.spec_json or {}).get("format") == "repository-draft-v1"), None)
+    if arch:
+        arch._workspace_source_changed = source_stale(await read_state(db, app.organization_id, app.id))
+    return arch
 
 def pending_proposal(spec):
     proposal = spec.get("proposal")
@@ -66,7 +70,7 @@ def output(arch):
     if not arch:
         return None
     from app.services.architecture.design_review import build_review
-    spec = arch.spec_json
+    spec = effective_spec(arch)
     region = (spec.get("requirements") or {}).get("region")
     proposal = pending_proposal(spec)
     topology = lambda graph, configs: build_topology(graph, configs, region, spec.get("resource_schema_version", 1))
@@ -79,7 +83,7 @@ def output(arch):
 def design_is_approved(arch):
     if not arch:
         return False
-    spec = arch.spec_json or {}
+    spec = effective_spec(arch)
     approval = spec.get("design_approval") or {}
     graph = spec.get("graph")
     return bool(isinstance(approval, dict) and isinstance(graph, dict) and graph.get("nodes")
@@ -118,6 +122,7 @@ async def initialize(application_id: str, membership=Depends(editor), db: AsyncS
     arch = Architecture(application_id=app.id, organization_id=membership.organization_id, name=app.name,
                         version="v1", status="DRAFT", spec_json=spec)
     db.add(arch)
+    await record_head(db, app, arch)
     await audit(db, membership, app, "ARCHITECTURE_EMPTY_CREATED")
     await db.commit()
     await db.refresh(arch)
@@ -169,11 +174,12 @@ async def restore_version(application_id: str, payload: RestoreVersion, membersh
         "messages": [], "restored_from": {"id": old.id, "version": old.version}, "deployment_status": "NOT_DEPLOYED"}
     for key in ("design_approval", "aws_references", "ai_request", "last_ai_questions", "last_ai_workflow", "last_ai_diagnostics"):
         spec.pop(key, None)
-    spec["source_changed"] = bool(arch.spec_json.get("source_changed") or old.spec_json.get("source_changed")
+    spec["source_changed"] = bool(effective_spec(arch).get("source_changed") or old.spec_json.get("source_changed")
         or (old.spec_json.get("evidence") or {}).get("commit") != (arch.spec_json.get("evidence") or {}).get("commit"))
     record = Architecture(application_id=app.id, organization_id=membership.organization_id, name=app.name,
         version=f"v{spec['revision']}", status="DRAFT", spec_json=spec)
     db.add(record)
+    await record_head(db, app, record)
     await audit(db, membership, app, "ARCHITECTURE_VERSION_RESTORED", {"restored_id": old.id, "restored_version": old.version})
     await db.commit()
     await db.refresh(record)
@@ -212,6 +218,7 @@ async def analyze(application_id: str, membership=Depends(editor), db: AsyncSess
             "graph": graph, "evidence": evidence, "messages": [], "proposal": None,
             "deployment_status": "NOT_DEPLOYED", "requirements": requirements, "capacity_plan": capacity_plan})
     db.add(arch)
+    await record_head(db, app, arch, source_refreshed=True)
     await audit(db, membership, app, "ARCHITECTURE_MANIFESTS_ANALYZED")
     await db.commit()
     await db.refresh(arch)
@@ -288,7 +295,7 @@ async def current(db, app, expected_id):
     arch = await latest(db, app)
     if not arch or arch.id != expected_id:
         raise HTTPException(409, "This architecture changed. Reload it before saving your changes.")
-    if arch.spec_json.get("source_changed"):
+    if effective_spec(arch).get("source_changed"):
         raise HTTPException(409, "Repository links changed. Refresh code findings before editing or approving this architecture.")
     return arch
 
@@ -306,6 +313,7 @@ async def save_version(db, membership, app, arch, graph, action, updates=None):
     record = Architecture(application_id=app.id, organization_id=membership.organization_id,
         name=app.name, version=f"v{spec['revision']}", status="DRAFT", spec_json=spec)
     db.add(record)
+    await record_head(db, app, record)
     await audit(db, membership, app, action)
     await db.commit()
     await db.refresh(record)
@@ -463,7 +471,7 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
     if not fresh_member or not fresh_member.is_active or fresh_member.organization_id != app.organization_id or fresh_member.role not in (MembershipRole.OWNER, MembershipRole.ADMIN) or not fresh_user or not fresh_user.is_active:
         raise HTTPException(403, "Your business editing access changed during this request. No proposal was saved.")
     latest_arch = await latest(db, app)
-    if not latest_arch or latest_arch.id != payload.expected_id or latest_arch.spec_json.get("source_changed") or (latest_arch.spec_json.get("ai_request") or {}).get("id") != request_id:
+    if not latest_arch or latest_arch.id != payload.expected_id or effective_spec(latest_arch).get("source_changed") or (latest_arch.spec_json.get("ai_request") or {}).get("id") != request_id:
         await audit(db, membership, app, "ARCHITECTURE_AI_REQUEST_DISCARDED", {"request_id": request_id, "code": "DESIGN_CHANGED"})
         await db.commit()
         raise HTTPException(409, "Your design or source changed while AI was responding. Reload before requesting a new proposal.")

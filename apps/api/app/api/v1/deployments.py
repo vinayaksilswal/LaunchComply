@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.api.v1.architecture_workspace import member, editor, application, latest, design_is_approved
+from app.services.architecture.workspace_state import effective_spec
 from app.models.entities import Deployment, CloudAccount
 
 router = APIRouter(prefix="/deployments", tags=["Deployments"])
@@ -22,7 +23,7 @@ async def list_deployments(membership=Depends(member), db: AsyncSession = Depend
 async def preparation(application_id: str, membership=Depends(member), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership)
     arch = await latest(db, app)
-    spec = arch.spec_json if arch else {}
+    spec = effective_spec(arch) if arch else {}
     evidence = spec.get("evidence") or {}
     targets = spec.get("requirements") or {}
     source_ready = bool(evidence.get("commit") and evidence.get("files") and not spec.get("source_changed"))

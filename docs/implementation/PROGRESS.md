@@ -41,6 +41,9 @@ refresh behavior. A02 remains open until every writer and review flow is migrate
   uniqueness and concurrent initialization verified in PostgreSQL. API, browser
   and PostgreSQL CI passed at `129a575`.
 - [ ] Move current writers/readers to this state, preserving historical snapshots.
+  Repository-link invalidation now uses source epochs and preserves old JSON;
+  local API and browser checks passed. Remaining mutable AI/reference/approval
+  writers and reviewed source refresh are still in progress (15 October 2026).
 - [ ] Review, apply or discard source refreshes without losing manual changes.
 
 ## Your requested product direction

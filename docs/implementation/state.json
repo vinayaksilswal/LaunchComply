@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "plan_version": "1.0",
-  "updated_at": "2026-10-14",
+  "updated_at": "2026-10-15",
   "audited_baseline_commit": "83a5d87",
   "planning_complete": true,
   "implementation_started_under_this_plan": true,
@@ -70,7 +70,7 @@
       ],
       "release": "R1",
       "status": "IN_PROGRESS",
-      "checkpoint": "Additive foundation verified at 129a575: full API 344 passed/4 live skipped; Linux API, PostgreSQL populated migration/constraints/concurrent initialization and browser jobs passed. Existing endpoints unchanged; new state is NOT authoritative until writer cutover and head reconciliation. Next: separately scoped mutable records, all reader/writer adapters, then reviewed source refresh with head/epoch conflict checks. See 2026-10-14-system-review.md.",
+      "checkpoint": "Repository edits now invalidate current source epoch without rewriting history. Editor, approval, deployment preparation, dashboard and late AI checks use current eligibility; new heads are recorded and legacy heads reconciled. Local full suite 346 passed/4 skipped plus final focused 3 passed; real browser removal flow passed. PostgreSQL simultaneous-edit CI pending. Remaining: separate mutable AI/reference/approval records and review/apply/discard source-refresh preservation. See 2026-10-15-source-history.md.",
       "evidence": [
         {
           "kind": "test",
@@ -85,6 +85,13 @@
           "commit": "129a575e18cc47ac5b0aa101684c5102644c9ea1",
           "observed_at": "2026-10-14",
           "summary": "API, PostgreSQL and browser CI jobs succeeded, including serialized JSON preservation, scoped FKs, uniqueness and concurrent initialization."
+        },
+        {
+          "kind": "test",
+          "path_or_url": "2026-10-15-source-history.md",
+          "commit": "working-tree",
+          "observed_at": "2026-10-15",
+          "summary": "Repository invalidation preserves serialized historical snapshots and revokes current eligibility; API and browser evidence."
         }
       ]
     },
@@ -573,14 +580,14 @@
   "handoff": {
     "current_task": "A02",
     "next_task": "A02",
-    "next_action": "Read 2026-10-14-system-review.md. Complete A02 writer/read-adapter cutover and source proposal UI; reconcile legacy heads before making the additive state authoritative. Update PROGRESS.md with verified work.",
+    "next_action": "Finish A02: move mutable chat/proposals/references/approvals outside snapshot JSON, then implement reviewed source refresh preserving manual configuration with expected head/epoch. Source epochs are now active for repository-link changes; see 2026-10-15-source-history.md.",
     "notes": [
       "A01 complete: all three Linux CI jobs passed at 97918cc.",
       "35-package programme and all release gates are not complete.",
       "Preserve unrelated .artifacts/.",
       "Customer brings existing software; agency custom-development journey is superseded."
     ],
-    "uncommitted_scope": "Implementation pushed at 129a575; final evidence-only checkpoint follows. Preserve unrelated .artifacts/."
+    "uncommitted_scope": "Source invalidation slice and evidence pending commit; preserve .artifacts/."
   },
   "additional_requests": [
     {

@@ -11,6 +11,8 @@ from app.schemas.dashboard import DashboardOverviewResponse, DashboardFinding, C
 from app.models.source_control import Repository, SourceControlConnection, ConnectionStatus
 from app.models.audit import AuditEvent
 from app.core.config import settings
+from app.models.architecture_state import ArchitectureWorkspaceState
+from app.services.architecture.workspace_state import source_stale
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -27,10 +29,12 @@ async def architecture_map(request: Request, offset: int = Query(0, ge=0),
         Architecture.application_id == Application.id, Architecture.organization_id == org_id,
         Architecture.spec_json["format"].as_string() == "repository-draft-v1")
         .order_by(Architecture.created_at.desc(), Architecture.id.desc()).limit(1).correlate(Application).scalar_subquery())
-    rows = (await db.execute(select(Application, Architecture).outerjoin(Architecture, Architecture.id == latest_id)
+    rows = (await db.execute(select(Application, Architecture, ArchitectureWorkspaceState).outerjoin(Architecture, Architecture.id == latest_id)
+        .outerjoin(ArchitectureWorkspaceState, (ArchitectureWorkspaceState.application_id == Application.id)
+            & (ArchitectureWorkspaceState.organization_id == org_id) & ArchitectureWorkspaceState.environment_id.is_(None))
         .where(Application.organization_id == org_id).order_by(Application.id).offset(offset).limit(101))).all()
     items = []
-    for app, architecture in rows[:100]:
+    for app, architecture, workspace_state in rows[:100]:
         spec = architecture.spec_json if architecture else {}
         requirements = spec.get("requirements") or {}
         graph = spec.get("graph") or {}
@@ -49,7 +53,7 @@ async def architecture_map(request: Request, offset: int = Query(0, ge=0),
                 "target": labels.get(edge["target"], edge["target"]), "label": edge.get("label", "Designed connection")} for edge in edges[:8]],
             "connections_truncated": len(edges) > 8,
             "availability_zones": sorted({s["availability_zone"] for s in subnets if s.get("availability_zone")}),
-            "source_changed": bool(spec.get("source_changed")),
+            "source_changed": bool(spec.get("source_changed")) or source_stale(workspace_state),
             "runtime_status": "NOT_VERIFIED"})
     return {"items": items, "next_offset": offset + 100 if len(rows) > 100 else None}
 

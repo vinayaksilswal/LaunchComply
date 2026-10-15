@@ -16,6 +16,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from app.services.architecture.resource_configuration import ResourceConfiguration, compile_template, validate_resources
 from test_resource_configuration import fixture
+from app.services.architecture.workspace_state import effective_spec
 
 
 def handlers():
@@ -39,6 +40,7 @@ def handlers():
                  "member": lambda: None, "get_db": lambda: None, "application": application,
                  "latest": latest, "audit": audit, "Architecture": record,
                  "ResourceConfiguration": ResourceConfiguration, "validate_resources": validate_resources,
+                 "effective_spec": effective_spec, "record_head": AsyncMock(),
                  "compile_template": compile_template, "output": lambda arch: {"id": arch.id, "version": arch.version, **copy.deepcopy(arch.spec_json)}}
     exec(compile(ast.Module(body=definitions, type_ignores=[]), "architecture_workspace_handlers", "exec"), namespace)
     return namespace

@@ -23,7 +23,7 @@ from app.core.audit import log_audit_event
 from app.models.source_control import Repository, ApplicationRepository, SourceControlConnection, ConnectionStatus
 from app.models.audit import AuditEvent
 from app.models.source_archive import ApplicationSourceArchive
-from app.models.entities import Architecture
+from app.services.architecture.workspace_state import invalidate_sources
 from app.services.architecture.repository_links import accessible_repositories, linked_repositories, repository_summary
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
@@ -81,16 +81,7 @@ async def set_repositories(application_id: str, payload: RepositorySelection, re
         db.add(ApplicationRepository(organization_id=org_id, application_id=app.id,
             repository_id=repo.id, branch=repo.default_branch, root_path="/", is_primary=index == 0))
     app.repo_provider, app.repo_url, app.repo_branch = "github", repos[0].html_url if repos else None, repos[0].default_branch if repos else "main"
-    drafts = (await db.execute(select(Architecture).where(Architecture.application_id == app.id,
-        Architecture.organization_id == org_id))).scalars().all()
-    for draft in drafts:
-        if (draft.spec_json or {}).get("format") != "repository-draft-v1": continue
-        spec = {**draft.spec_json, "source_changed": True, "proposal": None}
-        if spec.get("design_approval"):
-            spec["superseded_design_approval"] = {**spec["design_approval"], "invalidated_reason": "SOURCE_LINKS_CHANGED"}
-        spec.pop("design_approval", None)
-        spec.pop("aws_references", None)
-        draft.spec_json = spec
+    await invalidate_sources(db, app)
     user = await db.get(User, membership.user_id)
     db.add(AuditEvent(organization_id=org_id, actor_id=membership.user_id, actor_email=user.email,
         action="BUSINESS_ASSET_REPOSITORIES_UPDATED", entity_type="application", entity_id=app.id,

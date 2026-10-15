@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.permissions import require_platform_admin
 from app.api.v1.architecture_workspace import editor, member, application, latest, design_is_approved
+from app.services.architecture.workspace_state import effective_spec
 from app.models.auth import Organization, User
 from app.models.entities import ServiceRequest
 from app.models.audit import AuditEvent
@@ -93,7 +94,7 @@ async def create(payload: CreateRequest, membership=Depends(editor), db: AsyncSe
         if not app or payload.service_code != "DEPLOYMENT_HELP":
             raise HTTPException(422, "A saved architecture reference is only supported for a business asset deployment review.")
         arch = await latest(db, app)
-        if not arch or arch.id != payload.architecture_id or (arch.spec_json or {}).get("source_changed"):
+        if not arch or arch.id != payload.architecture_id or effective_spec(arch).get("source_changed"):
             raise HTTPException(409, "The saved design changed. Refresh deployment preparation before submitting this review.")
         spec = arch.spec_json or {}
         evidence = spec.get("evidence") or {}
