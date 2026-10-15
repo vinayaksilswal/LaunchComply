@@ -24,6 +24,12 @@ test("removing a source preserves saved history and warns in the architecture wo
   expect(saved.ok()).toBeTruthy();
   const original = await saved.json();
   await page.goto(`/dashboard/applications/${asset.id}`);
+  // A fresh Chromium cursor starts over the hover-expanding sidebar. Leave it
+  // as a user would before interacting with content beneath the overlay.
+  await page.mouse.move((page.viewportSize()?.width || 1280) - 24, 200);
+  if ((page.viewportSize()?.width || 1280) >= 1024) {
+    await expect(page.getByRole("complementary", { name: "Workspace navigation" })).toHaveCSS("width", "64px");
+  }
   await page.getByRole("button", { name: "Source code", exact: true }).click();
   await page.getByRole("button", { name: `Remove repository ${repositories[0].full_name}`, exact: true }).click();
   await expect(page.getByText("No repositories linked. Add your frontend and backend repositories to start.")).toBeVisible();

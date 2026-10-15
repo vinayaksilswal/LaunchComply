@@ -28,7 +28,11 @@ application lock. Latest-version lookup remains authoritative during cutover.
   setup uses the explicitly test-only fixture provider; not live GitHub evidence.
 - PostgreSQL adds two simultaneous repository edits against the same expected
   links: require one success, one conflict, one epoch increment and unchanged
-  serialized snapshot. CI result will be added after execution.
+  serialized snapshot. PostgreSQL and API CI passed at `c753cfc`.
+- Initial browser CI failed because its initial cursor held the hover sidebar
+  over the Source code button. Test now moves into the workspace and waits for
+  normal collapse (no forced click); local rerun passed in 1.5 minutes. Final
+  browser CI result remains pending.
 
 ## Remaining A02 work
 
@@ -37,6 +41,14 @@ chat/proposal/reference/approval writers still embed mutable state in design
 JSON. Source analysis still generates a replacement version without review and
 can drop manual configurations. Move those writers to scoped records and add
 review/apply/discard with head and epoch checks before marking A02 complete.
+
+Next writer audit: `approve-design`, both chat receipt/result/failure writes,
+`references`, and `discard-proposal` in architecture_workspace.py. Keep immutable
+version previews on raw historical state; the current-workspace adapter must
+merge separately scoped activity without dirtying the mapped snapshot. Strip
+mutable fields from new design snapshots only after the adapter is deployed.
+Keep existing legacy metadata available for historical display. Test proposal
+apply/discard, failure/retry, restore and source invalidation through that adapter.
 
 No AWS resources were created, no production data was manually migrated, and no
 enterprise release gate is accepted by these tests.
