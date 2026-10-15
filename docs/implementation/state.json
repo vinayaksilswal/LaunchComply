@@ -70,7 +70,7 @@
       ],
       "release": "R1",
       "status": "IN_PROGRESS",
-      "checkpoint": "Repository edits now invalidate current source epoch without rewriting history. Editor, approval, deployment preparation, dashboard and late AI checks use current eligibility; new heads are recorded and legacy heads reconciled. Local full suite 346 passed/4 skipped plus final focused 3 passed; real browser removal flow passed. PostgreSQL simultaneous-edit CI pending. Remaining: separate mutable AI/reference/approval records and review/apply/discard source-refresh preservation. See 2026-10-15-source-history.md.",
+      "checkpoint": "Repository edits invalidate the current source epoch without rewriting history. Current readers and late AI checks use source eligibility. API, PostgreSQL simultaneous-edit and browser CI passed at 8cdf0f3 (run 38767930847). Remaining: separate mutable AI/reference/approval records and reviewed source-refresh preservation. See 2026-10-15-source-history.md.",
       "evidence": [
         {
           "kind": "test",
@@ -89,9 +89,9 @@
         {
           "kind": "test",
           "path_or_url": "2026-10-15-source-history.md",
-          "commit": "working-tree",
+          "commit": "8cdf0f392a264f304af652d92484fffd3e74e801",
           "observed_at": "2026-10-15",
-          "summary": "Repository invalidation preserves serialized historical snapshots and revokes current eligibility; API and browser evidence."
+          "summary": "Repository invalidation preserves historical snapshots; API, PostgreSQL concurrency and browser CI all passed: https://github.com/vinayaksilswal/LaunchComply/actions/runs/38767930847"
         }
       ]
     },
@@ -587,7 +587,7 @@
       "Preserve unrelated .artifacts/.",
       "Customer brings existing software; agency custom-development journey is superseded."
     ],
-    "uncommitted_scope": "Source invalidation slice and evidence pending commit; preserve .artifacts/."
+    "uncommitted_scope": "Implementation and evidence committed; preserve unrelated .artifacts/."
   },
   "additional_requests": [
     {

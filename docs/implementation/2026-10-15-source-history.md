@@ -32,7 +32,8 @@ application lock. Latest-version lookup remains authoritative during cutover.
 - Initial browser CI failed because its initial cursor held the hover sidebar
   over the Source code button. Test now moves into the workspace and waits for
   normal collapse (no forced click); local rerun passed in 1.5 minutes. Final
-  browser CI result remains pending.
+  browser CI subsequently passed at `8cdf0f3`, alongside API and PostgreSQL.
+  [Final CI run](https://github.com/vinayaksilswal/LaunchComply/actions/runs/38767930847).
 
 ## Remaining A02 work
 

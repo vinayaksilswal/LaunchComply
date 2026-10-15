@@ -1,6 +1,6 @@
 # LaunchComply — your requests and implementation progress
 
-Updated: **14 October 2026**. This is the visible checklist for our ongoing work.
+Updated: **15 October 2026**. This is the visible checklist for our ongoing work.
 
 **Rule:** Keep every request. When work is implemented and verified, mark it
 **[x] ~~Done~~** and retain its evidence. Never delete it to make the backlog shorter.
@@ -33,16 +33,21 @@ open; no release gate has been accepted yet.
 ## Current system review
 
 [Code-path review, remaining gaps and exact next steps](2026-10-14-system-review.md).
-The new workspace-state table is additive only; it does not yet change customer
-refresh behavior. A02 remains open until every writer and review flow is migrated.
+Workspace state now protects history during repository-link changes. Source
+refresh review remains unfinished. A02 stays open until every writer and review
+flow is migrated.
 
 - [x] ~~Add and verify the separate workspace-state database foundation.~~
   Migration preserves stored JSON/IDs/timestamps; tenant and environment references,
   uniqueness and concurrent initialization verified in PostgreSQL. API, browser
   and PostgreSQL CI passed at `129a575`.
-- [ ] Move current writers/readers to this state, preserving historical snapshots.
+- [x] ~~Preserve saved versions when repositories are added or removed.~~
+  Current eligibility uses source epochs; historical JSON and timestamps remain
+  unchanged. API, PostgreSQL concurrency and browser CI passed at `8cdf0f3`.
+  [Evidence](2026-10-15-source-history.md).
+- [ ] Move all current writers/readers to this state, preserving historical snapshots.
   Repository-link invalidation now uses source epochs and preserves old JSON;
-  local API and browser checks passed. Remaining mutable AI/reference/approval
+  API, PostgreSQL and browser CI passed. Remaining mutable AI/reference/approval
   writers and reviewed source refresh are still in progress (15 October 2026).
 - [ ] Review, apply or discard source refreshes without losing manual changes.
 
