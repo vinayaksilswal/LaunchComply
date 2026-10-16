@@ -1,0 +1,986 @@
+{
+  "canonical": {
+    "analysis_metadata": {
+      "legacy_evidence": {
+        "branch": "main",
+        "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "components": [],
+        "files": [],
+        "repositories": [],
+        "repository": "fixture/business",
+        "scope": "Synthetic evidence; runtime connections unverified."
+      }
+    },
+    "application_id": "golden-app",
+    "connections_by_id": {
+      "cfg_044435fc8b13ee0aaf99ffbf0ef901e0a025a1fd": {
+        "authentication": "UNKNOWN",
+        "caller_mode": "UNKNOWN",
+        "derived_from": {
+          "index": null,
+          "property": "subnet_node_id",
+          "resource_id": "association"
+        },
+        "destination_port": null,
+        "evidence_refs": [],
+        "evidence_status": "UNKNOWN",
+        "id": "cfg_044435fc8b13ee0aaf99ffbf0ef901e0a025a1fd",
+        "label": "subnet_node_id",
+        "origin": "CONFIGURATION",
+        "protocol": "UNKNOWN",
+        "purpose": "CONFIG_REFERENCE",
+        "source": "association",
+        "target": "public",
+        "tls": "UNKNOWN"
+      },
+      "cfg_1c53ebd59b5fceb8a09c0da87288b114003dd0c3": {
+        "authentication": "UNKNOWN",
+        "caller_mode": "UNKNOWN",
+        "derived_from": {
+          "index": null,
+          "property": "vpc_node_id",
+          "resource_id": "public"
+        },
+        "destination_port": null,
+        "evidence_refs": [],
+        "evidence_status": "UNKNOWN",
+        "id": "cfg_1c53ebd59b5fceb8a09c0da87288b114003dd0c3",
+        "label": "vpc_node_id",
+        "origin": "CONFIGURATION",
+        "protocol": "UNKNOWN",
+        "purpose": "CONFIG_REFERENCE",
+        "source": "public",
+        "target": "vpc",
+        "tls": "UNKNOWN"
+      },
+      "cfg_56c37f1311808f60ed44f62f556072f8a57f3e8a": {
+        "authentication": "UNKNOWN",
+        "caller_mode": "UNKNOWN",
+        "derived_from": {
+          "index": null,
+          "property": "route_table_node_id",
+          "resource_id": "association"
+        },
+        "destination_port": null,
+        "evidence_refs": [],
+        "evidence_status": "UNKNOWN",
+        "id": "cfg_56c37f1311808f60ed44f62f556072f8a57f3e8a",
+        "label": "route_table_node_id",
+        "origin": "CONFIGURATION",
+        "protocol": "UNKNOWN",
+        "purpose": "CONFIG_REFERENCE",
+        "source": "association",
+        "target": "route",
+        "tls": "UNKNOWN"
+      },
+      "cfg_80652d1f204f7f5c994a1128ee3f453f07a78924": {
+        "authentication": "UNKNOWN",
+        "caller_mode": "UNKNOWN",
+        "derived_from": {
+          "index": null,
+          "property": "vpc_node_id",
+          "resource_id": "route"
+        },
+        "destination_port": null,
+        "evidence_refs": [],
+        "evidence_status": "UNKNOWN",
+        "id": "cfg_80652d1f204f7f5c994a1128ee3f453f07a78924",
+        "label": "vpc_node_id",
+        "origin": "CONFIGURATION",
+        "protocol": "UNKNOWN",
+        "purpose": "CONFIG_REFERENCE",
+        "source": "route",
+        "target": "vpc",
+        "tls": "UNKNOWN"
+      },
+      "cfg_d2d0017fb03258683d841e0347d69cdab3c70312": {
+        "authentication": "UNKNOWN",
+        "caller_mode": "UNKNOWN",
+        "derived_from": {
+          "index": null,
+          "property": "vpc_node_id",
+          "resource_id": "private"
+        },
+        "destination_port": null,
+        "evidence_refs": [],
+        "evidence_status": "UNKNOWN",
+        "id": "cfg_d2d0017fb03258683d841e0347d69cdab3c70312",
+        "label": "vpc_node_id",
+        "origin": "CONFIGURATION",
+        "protocol": "UNKNOWN",
+        "purpose": "CONFIG_REFERENCE",
+        "source": "private",
+        "target": "vpc",
+        "tls": "UNKNOWN"
+      },
+      "legacy_6d911c6173ee075da30c7e3223f409ce619f1ec4": {
+        "authentication": "UNKNOWN",
+        "caller_mode": "UNKNOWN",
+        "derived_from": null,
+        "destination_port": null,
+        "evidence_refs": [],
+        "evidence_status": "UNKNOWN",
+        "id": "legacy_6d911c6173ee075da30c7e3223f409ce619f1ec4",
+        "label": "Unresolved browser API request",
+        "origin": "LEGACY",
+        "protocol": "UNKNOWN",
+        "purpose": "UNKNOWN",
+        "source": "web1",
+        "target": "api",
+        "tls": "UNKNOWN"
+      },
+      "legacy_9852a461a84884ff43b805a3621f2aeaa62b1b30": {
+        "authentication": "UNKNOWN",
+        "caller_mode": "UNKNOWN",
+        "derived_from": null,
+        "destination_port": null,
+        "evidence_refs": [],
+        "evidence_status": "UNKNOWN",
+        "id": "legacy_9852a461a84884ff43b805a3621f2aeaa62b1b30",
+        "label": "Storage candidate",
+        "origin": "LEGACY",
+        "protocol": "UNKNOWN",
+        "purpose": "UNKNOWN",
+        "source": "api",
+        "target": "storage",
+        "tls": "UNKNOWN"
+      },
+      "legacy_b7478f0d62313096dce3c3f88e07057cd2ae20dd": {
+        "authentication": "UNKNOWN",
+        "caller_mode": "UNKNOWN",
+        "derived_from": null,
+        "destination_port": null,
+        "evidence_refs": [],
+        "evidence_status": "UNKNOWN",
+        "id": "legacy_b7478f0d62313096dce3c3f88e07057cd2ae20dd",
+        "label": "Unresolved browser API request",
+        "origin": "LEGACY",
+        "protocol": "UNKNOWN",
+        "purpose": "UNKNOWN",
+        "source": "web1",
+        "target": "api",
+        "tls": "UNKNOWN"
+      }
+    },
+    "design_id": "4c5aeeee-444d-53b2-89f0-38922138e30b",
+    "environment_id": null,
+    "extensions": {
+      "launchcomply.legacy": {
+        "data": {
+          "configuration_property_fields": {
+            "association": [
+              "route_table_node_id",
+              "subnet_node_id"
+            ],
+            "logs": [
+              "retention_days"
+            ],
+            "private": [
+              "availability_zone",
+              "cidr",
+              "vpc_node_id"
+            ],
+            "public": [
+              "availability_zone",
+              "cidr",
+              "vpc_node_id"
+            ],
+            "route": [
+              "vpc_node_id"
+            ],
+            "storage": [
+              "versioning"
+            ],
+            "vpc": [
+              "cidr"
+            ]
+          },
+          "metadata": {
+            "deployment_status": "NOT_DEPLOYED",
+            "extensions": {
+              "customer-note": {
+                "keep": "legacy metadata"
+              }
+            },
+            "format": "repository-draft-v1",
+            "messages": [],
+            "proposal": null,
+            "resource_schema_version": 1,
+            "revision": 1
+          },
+          "requirement_fields": [
+            "region"
+          ],
+          "root_fields": [
+            "deployment_status",
+            "evidence",
+            "extensions",
+            "format",
+            "graph",
+            "messages",
+            "proposal",
+            "requirements",
+            "resource_configurations",
+            "resource_schema_version",
+            "revision"
+          ],
+          "unknown_requirements": {}
+        },
+        "version": 1
+      }
+    },
+    "format": "launchcomply-design",
+    "organization_id": "golden-org",
+    "parent_revision_id": null,
+    "requirements": {
+      "availability": null,
+      "concurrent_users": null,
+      "peak_requests_per_minute": null,
+      "region": "ap-south-1",
+      "requests_per_second_per_replica": null,
+      "secondary_region": null,
+      "sizing_workload_id": null,
+      "workload_policies": []
+    },
+    "resources_by_id": {
+      "api": {
+        "capabilities": {
+          "cloudformation_export": false,
+          "configuration": false,
+          "drawable": true,
+          "drift_management": false,
+          "verified_deployment": false
+        },
+        "catalog_type": null,
+        "compiler_logical_id": "Lc14c2529eb4498c5d1ffd6915d05bf58a91bdda79",
+        "configuration": null,
+        "configuration_schema_version": 1,
+        "description": "Execution mode and reachability need confirmation.",
+        "evidence_refs": [],
+        "id": "api",
+        "label": "Private API",
+        "layer": "APPLICATION",
+        "legacy_service": "ECS Fargate",
+        "ownership": "PLANNED",
+        "ownership_evidence_ref": null,
+        "target": {
+          "account_id": null,
+          "connection_ref": null,
+          "environment_id": null,
+          "region": "ap-south-1",
+          "scope": "UNKNOWN"
+        }
+      },
+      "association": {
+        "capabilities": {
+          "cloudformation_export": true,
+          "configuration": true,
+          "drawable": true,
+          "drift_management": false,
+          "verified_deployment": false
+        },
+        "catalog_type": "AWS::EC2::SubnetRouteTableAssociation",
+        "compiler_logical_id": "Lc0b514913789f890c4af8679b7eca086160d524a8",
+        "configuration": {
+          "properties": {
+            "route_table_node_id": "route",
+            "subnet_node_id": "public"
+          },
+          "resource_type": "AWS::EC2::SubnetRouteTableAssociation"
+        },
+        "configuration_schema_version": 1,
+        "description": "Synthetic configured intent, not deployed.",
+        "evidence_refs": [],
+        "id": "association",
+        "label": "Frontend route binding",
+        "layer": "DATA",
+        "legacy_service": "AWS::EC2::SubnetRouteTableAssociation",
+        "ownership": "PLANNED",
+        "ownership_evidence_ref": null,
+        "target": {
+          "account_id": null,
+          "connection_ref": null,
+          "environment_id": null,
+          "region": "ap-south-1",
+          "scope": "REGIONAL"
+        }
+      },
+      "logs": {
+        "capabilities": {
+          "cloudformation_export": true,
+          "configuration": true,
+          "drawable": true,
+          "drift_management": false,
+          "verified_deployment": false
+        },
+        "catalog_type": "AWS::Logs::LogGroup",
+        "compiler_logical_id": "Lc98f38f12db221a8cf8ca7aadfdcd759b01d52eb4",
+        "configuration": {
+          "properties": {
+            "retention_days": 30
+          },
+          "resource_type": "AWS::Logs::LogGroup"
+        },
+        "configuration_schema_version": 1,
+        "description": "Synthetic configured intent, not deployed.",
+        "evidence_refs": [],
+        "id": "logs",
+        "label": "Application monitoring",
+        "layer": "SUPPORT",
+        "legacy_service": "AWS::Logs::LogGroup",
+        "ownership": "PLANNED",
+        "ownership_evidence_ref": null,
+        "target": {
+          "account_id": null,
+          "connection_ref": null,
+          "environment_id": null,
+          "region": "ap-south-1",
+          "scope": "REGIONAL"
+        }
+      },
+      "private": {
+        "capabilities": {
+          "cloudformation_export": true,
+          "configuration": true,
+          "drawable": true,
+          "drift_management": false,
+          "verified_deployment": false
+        },
+        "catalog_type": "AWS::EC2::Subnet",
+        "compiler_logical_id": "Lc715dc8493c36579a5b116995100f635e3572fdf8",
+        "configuration": {
+          "properties": {
+            "availability_zone": "ap-south-1b",
+            "cidr": "10.40.2.0/24",
+            "vpc_node_id": "vpc"
+          },
+          "resource_type": "AWS::EC2::Subnet"
+        },
+        "configuration_schema_version": 1,
+        "description": "Synthetic configured intent, not deployed.",
+        "evidence_refs": [],
+        "id": "private",
+        "label": "API subnet",
+        "layer": "DATA",
+        "legacy_service": "AWS::EC2::Subnet",
+        "ownership": "PLANNED",
+        "ownership_evidence_ref": null,
+        "target": {
+          "account_id": null,
+          "connection_ref": null,
+          "environment_id": null,
+          "region": "ap-south-1",
+          "scope": "REGIONAL"
+        }
+      },
+      "public": {
+        "capabilities": {
+          "cloudformation_export": true,
+          "configuration": true,
+          "drawable": true,
+          "drift_management": false,
+          "verified_deployment": false
+        },
+        "catalog_type": "AWS::EC2::Subnet",
+        "compiler_logical_id": "Lcefa1f375d76194fa51a3556a97e641e61685f914",
+        "configuration": {
+          "properties": {
+            "availability_zone": "ap-south-1a",
+            "cidr": "10.40.1.0/24",
+            "vpc_node_id": "vpc"
+          },
+          "resource_type": "AWS::EC2::Subnet"
+        },
+        "configuration_schema_version": 1,
+        "description": "Synthetic configured intent, not deployed.",
+        "evidence_refs": [],
+        "id": "public",
+        "label": "Frontend subnet",
+        "layer": "DATA",
+        "legacy_service": "AWS::EC2::Subnet",
+        "ownership": "PLANNED",
+        "ownership_evidence_ref": null,
+        "target": {
+          "account_id": null,
+          "connection_ref": null,
+          "environment_id": null,
+          "region": "ap-south-1",
+          "scope": "REGIONAL"
+        }
+      },
+      "route": {
+        "capabilities": {
+          "cloudformation_export": true,
+          "configuration": true,
+          "drawable": true,
+          "drift_management": false,
+          "verified_deployment": false
+        },
+        "catalog_type": "AWS::EC2::RouteTable",
+        "compiler_logical_id": "Lc8a84e406c08ac9594f47222406598f7598e15c55",
+        "configuration": {
+          "properties": {
+            "vpc_node_id": "vpc"
+          },
+          "resource_type": "AWS::EC2::RouteTable"
+        },
+        "configuration_schema_version": 1,
+        "description": "Synthetic configured intent, not deployed.",
+        "evidence_refs": [],
+        "id": "route",
+        "label": "Frontend routes",
+        "layer": "DATA",
+        "legacy_service": "AWS::EC2::RouteTable",
+        "ownership": "PLANNED",
+        "ownership_evidence_ref": null,
+        "target": {
+          "account_id": null,
+          "connection_ref": null,
+          "environment_id": null,
+          "region": "ap-south-1",
+          "scope": "REGIONAL"
+        }
+      },
+      "storage": {
+        "capabilities": {
+          "cloudformation_export": true,
+          "configuration": true,
+          "drawable": true,
+          "drift_management": false,
+          "verified_deployment": false
+        },
+        "catalog_type": "AWS::S3::Bucket",
+        "compiler_logical_id": "Lc49a25f9feefaffecad0fcd30c50dc9331cff8b55",
+        "configuration": {
+          "properties": {
+            "versioning": true
+          },
+          "resource_type": "AWS::S3::Bucket"
+        },
+        "configuration_schema_version": 1,
+        "description": "Synthetic configured intent, not deployed.",
+        "evidence_refs": [],
+        "id": "storage",
+        "label": "Private storage",
+        "layer": "DATA",
+        "legacy_service": "AWS::S3::Bucket",
+        "ownership": "PLANNED",
+        "ownership_evidence_ref": null,
+        "target": {
+          "account_id": null,
+          "connection_ref": null,
+          "environment_id": null,
+          "region": "ap-south-1",
+          "scope": "REGIONAL"
+        }
+      },
+      "vpc": {
+        "capabilities": {
+          "cloudformation_export": true,
+          "configuration": true,
+          "drawable": true,
+          "drift_management": false,
+          "verified_deployment": false
+        },
+        "catalog_type": "AWS::EC2::VPC",
+        "compiler_logical_id": "Lc38faba71b3a6cfc9e5f93fe6a17abe770093ba93",
+        "configuration": {
+          "properties": {
+            "cidr": "10.40.0.0/16",
+            "dns_hostnames": true,
+            "dns_support": true
+          },
+          "resource_type": "AWS::EC2::VPC"
+        },
+        "configuration_schema_version": 1,
+        "description": "Synthetic configured intent, not deployed.",
+        "evidence_refs": [],
+        "id": "vpc",
+        "label": "Business VPC",
+        "layer": "DATA",
+        "legacy_service": "AWS::EC2::VPC",
+        "ownership": "PLANNED",
+        "ownership_evidence_ref": null,
+        "target": {
+          "account_id": null,
+          "connection_ref": null,
+          "environment_id": null,
+          "region": "ap-south-1",
+          "scope": "REGIONAL"
+        }
+      },
+      "web1": {
+        "capabilities": {
+          "cloudformation_export": false,
+          "configuration": false,
+          "drawable": true,
+          "drift_management": false,
+          "verified_deployment": false
+        },
+        "catalog_type": null,
+        "compiler_logical_id": "Lc659a7fb2af476fae688d711213d91dc1550a37f0",
+        "configuration": null,
+        "configuration_schema_version": 1,
+        "description": "Execution mode and reachability need confirmation.",
+        "evidence_refs": [],
+        "id": "web1",
+        "label": "Portal frontend",
+        "layer": "APPLICATION",
+        "legacy_service": "Static hosting / container",
+        "ownership": "PLANNED",
+        "ownership_evidence_ref": null,
+        "target": {
+          "account_id": null,
+          "connection_ref": null,
+          "environment_id": null,
+          "region": "ap-south-1",
+          "scope": "UNKNOWN"
+        }
+      },
+      "web2": {
+        "capabilities": {
+          "cloudformation_export": false,
+          "configuration": false,
+          "drawable": true,
+          "drift_management": false,
+          "verified_deployment": false
+        },
+        "catalog_type": null,
+        "compiler_logical_id": "Lc146d3146edc9c8f1640fdac0e4919b013daf8f40",
+        "configuration": null,
+        "configuration_schema_version": 1,
+        "description": "Execution mode and reachability need confirmation.",
+        "evidence_refs": [],
+        "id": "web2",
+        "label": "HR frontend",
+        "layer": "APPLICATION",
+        "legacy_service": "Static hosting / container",
+        "ownership": "PLANNED",
+        "ownership_evidence_ref": null,
+        "target": {
+          "account_id": null,
+          "connection_ref": null,
+          "environment_id": null,
+          "region": "ap-south-1",
+          "scope": "UNKNOWN"
+        }
+      },
+      "web3": {
+        "capabilities": {
+          "cloudformation_export": false,
+          "configuration": false,
+          "drawable": true,
+          "drift_management": false,
+          "verified_deployment": false
+        },
+        "catalog_type": null,
+        "compiler_logical_id": "Lca0636392b8ed214f998edf82fad6aaed3b373dc8",
+        "configuration": null,
+        "configuration_schema_version": 1,
+        "description": "Execution mode and reachability need confirmation.",
+        "evidence_refs": [],
+        "id": "web3",
+        "label": "ERP frontend",
+        "layer": "APPLICATION",
+        "legacy_service": "Static hosting / container",
+        "ownership": "PLANNED",
+        "ownership_evidence_ref": null,
+        "target": {
+          "account_id": null,
+          "connection_ref": null,
+          "environment_id": null,
+          "region": "ap-south-1",
+          "scope": "UNKNOWN"
+        }
+      },
+      "web4": {
+        "capabilities": {
+          "cloudformation_export": false,
+          "configuration": false,
+          "drawable": true,
+          "drift_management": false,
+          "verified_deployment": false
+        },
+        "catalog_type": null,
+        "compiler_logical_id": "Lcd8204ecd5f3e92cb1a898f7fdb6d96d32670e8fb",
+        "configuration": null,
+        "configuration_schema_version": 1,
+        "description": "Execution mode and reachability need confirmation.",
+        "evidence_refs": [],
+        "id": "web4",
+        "label": "Legal frontend",
+        "layer": "APPLICATION",
+        "legacy_service": "Static hosting / container",
+        "ownership": "PLANNED",
+        "ownership_evidence_ref": null,
+        "target": {
+          "account_id": null,
+          "connection_ref": null,
+          "environment_id": null,
+          "region": "ap-south-1",
+          "scope": "UNKNOWN"
+        }
+      }
+    },
+    "revision_id": "golden-architecture-v1",
+    "schema_version": 2,
+    "source_identity": {
+      "declared_bindings": [],
+      "legacy_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "repository_refs": []
+    },
+    "source_snapshot_ids": [],
+    "view_state": {
+      "collapsed_resource_ids": [],
+      "edge_order": [
+        "legacy_6d911c6173ee075da30c7e3223f409ce619f1ec4",
+        "legacy_9852a461a84884ff43b805a3621f2aeaa62b1b30",
+        "legacy_b7478f0d62313096dce3c3f88e07057cd2ae20dd"
+      ],
+      "node_order": [
+        "vpc",
+        "public",
+        "private",
+        "route",
+        "association",
+        "storage",
+        "logs",
+        "web1",
+        "web2",
+        "web3",
+        "web4",
+        "api"
+      ],
+      "node_positions": {
+        "api": {
+          "pinned": false,
+          "x": 1200,
+          "y": 520
+        },
+        "association": {
+          "pinned": false,
+          "x": 440,
+          "y": 300
+        },
+        "logs": {
+          "pinned": false,
+          "x": 80,
+          "y": 520
+        },
+        "private": {
+          "pinned": false,
+          "x": 800,
+          "y": 80
+        },
+        "public": {
+          "pinned": false,
+          "x": 440,
+          "y": 80
+        },
+        "route": {
+          "pinned": false,
+          "x": 80,
+          "y": 300
+        },
+        "storage": {
+          "pinned": false,
+          "x": 800,
+          "y": 300
+        },
+        "vpc": {
+          "pinned": false,
+          "x": 80,
+          "y": 80
+        },
+        "web1": {
+          "pinned": false,
+          "x": 1200,
+          "y": 80
+        },
+        "web2": {
+          "pinned": false,
+          "x": 1560,
+          "y": 80
+        },
+        "web3": {
+          "pinned": false,
+          "x": 1200,
+          "y": 300
+        },
+        "web4": {
+          "pinned": false,
+          "x": 1560,
+          "y": 300
+        }
+      },
+      "zoom": null
+    },
+    "workloads_by_id": {
+      "api": {
+        "evidence_refs": [],
+        "execution_mode": "UNKNOWN",
+        "id": "api",
+        "kind": "UNKNOWN",
+        "resource_ids": [
+          "api"
+        ]
+      },
+      "web1": {
+        "evidence_refs": [],
+        "execution_mode": "UNKNOWN",
+        "id": "web1",
+        "kind": "UNKNOWN",
+        "resource_ids": [
+          "web1"
+        ]
+      },
+      "web2": {
+        "evidence_refs": [],
+        "execution_mode": "UNKNOWN",
+        "id": "web2",
+        "kind": "UNKNOWN",
+        "resource_ids": [
+          "web2"
+        ]
+      },
+      "web3": {
+        "evidence_refs": [],
+        "execution_mode": "UNKNOWN",
+        "id": "web3",
+        "kind": "UNKNOWN",
+        "resource_ids": [
+          "web3"
+        ]
+      },
+      "web4": {
+        "evidence_refs": [],
+        "execution_mode": "UNKNOWN",
+        "id": "web4",
+        "kind": "UNKNOWN",
+        "resource_ids": [
+          "web4"
+        ]
+      }
+    }
+  },
+  "description": "Synthetic immutable compatibility fixture; no customer data or live AWS evidence.",
+  "fingerprints": {
+    "algorithm": "sha256",
+    "artifact_input_hash": "e7f0e4dd1daf99482cf90903590176513fb3f80b18fea04c2202ec523e86b269",
+    "artifact_status": "INPUT_IDENTITY_ONLY",
+    "compiler_version": "offline-cfn-2",
+    "layout_hash": "c373e462ab554790ca2d1aee5f3694d8b6db4dc55b09d33ba549bd94da04c089",
+    "policy_version": "network-schema-1",
+    "semantic_hash": "8e26b9218a25c02ff028c65d9ffa1c6718cd7eaacbd905f2f1ae3d9b28cd9784",
+    "version": 1
+  },
+  "identity": {
+    "application_id": "golden-app",
+    "organization_id": "golden-org",
+    "revision_id": "golden-architecture-v1"
+  },
+  "legacy": {
+    "deployment_status": "NOT_DEPLOYED",
+    "evidence": {
+      "branch": "main",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "components": [],
+      "files": [],
+      "repositories": [],
+      "repository": "fixture/business",
+      "scope": "Synthetic evidence; runtime connections unverified."
+    },
+    "extensions": {
+      "customer-note": {
+        "keep": "legacy metadata"
+      }
+    },
+    "format": "repository-draft-v1",
+    "graph": {
+      "edges": [
+        {
+          "label": "Unresolved browser API request",
+          "source": "web1",
+          "target": "api"
+        },
+        {
+          "label": "Storage candidate",
+          "source": "api",
+          "target": "storage"
+        },
+        {
+          "label": "Unresolved browser API request",
+          "source": "web1",
+          "target": "api"
+        }
+      ],
+      "nodes": [
+        {
+          "description": "Synthetic configured intent, not deployed.",
+          "id": "vpc",
+          "label": "Business VPC",
+          "service": "AWS::EC2::VPC",
+          "x": 80,
+          "y": 80,
+          "zone": "DATA"
+        },
+        {
+          "description": "Synthetic configured intent, not deployed.",
+          "id": "public",
+          "label": "Frontend subnet",
+          "service": "AWS::EC2::Subnet",
+          "x": 440,
+          "y": 80,
+          "zone": "DATA"
+        },
+        {
+          "description": "Synthetic configured intent, not deployed.",
+          "id": "private",
+          "label": "API subnet",
+          "service": "AWS::EC2::Subnet",
+          "x": 800,
+          "y": 80,
+          "zone": "DATA"
+        },
+        {
+          "description": "Synthetic configured intent, not deployed.",
+          "id": "route",
+          "label": "Frontend routes",
+          "service": "AWS::EC2::RouteTable",
+          "x": 80,
+          "y": 300,
+          "zone": "DATA"
+        },
+        {
+          "description": "Synthetic configured intent, not deployed.",
+          "id": "association",
+          "label": "Frontend route binding",
+          "service": "AWS::EC2::SubnetRouteTableAssociation",
+          "x": 440,
+          "y": 300,
+          "zone": "DATA"
+        },
+        {
+          "description": "Synthetic configured intent, not deployed.",
+          "id": "storage",
+          "label": "Private storage",
+          "service": "AWS::S3::Bucket",
+          "x": 800,
+          "y": 300,
+          "zone": "DATA"
+        },
+        {
+          "description": "Synthetic configured intent, not deployed.",
+          "id": "logs",
+          "label": "Application monitoring",
+          "service": "AWS::Logs::LogGroup",
+          "x": 80,
+          "y": 520,
+          "zone": "SUPPORT"
+        },
+        {
+          "description": "Execution mode and reachability need confirmation.",
+          "id": "web1",
+          "label": "Portal frontend",
+          "service": "Static hosting / container",
+          "x": 1200,
+          "y": 80,
+          "zone": "APPLICATION"
+        },
+        {
+          "description": "Execution mode and reachability need confirmation.",
+          "id": "web2",
+          "label": "HR frontend",
+          "service": "Static hosting / container",
+          "x": 1560,
+          "y": 80,
+          "zone": "APPLICATION"
+        },
+        {
+          "description": "Execution mode and reachability need confirmation.",
+          "id": "web3",
+          "label": "ERP frontend",
+          "service": "Static hosting / container",
+          "x": 1200,
+          "y": 300,
+          "zone": "APPLICATION"
+        },
+        {
+          "description": "Execution mode and reachability need confirmation.",
+          "id": "web4",
+          "label": "Legal frontend",
+          "service": "Static hosting / container",
+          "x": 1560,
+          "y": 300,
+          "zone": "APPLICATION"
+        },
+        {
+          "description": "Execution mode and reachability need confirmation.",
+          "id": "api",
+          "label": "Private API",
+          "service": "ECS Fargate",
+          "x": 1200,
+          "y": 520,
+          "zone": "APPLICATION"
+        }
+      ]
+    },
+    "messages": [],
+    "proposal": null,
+    "requirements": {
+      "region": "ap-south-1"
+    },
+    "resource_configurations": {
+      "association": {
+        "properties": {
+          "route_table_node_id": "route",
+          "subnet_node_id": "public"
+        },
+        "resource_type": "AWS::EC2::SubnetRouteTableAssociation"
+      },
+      "logs": {
+        "properties": {
+          "retention_days": 30
+        },
+        "resource_type": "AWS::Logs::LogGroup"
+      },
+      "private": {
+        "properties": {
+          "availability_zone": "ap-south-1b",
+          "cidr": "10.40.2.0/24",
+          "vpc_node_id": "vpc"
+        },
+        "resource_type": "AWS::EC2::Subnet"
+      },
+      "public": {
+        "properties": {
+          "availability_zone": "ap-south-1a",
+          "cidr": "10.40.1.0/24",
+          "vpc_node_id": "vpc"
+        },
+        "resource_type": "AWS::EC2::Subnet"
+      },
+      "route": {
+        "properties": {
+          "vpc_node_id": "vpc"
+        },
+        "resource_type": "AWS::EC2::RouteTable"
+      },
+      "storage": {
+        "properties": {
+          "versioning": true
+        },
+        "resource_type": "AWS::S3::Bucket"
+      },
+      "vpc": {
+        "properties": {
+          "cidr": "10.40.0.0/16"
+        },
+        "resource_type": "AWS::EC2::VPC"
+      }
+    },
+    "resource_schema_version": 1,
+    "revision": 1
+  },
+  "offline_export_sha256": "6fbbe837cdee7f0aa73a739cb5628f1da2052dfb7e7de80c229452c6a9b0b252"
+}

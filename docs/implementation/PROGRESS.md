@@ -6,9 +6,10 @@ Updated: **16 October 2026**. This is the visible checklist for our ongoing work
 **[x] ~~Done~~** and retain its evidence. Never delete it to make the backlog shorter.
 An existing screen or a successful build alone does not make a whole request done.
 
-**Current work:** A01 and A02 are complete. Next is A03: the unified design format
-and compatibility boundary. Production readiness is still open; no release gate
-has been accepted yet.
+**Current work:** A01 and A02 are complete. A03 is in progress: the unified design
+format and compatibility boundary. Its read-only inspector/export is implemented;
+native writes and mixed-version editor migration remain. No release gate has
+been accepted yet.
 
 ## Completed and verified
 
@@ -52,6 +53,10 @@ refresh is reviewed before Apply, preserving customer configuration and layout.
 - [x] ~~Review, apply or discard source refreshes without losing manual changes.~~
   Final API, PostgreSQL concurrency and browser CI passed at `66451d8`.
   [Refresh evidence](2026-10-16-reviewed-refresh.md).
+
+- [ ] Canonical design reader, stable identities and saved-design inspector/export.
+  Local API, contract, frontend build and real browser checks passed; final CI
+  pending. [Reader evidence](2026-10-16-canonical-reader.md).
 
 ## Your requested product direction
 
@@ -165,7 +170,7 @@ one package does not automatically complete every customer request it supports.
 <!-- work-packages:start -->
 - [x] ~~A01 — Reproducible baseline and regression fixtures~~ — Done; verified in CI.
 - [x] ~~A02 — Preserve saved work and immutable history~~ — Done; migration, activity separation, reviewed refresh and concurrency/browser checks passed.
-- [ ] **A03 — Canonical design v2 and compatibility**
+- [ ] **A03 — Canonical design v2 and compatibility** — In progress. Reader/adapter and inspector/export implemented; native write and mixed-version cutover remain.
 - [ ] **A04 — Effective GitHub refs, roots and snapshots**
 - [ ] **A05 — Evidence-backed workloads and connections**
 - [ ] **A06 — Editor commands and manual controls**

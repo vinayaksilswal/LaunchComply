@@ -174,6 +174,10 @@ async def test_concurrent_design_approvals_share_activity_without_mutating_snaps
                 json={"expected_id": identifier}) for _ in range(2)])
             assert all(response.status_code == 200 for response in approvals), [r.text for r in approvals]
             assert approvals[0].json()["design_approval"] == approvals[1].json()["design_approval"]
+            canonical = await client.get(f"/api/v1/architecture/designs/{asset}", headers=headers, params={"expected_id": identifier})
+            assert canonical.status_code == 200, canonical.text
+            assert canonical.json()["read_only"] and canonical.json()["design"]["revision_id"] == identifier
+            assert set(canonical.json()["design"]["resources_by_id"]) == {"logs"}
             async with engine.connect() as db:
                 assert (await db.execute(query)).one() == before
                 activity = (await db.execute(select(ArchitectureVersionActivity.payload).where(

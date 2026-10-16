@@ -1,0 +1,1952 @@
+{
+  "$defs": {
+    "Association": {
+      "additionalProperties": false,
+      "properties": {
+        "route_table_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_type": "AWS::EC2::RouteTable",
+          "title": "Route table",
+          "type": "string"
+        },
+        "subnet_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_type": "AWS::EC2::Subnet",
+          "title": "Subnet",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subnet_node_id",
+        "route_table_node_id"
+      ],
+      "title": "Association",
+      "type": "object"
+    },
+    "Attachment": {
+      "additionalProperties": false,
+      "properties": {
+        "gateway_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_type": "AWS::EC2::InternetGateway",
+          "title": "Internet gateway",
+          "type": "string"
+        },
+        "vpc_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_type": "AWS::EC2::VPC",
+          "title": "VPC",
+          "type": "string"
+        }
+      },
+      "required": [
+        "vpc_node_id",
+        "gateway_node_id"
+      ],
+      "title": "Attachment",
+      "type": "object"
+    },
+    "BucketConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/BucketProperties"
+        },
+        "resource_type": {
+          "const": "AWS::S3::Bucket",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "BucketConfiguration",
+      "type": "object"
+    },
+    "BucketProperties": {
+      "additionalProperties": false,
+      "properties": {
+        "versioning": {
+          "default": true,
+          "title": "Object versioning",
+          "type": "boolean"
+        }
+      },
+      "title": "BucketProperties",
+      "type": "object"
+    },
+    "ConfigReference": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "anyOf": [
+            {
+              "maximum": 79,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Index"
+        },
+        "property": {
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "title": "Property",
+          "type": "string"
+        },
+        "resource_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "title": "Resource Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_id",
+        "property"
+      ],
+      "title": "ConfigReference",
+      "type": "object"
+    },
+    "Connection": {
+      "additionalProperties": false,
+      "properties": {
+        "authentication": {
+          "default": "UNKNOWN",
+          "enum": [
+            "NONE",
+            "JWT",
+            "IAM",
+            "MTLS",
+            "UNKNOWN"
+          ],
+          "title": "Authentication",
+          "type": "string"
+        },
+        "caller_mode": {
+          "default": "UNKNOWN",
+          "enum": [
+            "BROWSER",
+            "SERVER",
+            "WORKER",
+            "UNKNOWN"
+          ],
+          "title": "Caller Mode",
+          "type": "string"
+        },
+        "derived_from": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConfigReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "destination_port": {
+          "anyOf": [
+            {
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Destination Port"
+        },
+        "evidence_refs": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "evidence_status": {
+          "default": "UNKNOWN",
+          "enum": [
+            "DECLARED",
+            "INFERRED",
+            "OBSERVED",
+            "UNKNOWN"
+          ],
+          "title": "Evidence Status",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "default": "",
+          "maxLength": 80,
+          "title": "Label",
+          "type": "string"
+        },
+        "origin": {
+          "default": "DECLARED",
+          "enum": [
+            "LEGACY",
+            "DECLARED",
+            "CONFIGURATION"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "protocol": {
+          "default": "UNKNOWN",
+          "enum": [
+            "https",
+            "http",
+            "tcp",
+            "udp",
+            "postgresql",
+            "mysql",
+            "redis",
+            "rediss",
+            "mongodb",
+            "mongodb+srv",
+            "s3",
+            "UNKNOWN"
+          ],
+          "title": "Protocol",
+          "type": "string"
+        },
+        "purpose": {
+          "default": "UNKNOWN",
+          "enum": [
+            "REQUEST",
+            "DATA",
+            "EVENT",
+            "TELEMETRY",
+            "BUILD",
+            "CONFIG_REFERENCE",
+            "SECURITY_RULE",
+            "IAM_PERMISSION",
+            "UNKNOWN"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "source": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "title": "Target",
+          "type": "string"
+        },
+        "tls": {
+          "default": "UNKNOWN",
+          "enum": [
+            "REQUIRED",
+            "DISABLED",
+            "UNKNOWN"
+          ],
+          "title": "Tls",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "target"
+      ],
+      "title": "Connection",
+      "type": "object"
+    },
+    "DeclaredBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "execution": {
+          "default": "unknown",
+          "enum": [
+            "browser",
+            "server",
+            "server-proxy",
+            "unknown"
+          ],
+          "title": "Execution",
+          "type": "string"
+        },
+        "name": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,79}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "protocol": {
+          "default": "unknown",
+          "enum": [
+            "https",
+            "http",
+            "postgresql",
+            "mysql",
+            "redis",
+            "rediss",
+            "mongodb",
+            "mongodb+srv",
+            "s3",
+            "unknown"
+          ],
+          "title": "Protocol",
+          "type": "string"
+        },
+        "source": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target"
+        }
+      },
+      "required": [
+        "name",
+        "source"
+      ],
+      "title": "DeclaredBinding",
+      "type": "object"
+    },
+    "EIPNetworkConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/Empty"
+        },
+        "resource_type": {
+          "const": "AWS::EC2::EIP",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "EIPNetworkConfiguration",
+      "type": "object"
+    },
+    "Egress": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_public_https_egress": {
+          "default": false,
+          "description": "Required for a 0.0.0.0/0 TCP 443 outbound rule; this does not verify TLS or destination trust.",
+          "title": "Explicitly allow public HTTPS egress",
+          "type": "boolean"
+        },
+        "from_port": {
+          "maximum": 65535,
+          "minimum": 1,
+          "title": "From port",
+          "type": "integer"
+        },
+        "group_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_type": "AWS::EC2::SecurityGroup",
+          "title": "Security group",
+          "type": "string"
+        },
+        "peer": {
+          "maxLength": 64,
+          "minLength": 1,
+          "reference_by": {
+            "field": "peer_kind",
+            "types": {
+              "SECURITY_GROUP": "AWS::EC2::SecurityGroup"
+            }
+          },
+          "title": "Peer resource or IPv4 CIDR",
+          "type": "string"
+        },
+        "peer_kind": {
+          "enum": [
+            "SECURITY_GROUP",
+            "CIDR"
+          ],
+          "title": "Peer type",
+          "type": "string"
+        },
+        "protocol": {
+          "default": "tcp",
+          "enum": [
+            "tcp",
+            "udp"
+          ],
+          "title": "Protocol",
+          "type": "string"
+        },
+        "to_port": {
+          "maximum": 65535,
+          "minimum": 1,
+          "title": "To port",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "group_node_id",
+        "from_port",
+        "to_port",
+        "peer_kind",
+        "peer"
+      ],
+      "title": "Egress",
+      "type": "object"
+    },
+    "Empty": {
+      "additionalProperties": false,
+      "properties": {},
+      "title": "Empty",
+      "type": "object"
+    },
+    "Extension": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Data",
+          "type": "object"
+        },
+        "version": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "data"
+      ],
+      "title": "Extension",
+      "type": "object"
+    },
+    "InternetGatewayNetworkConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/Empty"
+        },
+        "resource_type": {
+          "const": "AWS::EC2::InternetGateway",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "InternetGatewayNetworkConfiguration",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "LogConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/LogProperties"
+        },
+        "resource_type": {
+          "const": "AWS::Logs::LogGroup",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "LogConfiguration",
+      "type": "object"
+    },
+    "LogProperties": {
+      "additionalProperties": false,
+      "properties": {
+        "retention_days": {
+          "default": 30,
+          "enum": [
+            1,
+            3,
+            5,
+            7,
+            14,
+            30,
+            60,
+            90,
+            120,
+            150,
+            180,
+            365,
+            400,
+            545,
+            731,
+            1096,
+            1827,
+            2192,
+            2557,
+            2922,
+            3288,
+            3653
+          ],
+          "title": "Retention in days",
+          "type": "integer"
+        }
+      },
+      "title": "LogProperties",
+      "type": "object"
+    },
+    "NatGateway": {
+      "additionalProperties": false,
+      "properties": {
+        "allocation_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_type": "AWS::EC2::EIP",
+          "title": "Dedicated Elastic IP",
+          "type": "string"
+        },
+        "subnet_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_type": "AWS::EC2::Subnet",
+          "title": "Public subnet",
+          "type": "string"
+        }
+      },
+      "required": [
+        "subnet_node_id",
+        "allocation_node_id"
+      ],
+      "title": "NatGateway",
+      "type": "object"
+    },
+    "NatGatewayNetworkConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/NatGateway"
+        },
+        "resource_type": {
+          "const": "AWS::EC2::NatGateway",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "NatGatewayNetworkConfiguration",
+      "type": "object"
+    },
+    "Position": {
+      "additionalProperties": false,
+      "properties": {
+        "pinned": {
+          "default": false,
+          "title": "Pinned",
+          "type": "boolean"
+        },
+        "x": {
+          "maximum": 6000,
+          "minimum": 0,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "maximum": 6000,
+          "minimum": 0,
+          "title": "Y",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "Position",
+      "type": "object"
+    },
+    "Requirements": {
+      "additionalProperties": false,
+      "properties": {
+        "availability": {
+          "anyOf": [
+            {
+              "enum": [
+                "SINGLE_AZ",
+                "MULTI_AZ",
+                "MULTI_REGION"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Availability"
+        },
+        "concurrent_users": {
+          "anyOf": [
+            {
+              "maximum": 10000000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Concurrent Users"
+        },
+        "peak_requests_per_minute": {
+          "anyOf": [
+            {
+              "maximum": 100000000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Peak Requests Per Minute"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z]{2}(?:-[a-z]+)+-\\d$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        },
+        "requests_per_second_per_replica": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "gt": 0,
+              "le": 1000000
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requests Per Second Per Replica"
+        },
+        "secondary_region": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z]{2}(?:-[a-z]+)+-\\d$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondary Region"
+        },
+        "sizing_workload_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sizing Workload Id"
+        },
+        "workload_policies": {
+          "items": {
+            "$ref": "#/$defs/WorkloadPolicy"
+          },
+          "maxItems": 80,
+          "title": "Workload Policies",
+          "type": "array"
+        }
+      },
+      "title": "Requirements",
+      "type": "object"
+    },
+    "Resource": {
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResourceCapabilities"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "catalog_type": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Catalog Type"
+        },
+        "compiler_logical_id": {
+          "pattern": "^Lc[a-f0-9]{40}$",
+          "title": "Compiler Logical Id",
+          "type": "string"
+        },
+        "configuration": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "AWS::EC2::EIP": "#/$defs/EIPNetworkConfiguration",
+                  "AWS::EC2::InternetGateway": "#/$defs/InternetGatewayNetworkConfiguration",
+                  "AWS::EC2::NatGateway": "#/$defs/NatGatewayNetworkConfiguration",
+                  "AWS::EC2::Route": "#/$defs/RouteNetworkConfiguration",
+                  "AWS::EC2::RouteTable": "#/$defs/RouteTableNetworkConfiguration",
+                  "AWS::EC2::SecurityGroup": "#/$defs/SecurityGroupNetworkConfiguration",
+                  "AWS::EC2::SecurityGroupEgress": "#/$defs/SecurityGroupEgressNetworkConfiguration",
+                  "AWS::EC2::SecurityGroupIngress": "#/$defs/SecurityGroupIngressNetworkConfiguration",
+                  "AWS::EC2::Subnet": "#/$defs/SubnetConfiguration",
+                  "AWS::EC2::SubnetRouteTableAssociation": "#/$defs/SubnetRouteTableAssociationNetworkConfiguration",
+                  "AWS::EC2::VPC": "#/$defs/VpcConfiguration",
+                  "AWS::EC2::VPCEndpoint": "#/$defs/VPCEndpointNetworkConfiguration",
+                  "AWS::EC2::VPCGatewayAttachment": "#/$defs/VPCGatewayAttachmentNetworkConfiguration",
+                  "AWS::Logs::LogGroup": "#/$defs/LogConfiguration",
+                  "AWS::S3::Bucket": "#/$defs/BucketConfiguration"
+                },
+                "propertyName": "resource_type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/VpcConfiguration"
+                },
+                {
+                  "$ref": "#/$defs/SubnetConfiguration"
+                },
+                {
+                  "$ref": "#/$defs/BucketConfiguration"
+                },
+                {
+                  "$ref": "#/$defs/LogConfiguration"
+                },
+                {
+                  "$ref": "#/$defs/RouteTableNetworkConfiguration"
+                },
+                {
+                  "$ref": "#/$defs/SubnetRouteTableAssociationNetworkConfiguration"
+                },
+                {
+                  "$ref": "#/$defs/InternetGatewayNetworkConfiguration"
+                },
+                {
+                  "$ref": "#/$defs/VPCGatewayAttachmentNetworkConfiguration"
+                },
+                {
+                  "$ref": "#/$defs/RouteNetworkConfiguration"
+                },
+                {
+                  "$ref": "#/$defs/EIPNetworkConfiguration"
+                },
+                {
+                  "$ref": "#/$defs/NatGatewayNetworkConfiguration"
+                },
+                {
+                  "$ref": "#/$defs/SecurityGroupNetworkConfiguration"
+                },
+                {
+                  "$ref": "#/$defs/SecurityGroupIngressNetworkConfiguration"
+                },
+                {
+                  "$ref": "#/$defs/SecurityGroupEgressNetworkConfiguration"
+                },
+                {
+                  "$ref": "#/$defs/VPCEndpointNetworkConfiguration"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Configuration"
+        },
+        "configuration_schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Configuration Schema Version",
+          "type": "integer"
+        },
+        "description": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Description",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "layer": {
+          "enum": [
+            "EDGE",
+            "APPLICATION",
+            "DATA",
+            "SUPPORT"
+          ],
+          "title": "Layer",
+          "type": "string"
+        },
+        "legacy_service": {
+          "maxLength": 100,
+          "title": "Legacy Service",
+          "type": "string"
+        },
+        "ownership": {
+          "default": "PLANNED",
+          "enum": [
+            "PLANNED",
+            "DISCOVERED_UNMANAGED",
+            "IMPORT_PENDING",
+            "STACK_MANAGED"
+          ],
+          "title": "Ownership",
+          "type": "string"
+        },
+        "ownership_evidence_ref": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ownership Evidence Ref"
+        },
+        "target": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "legacy_service",
+        "layer",
+        "compiler_logical_id"
+      ],
+      "title": "Resource",
+      "type": "object"
+    },
+    "ResourceCapabilities": {
+      "additionalProperties": false,
+      "properties": {
+        "cloudformation_export": {
+          "default": false,
+          "title": "Cloudformation Export",
+          "type": "boolean"
+        },
+        "configuration": {
+          "default": false,
+          "title": "Configuration",
+          "type": "boolean"
+        },
+        "drawable": {
+          "const": true,
+          "default": true,
+          "title": "Drawable",
+          "type": "boolean"
+        },
+        "drift_management": {
+          "const": false,
+          "default": false,
+          "title": "Drift Management",
+          "type": "boolean"
+        },
+        "verified_deployment": {
+          "const": false,
+          "default": false,
+          "title": "Verified Deployment",
+          "type": "boolean"
+        }
+      },
+      "title": "ResourceCapabilities",
+      "type": "object"
+    },
+    "Route": {
+      "additionalProperties": false,
+      "properties": {
+        "destination_cidr": {
+          "default": "0.0.0.0/0",
+          "maxLength": 18,
+          "title": "Destination IPv4 CIDR",
+          "type": "string"
+        },
+        "route_table_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_type": "AWS::EC2::RouteTable",
+          "title": "Route table",
+          "type": "string"
+        },
+        "target_kind": {
+          "enum": [
+            "INTERNET_GATEWAY",
+            "NAT_GATEWAY"
+          ],
+          "title": "Route target",
+          "type": "string"
+        },
+        "target_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_by": {
+            "field": "target_kind",
+            "types": {
+              "INTERNET_GATEWAY": "AWS::EC2::InternetGateway",
+              "NAT_GATEWAY": "AWS::EC2::NatGateway"
+            }
+          },
+          "title": "Target resource",
+          "type": "string"
+        }
+      },
+      "required": [
+        "route_table_node_id",
+        "target_kind",
+        "target_node_id"
+      ],
+      "title": "Route",
+      "type": "object"
+    },
+    "RouteNetworkConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/Route"
+        },
+        "resource_type": {
+          "const": "AWS::EC2::Route",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "RouteNetworkConfiguration",
+      "type": "object"
+    },
+    "RouteTable": {
+      "additionalProperties": false,
+      "properties": {
+        "vpc_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_type": "AWS::EC2::VPC",
+          "title": "VPC",
+          "type": "string"
+        }
+      },
+      "required": [
+        "vpc_node_id"
+      ],
+      "title": "RouteTable",
+      "type": "object"
+    },
+    "RouteTableNetworkConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/RouteTable"
+        },
+        "resource_type": {
+          "const": "AWS::EC2::RouteTable",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "RouteTableNetworkConfiguration",
+      "type": "object"
+    },
+    "Rule": {
+      "additionalProperties": false,
+      "properties": {
+        "from_port": {
+          "maximum": 65535,
+          "minimum": 1,
+          "title": "From port",
+          "type": "integer"
+        },
+        "group_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_type": "AWS::EC2::SecurityGroup",
+          "title": "Security group",
+          "type": "string"
+        },
+        "peer": {
+          "maxLength": 64,
+          "minLength": 1,
+          "reference_by": {
+            "field": "peer_kind",
+            "types": {
+              "SECURITY_GROUP": "AWS::EC2::SecurityGroup"
+            }
+          },
+          "title": "Peer resource or IPv4 CIDR",
+          "type": "string"
+        },
+        "peer_kind": {
+          "enum": [
+            "SECURITY_GROUP",
+            "CIDR"
+          ],
+          "title": "Peer type",
+          "type": "string"
+        },
+        "protocol": {
+          "default": "tcp",
+          "enum": [
+            "tcp",
+            "udp"
+          ],
+          "title": "Protocol",
+          "type": "string"
+        },
+        "to_port": {
+          "maximum": 65535,
+          "minimum": 1,
+          "title": "To port",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "group_node_id",
+        "from_port",
+        "to_port",
+        "peer_kind",
+        "peer"
+      ],
+      "title": "Rule",
+      "type": "object"
+    },
+    "S3Endpoint": {
+      "additionalProperties": false,
+      "properties": {
+        "access": {
+          "default": "READ_ONLY",
+          "description": "Scoped endpoint policy only. Application IAM and bucket policies still determine access; delete is not granted.",
+          "enum": [
+            "READ_ONLY",
+            "READ_WRITE"
+          ],
+          "title": "Endpoint access",
+          "type": "string"
+        },
+        "bucket_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_type": "AWS::S3::Bucket",
+          "title": "Allowed bucket",
+          "type": "string"
+        },
+        "route_table_node_ids": {
+          "items": {
+            "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+            "type": "string"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "reference_type": "AWS::EC2::RouteTable",
+          "title": "Associated route tables",
+          "type": "array"
+        },
+        "vpc_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_type": "AWS::EC2::VPC",
+          "title": "VPC",
+          "type": "string"
+        }
+      },
+      "required": [
+        "vpc_node_id",
+        "route_table_node_ids",
+        "bucket_node_id"
+      ],
+      "title": "S3Endpoint",
+      "type": "object"
+    },
+    "SecurityGroup": {
+      "additionalProperties": false,
+      "properties": {
+        "group_description": {
+          "maxLength": 255,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9 ._:/()#,@\\[\\]+=;&{}!$*\\-]+$",
+          "title": "Group description",
+          "type": "string"
+        },
+        "security_role": {
+          "default": "CUSTOM",
+          "description": "Backend/data inbound rules must reference a same-VPC security group, not a CIDR.",
+          "enum": [
+            "PUBLIC_INGRESS",
+            "FRONTEND",
+            "PRIVATE_BACKEND",
+            "ISOLATED_DATA",
+            "CUSTOM"
+          ],
+          "title": "Security role",
+          "type": "string"
+        },
+        "vpc_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_type": "AWS::EC2::VPC",
+          "title": "VPC",
+          "type": "string"
+        }
+      },
+      "required": [
+        "vpc_node_id",
+        "group_description"
+      ],
+      "title": "SecurityGroup",
+      "type": "object"
+    },
+    "SecurityGroupEgressNetworkConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/Egress"
+        },
+        "resource_type": {
+          "const": "AWS::EC2::SecurityGroupEgress",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "SecurityGroupEgressNetworkConfiguration",
+      "type": "object"
+    },
+    "SecurityGroupIngressNetworkConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/Rule"
+        },
+        "resource_type": {
+          "const": "AWS::EC2::SecurityGroupIngress",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "SecurityGroupIngressNetworkConfiguration",
+      "type": "object"
+    },
+    "SecurityGroupNetworkConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/SecurityGroup"
+        },
+        "resource_type": {
+          "const": "AWS::EC2::SecurityGroup",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "SecurityGroupNetworkConfiguration",
+      "type": "object"
+    },
+    "SourceIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "declared_bindings": {
+          "items": {
+            "$ref": "#/$defs/DeclaredBinding"
+          },
+          "maxItems": 100,
+          "title": "Declared Bindings",
+          "type": "array"
+        },
+        "legacy_commit": {
+          "anyOf": [
+            {
+              "pattern": "^[a-fA-F0-9]{40,64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Legacy Commit"
+        },
+        "repository_refs": {
+          "items": {
+            "$ref": "#/$defs/SourceRef"
+          },
+          "maxItems": 6,
+          "title": "Repository Refs",
+          "type": "array"
+        }
+      },
+      "title": "SourceIdentity",
+      "type": "object"
+    },
+    "SourceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "default": "",
+          "maxLength": 300,
+          "title": "Branch",
+          "type": "string"
+        },
+        "commit": {
+          "anyOf": [
+            {
+              "pattern": "^[a-fA-F0-9]{40,64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Commit"
+        },
+        "repository": {
+          "default": "",
+          "maxLength": 300,
+          "title": "Repository",
+          "type": "string"
+        },
+        "repository_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repository Id"
+        },
+        "root_path": {
+          "default": "/",
+          "maxLength": 1000,
+          "title": "Root Path",
+          "type": "string"
+        }
+      },
+      "title": "SourceRef",
+      "type": "object"
+    },
+    "SubnetConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/SubnetProperties"
+        },
+        "resource_type": {
+          "const": "AWS::EC2::Subnet",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "SubnetConfiguration",
+      "type": "object"
+    },
+    "SubnetProperties": {
+      "additionalProperties": false,
+      "properties": {
+        "availability_zone": {
+          "description": "Choose an AZ available to your AWS account, such as ap-south-1a.",
+          "maxLength": 32,
+          "pattern": "^[a-z]{2}(?:-[a-z]+)+-\\d[a-z]$",
+          "title": "Availability zone",
+          "type": "string"
+        },
+        "cidr": {
+          "maxLength": 18,
+          "minLength": 9,
+          "title": "IPv4 CIDR",
+          "type": "string"
+        },
+        "vpc_node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "reference_type": "AWS::EC2::VPC",
+          "title": "Parent VPC",
+          "type": "string"
+        }
+      },
+      "required": [
+        "vpc_node_id",
+        "cidr",
+        "availability_zone"
+      ],
+      "title": "SubnetProperties",
+      "type": "object"
+    },
+    "SubnetRouteTableAssociationNetworkConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/Association"
+        },
+        "resource_type": {
+          "const": "AWS::EC2::SubnetRouteTableAssociation",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "SubnetRouteTableAssociationNetworkConfiguration",
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "properties": {
+        "account_id": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{12}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Account Id"
+        },
+        "connection_ref": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Connection Ref"
+        },
+        "environment_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Environment Id"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z]{2}(?:-[a-z]+)+-\\d$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        },
+        "scope": {
+          "default": "UNKNOWN",
+          "enum": [
+            "REGIONAL",
+            "GLOBAL",
+            "UNKNOWN"
+          ],
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "title": "Target",
+      "type": "object"
+    },
+    "VPCEndpointNetworkConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/S3Endpoint"
+        },
+        "resource_type": {
+          "const": "AWS::EC2::VPCEndpoint",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "VPCEndpointNetworkConfiguration",
+      "type": "object"
+    },
+    "VPCGatewayAttachmentNetworkConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/Attachment"
+        },
+        "resource_type": {
+          "const": "AWS::EC2::VPCGatewayAttachment",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "VPCGatewayAttachmentNetworkConfiguration",
+      "type": "object"
+    },
+    "ViewState": {
+      "additionalProperties": false,
+      "properties": {
+        "collapsed_resource_ids": {
+          "items": {
+            "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+            "type": "string"
+          },
+          "maxItems": 80,
+          "title": "Collapsed Resource Ids",
+          "type": "array"
+        },
+        "edge_order": {
+          "items": {
+            "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+            "type": "string"
+          },
+          "maxItems": 160,
+          "title": "Edge Order",
+          "type": "array"
+        },
+        "node_order": {
+          "items": {
+            "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+            "type": "string"
+          },
+          "maxItems": 80,
+          "title": "Node Order",
+          "type": "array"
+        },
+        "node_positions": {
+          "maxProperties": 80,
+          "patternProperties": {
+            "^[a-zA-Z0-9_-]{1,64}$": {
+              "$ref": "#/$defs/Position"
+            }
+          },
+          "title": "Node Positions",
+          "type": "object"
+        },
+        "zoom": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "ge": 0.05,
+              "le": 4
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zoom"
+        }
+      },
+      "required": [
+        "node_positions",
+        "node_order",
+        "edge_order"
+      ],
+      "title": "ViewState",
+      "type": "object"
+    },
+    "VpcConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/VpcProperties"
+        },
+        "resource_type": {
+          "const": "AWS::EC2::VPC",
+          "title": "Resource Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "resource_type",
+        "properties"
+      ],
+      "title": "VpcConfiguration",
+      "type": "object"
+    },
+    "VpcProperties": {
+      "additionalProperties": false,
+      "properties": {
+        "cidr": {
+          "description": "Canonical private network, /16 through /28.",
+          "maxLength": 18,
+          "minLength": 9,
+          "title": "IPv4 CIDR",
+          "type": "string"
+        },
+        "dns_hostnames": {
+          "default": true,
+          "title": "DNS hostnames",
+          "type": "boolean"
+        },
+        "dns_support": {
+          "default": true,
+          "title": "DNS resolution",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cidr"
+      ],
+      "title": "VpcProperties",
+      "type": "object"
+    },
+    "Workload": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_refs": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "execution_mode": {
+          "default": "UNKNOWN",
+          "enum": [
+            "BROWSER",
+            "SERVER",
+            "WORKER",
+            "UNKNOWN"
+          ],
+          "title": "Execution Mode",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "UNKNOWN",
+          "enum": [
+            "FRONTEND",
+            "BFF",
+            "API",
+            "WORKER",
+            "JOB",
+            "UNKNOWN"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "resource_ids": {
+          "items": {
+            "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+            "type": "string"
+          },
+          "maxItems": 80,
+          "title": "Resource Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Workload",
+      "type": "object"
+    },
+    "WorkloadPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "alb_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alb Id"
+        },
+        "deployment_strategy": {
+          "enum": [
+            "ROLLING",
+            "BLUE_GREEN"
+          ],
+          "title": "Deployment Strategy",
+          "type": "string"
+        },
+        "health_check_path": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 1,
+              "pattern": "^/[a-zA-Z0-9/_.-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Health Check Path"
+        },
+        "max_tasks": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Max Tasks",
+          "type": "integer"
+        },
+        "metric": {
+          "enum": [
+            "CPU",
+            "MEMORY",
+            "ALB_REQUESTS"
+          ],
+          "title": "Metric",
+          "type": "string"
+        },
+        "min_tasks": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Min Tasks",
+          "type": "integer"
+        },
+        "node_id": {
+          "pattern": "^[a-zA-Z0-9_-]{1,64}$",
+          "title": "Node Id",
+          "type": "string"
+        },
+        "scale_in_cooldown_seconds": {
+          "maximum": 86400,
+          "minimum": 0,
+          "title": "Scale In Cooldown Seconds",
+          "type": "integer"
+        },
+        "scale_out_cooldown_seconds": {
+          "maximum": 86400,
+          "minimum": 0,
+          "title": "Scale Out Cooldown Seconds",
+          "type": "integer"
+        },
+        "target": {
+          "exclusiveMinimum": 0,
+          "maximum": 100000000,
+          "title": "Target",
+          "type": "number"
+        },
+        "target_port": {
+          "anyOf": [
+            {
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Port"
+        }
+      },
+      "required": [
+        "node_id",
+        "min_tasks",
+        "max_tasks",
+        "metric",
+        "target",
+        "scale_out_cooldown_seconds",
+        "scale_in_cooldown_seconds",
+        "deployment_strategy"
+      ],
+      "title": "WorkloadPolicy",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "analysis_metadata": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Analysis Metadata",
+      "type": "object"
+    },
+    "application_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Application Id",
+      "type": "string"
+    },
+    "connections_by_id": {
+      "maxProperties": 1760,
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]{1,64}$": {
+          "$ref": "#/$defs/Connection"
+        }
+      },
+      "title": "Connections By Id",
+      "type": "object"
+    },
+    "design_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Design Id",
+      "type": "string"
+    },
+    "environment_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Environment Id"
+    },
+    "extensions": {
+      "maxProperties": 30,
+      "patternProperties": {
+        "^[a-z][a-z0-9_-]*(?:\\.[a-z][a-z0-9_-]*)+$": {
+          "$ref": "#/$defs/Extension"
+        }
+      },
+      "propertyNames": {
+        "maxLength": 100
+      },
+      "title": "Extensions",
+      "type": "object"
+    },
+    "format": {
+      "const": "launchcomply-design",
+      "default": "launchcomply-design",
+      "title": "Format",
+      "type": "string"
+    },
+    "organization_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Organization Id",
+      "type": "string"
+    },
+    "parent_revision_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent Revision Id"
+    },
+    "requirements": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Requirements"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "resources_by_id": {
+      "maxProperties": 80,
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]{1,64}$": {
+          "$ref": "#/$defs/Resource"
+        }
+      },
+      "title": "Resources By Id",
+      "type": "object"
+    },
+    "revision_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Revision Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 2,
+      "default": 2,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "source_identity": {
+      "$ref": "#/$defs/SourceIdentity"
+    },
+    "source_snapshot_ids": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 100,
+      "title": "Source Snapshot Ids",
+      "type": "array"
+    },
+    "view_state": {
+      "$ref": "#/$defs/ViewState"
+    },
+    "workloads_by_id": {
+      "maxProperties": 80,
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]{1,64}$": {
+          "$ref": "#/$defs/Workload"
+        }
+      },
+      "title": "Workloads By Id",
+      "type": "object"
+    }
+  },
+  "required": [
+    "design_id",
+    "revision_id",
+    "organization_id",
+    "application_id",
+    "resources_by_id",
+    "connections_by_id",
+    "view_state"
+  ],
+  "title": "Design",
+  "type": "object"
+}

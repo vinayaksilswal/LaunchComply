@@ -5,6 +5,10 @@
 
 // Only known service codes receive specific messages; raw server errors stay private.
 const serviceMessages: Record<string, string> = {
+  DESIGN_CHANGED: "The saved design changed. Reload the workspace before inspecting or downloading it.",
+  DESIGN_FORMAT_UNSUPPORTED: "This design needs a compatible reader. Its original saved version is unchanged.",
+  DESIGN_PROJECTION_UNAVAILABLE: "This saved design needs compatibility review. Its original data is unchanged; use version history.",
+  CANONICAL_WRITES_DISABLED: "Native design writes are not enabled. Continue editing in the architecture workspace.",
   RESOURCE_CONFIGURATION_INVALID: "Resource settings failed validation. Check resource references, CIDRs, region and ports. Private backend/data inbound access must use an authorized security-group peer.",
   GITHUB_APP_NOT_CONFIGURED: "GitHub connection needs to be configured by the platform administrator. Contact workspace support to continue.",
   ARCHITECTURE_AI_NOT_CONFIGURED: "The architecture assistant is not enabled. Ask your platform administrator to configure it.",

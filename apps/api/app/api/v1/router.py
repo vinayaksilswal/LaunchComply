@@ -4,6 +4,7 @@ from app.api.v1.applications import router as apps_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.architecture import router as architecture_router
 from app.api.v1.architecture_workspace import router as architecture_workspace_router
+from app.api.v1.designs import router as designs_router
 from app.api.v1.workspace_records import router as workspace_records_router
 from app.api.v1.business_requests import router as business_requests_router
 from app.api.v1.service_payments import router as service_payments_router
@@ -37,6 +38,7 @@ api_v1_router.include_router(apps_router)
 api_v1_router.include_router(dashboard_router)
 api_v1_router.include_router(architecture_router)
 api_v1_router.include_router(architecture_workspace_router)
+api_v1_router.include_router(designs_router)
 api_v1_router.include_router(workspace_records_router)
 api_v1_router.include_router(business_requests_router)
 api_v1_router.include_router(service_payments_router)

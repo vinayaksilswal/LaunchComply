@@ -1,6 +1,54 @@
 import { test, expect } from "@playwright/test";
 import { newBusiness } from "../workspace-fixture";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+
+test("saved design data exports canonical JSON and separates layout from infrastructure identity", async ({ page, request }) => {
+  const { headers } = await newBusiness(page, request);
+  const asset = await (await request.post("/api/backend/applications/", { headers, data: { name: "Canonical design workflow" } })).json();
+  const workspace = `/api/backend/architecture/workspace/${asset.id}`;
+  const initialized = await (await request.post(`${workspace}/initialize`, { headers })).json();
+  const graph = { nodes: [{ id: "vpc", label: "Business network", service: "AWS::EC2::VPC", zone: "DATA", description: "Saved intent", x: 100, y: 100 }], edges: [] };
+  const saved = await request.post(`${workspace}/save`, { headers, data: { expected_id: initialized.id, graph } });
+  expect(saved.ok()).toBeTruthy();
+  const configured = await request.post(`${workspace}/resource-configuration`, { headers, data: { expected_id: (await saved.json()).id,
+    node_id: "vpc", configuration: { resource_type: "AWS::EC2::VPC", properties: { cidr: "10.10.0.0/16" } } } });
+  expect(configured.ok()).toBeTruthy();
+  const original = await configured.json();
+  const canonical = await (await request.get(`/api/backend/architecture/designs/${asset.id}`, { headers })).json();
+  await page.goto(`/dashboard/architecture?application=${asset.id}`);
+  await page.mouse.move((page.viewportSize()?.width || 1280) - 24, 200);
+  await page.getByRole("button", { name: "Services & sizing", exact: true }).click();
+  await page.getByRole("button", { name: "Inspect saved design data", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Saved design data", exact: true });
+  await expect(dialog.getByLabel("Infrastructure intent fingerprint")).toHaveText(canonical.fingerprints.semantic_hash);
+  const downloading = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "Download design JSON", exact: true }).click();
+  const downloaded = await downloading;
+  const file = await downloaded.path();
+  expect(file).toBeTruthy();
+  const exported = JSON.parse(await readFile(file!, "utf8"));
+  expect(exported.format).toBe("launchcomply-design");
+  expect(exported.schema_version).toBe(2);
+  expect(exported.revision_id).toBe(original.id);
+  expect(exported.resources_by_id.vpc.configuration.properties.cidr).toBe("10.10.0.0/16");
+  await dialog.getByRole("button", { name: "Close saved design data" }).click();
+  const moved = { ...graph, nodes: [{ ...graph.nodes[0], x: 700, y: 500, label: "Renamed network" }] };
+  const updated = await request.post(`${workspace}/save`, { headers, data: { expected_id: original.id, graph: moved } });
+  expect(updated.ok()).toBeTruthy();
+  await page.reload();
+  await page.getByRole("button", { name: "Services & sizing", exact: true }).click();
+  await page.getByRole("button", { name: "Inspect saved design data", exact: true }).click();
+  await expect(dialog.getByLabel("Infrastructure intent fingerprint")).toHaveText(canonical.fingerprints.semantic_hash);
+  await expect(dialog.getByLabel("Diagram layout fingerprint")).not.toHaveText(canonical.fingerprints.layout_hash);
+  await dialog.getByRole("button", { name: "Close saved design data" }).click();
+  await page.getByRole("button", { name: "History", exact: true }).click();
+  const history = page.getByRole("dialog", { name: "Saved architecture history" });
+  await history.getByRole("button").filter({ has: page.locator("strong", { hasText: new RegExp(`^${original.version}$`) }) }).click();
+  await history.getByRole("button", { name: "Inspect saved design data", exact: true }).click();
+  await expect(dialog.getByText(/Historical version/)).toBeVisible();
+  await expect(dialog.getByLabel("Diagram layout fingerprint")).toHaveText(canonical.fingerprints.layout_hash);
+});
 
 test("source refresh can be reviewed, discarded and applied without losing manual settings", async ({ page, request }) => {
   const { headers } = await newBusiness(page, request);

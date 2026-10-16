@@ -55,6 +55,7 @@ import { ResourceChangeReview } from "./ResourceChangeReview";
 import { newComponentPosition } from "./manualPlacement";
 import { ArchitectQuestions, type ArchitectQuestion } from "./ArchitectQuestions";
 import { ArchitectureHistory } from "./ArchitectureHistory";
+import { CanonicalDesignPanel } from "./CanonicalDesignPanel";
 import { RequestFlows } from "./RequestFlows";
 import { arrangeResourceTopology, resourceBoundaries, visibleTopology, routingLabels, type ResourceTopology } from "./resourceTopology";
 import { ResourceTopologyMap } from "./ResourceTopologyMap";
@@ -787,6 +788,7 @@ export function ArchitectureCanvas() {
                   dependency alone cannot establish production capacity.
                 </p>
                 <ScalingSummary graph={shown} requirements={draft.requirements} />
+                <div className="my-4"><CanonicalDesignPanel applicationId={appId} savedId={draft.id} disabled={!!busy} unsaved={dirty} /></div>
                 <DesignReview review={draft.design_review} version={draft.version} saved={!dirty && !preview && !draft.proposal} assetId={appId} />
                 <div className="mt-5 overflow-x-auto">
                   <table className="w-full text-left text-xs">
