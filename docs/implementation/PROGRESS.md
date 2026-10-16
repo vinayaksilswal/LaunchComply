@@ -6,9 +6,9 @@ Updated: **16 October 2026**. This is the visible checklist for our ongoing work
 **[x] ~~Done~~** and retain its evidence. Never delete it to make the backlog shorter.
 An existing screen or a successful build alone does not make a whole request done.
 
-**Current work:** A01 is complete. A02 is in progress: preserve saved architecture,
-manual changes and history during source refreshes. Production readiness is still
-open; no release gate has been accepted yet.
+**Current work:** A01 and A02 are complete. Next is A03: the unified design format
+and compatibility boundary. Production readiness is still open; no release gate
+has been accepted yet.
 
 ## Completed and verified
 
@@ -33,9 +33,9 @@ open; no release gate has been accepted yet.
 ## Current system review
 
 [Code-path review, remaining gaps and exact next steps](2026-10-14-system-review.md).
-Workspace state now protects history during repository-link changes. Source
-refresh review remains unfinished. A02 stays open until every writer and review
-flow is migrated.
+Workspace state protects history during repository-link changes. Conversations,
+proposals, references and approvals are separate from saved diagram JSON. Source
+refresh is reviewed before Apply, preserving customer configuration and layout.
 
 - [x] ~~Add and verify the separate workspace-state database foundation.~~
   Migration preserves stored JSON/IDs/timestamps; tenant and environment references,
@@ -49,9 +49,9 @@ flow is migrated.
   Legacy metadata remains readable; new snapshots keep activity in separate
   version records. API, PostgreSQL and browser CI passed at `1085c2b`.
   [Activity evidence](2026-10-16-version-activity.md).
-- [ ] Review, apply or discard source refreshes without losing manual changes.
-  Implemented and verified in focused API and real browser checks. Final broad
-  checks pending. [Refresh evidence](2026-10-16-reviewed-refresh.md).
+- [x] ~~Review, apply or discard source refreshes without losing manual changes.~~
+  Final API, PostgreSQL concurrency and browser CI passed at `66451d8`.
+  [Refresh evidence](2026-10-16-reviewed-refresh.md).
 
 ## Your requested product direction
 
@@ -105,7 +105,9 @@ workflow is verified; this list does not mean every item must be rebuilt.
   positions and configuration through save/reload.
 - [ ] Undo/redo, Ctrl+Z and reliable recovery of accidental edits.
 - [ ] Saved architecture history, preview and restore as a new version.
-- [ ] Refresh source findings without replacing manual work or rewriting history.
+- [x] ~~Refresh source findings without replacing manual work or rewriting history.~~
+  A02 verified with manual VPC/storage configuration, connections, bindings and
+  positions; API, PostgreSQL and browser [evidence](2026-10-16-reviewed-refresh.md).
 - [ ] Broad searchable AWS service catalog, properties, implementation guidance
   and guided additions; clearly distinguish drawable from deployable services.
 - [ ] Readable large diagrams, compact toolbars, usable zoom/focus and exports.
@@ -162,7 +164,7 @@ one package does not automatically complete every customer request it supports.
 
 <!-- work-packages:start -->
 - [x] ~~A01 — Reproducible baseline and regression fixtures~~ — Done; verified in CI.
-- [ ] **A02 — Preserve saved work and immutable history** — In progress. Additive state and migration tests implemented; writer cutover and reviewed source refresh remain.
+- [x] ~~A02 — Preserve saved work and immutable history~~ — Done; migration, activity separation, reviewed refresh and concurrency/browser checks passed.
 - [ ] **A03 — Canonical design v2 and compatibility**
 - [ ] **A04 — Effective GitHub refs, roots and snapshots**
 - [ ] **A05 — Evidence-backed workloads and connections**

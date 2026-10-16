@@ -69,8 +69,8 @@
         "A01"
       ],
       "release": "R1",
-      "status": "IN_PROGRESS",
-      "checkpoint": "Activity cutover verified in API/PostgreSQL/browser CI at 1085c2b. Reviewed source refresh implemented with additive preservation, captured head/epoch/generation, unlocked external I/O, review/apply/discard and ZIP boundary. Full local API 367 passed/4 skips; final focused refresh 16 passed; browser review/discard/apply passed. Final frontend build and browser workflow passed; PostgreSQL concurrency CI pending. Mark DONE only after final CI acceptance.",
+      "status": "DONE",
+      "checkpoint": "Completed at 66451d8: all API, PostgreSQL and browser CI jobs passed (run 38859369112). Immutable snapshot boundary covers editor, upload and activity writers; reviewed source refresh preserves IDs, manual graph/configuration/bindings/layout and unknown extensions, with head/epoch/generation conflicts, cancellation/retry and server Apply validation. R0-R4 remain unaccepted.",
       "evidence": [
         {
           "kind": "test",
@@ -103,9 +103,16 @@
         {
           "kind": "test",
           "path_or_url": "2026-10-16-reviewed-refresh.md",
-          "commit": "working-tree",
+          "commit": "66451d88f59ae9dbfcf717e03de8d0f45ac8d893",
           "observed_at": "2026-10-16",
-          "summary": "Reviewed source refresh; full local API 367 passed/4 opt-in skips; final focused 16 passed; real ZIP browser workflow passed. Final CI pending."
+          "summary": "Reviewed source refresh: final focused 16 passed, local broad 367 passed/4 live skips, final frontend build and real browser passed; final API/PostgreSQL/browser CI all passed: https://github.com/vinayaksilswal/LaunchComply/actions/runs/38859369112"
+        },
+        {
+          "kind": "test",
+          "path_or_url": "https://github.com/vinayaksilswal/LaunchComply/actions/runs/38859369112",
+          "commit": "66451d88f59ae9dbfcf717e03de8d0f45ac8d893",
+          "observed_at": "2026-10-16",
+          "summary": "All three CI jobs succeeded, including real PostgreSQL concurrent refresh/apply, migration preservation and browser source review/discard/apply and approval/history workflows."
         }
       ]
     },
@@ -592,16 +599,16 @@
     }
   ],
   "handoff": {
-    "current_task": "A02",
-    "next_task": "A02",
-    "next_action": "Finish validation of reviewed source refresh, including final focused tests, full API and PostgreSQL concurrent refresh/apply CI. If all A02 acceptance passes, mark A02 DONE and proceed to A03 canonical design v2 compatibility. Preserve all legacy versions and activity.",
+    "current_task": null,
+    "next_task": "A03",
+    "next_action": "Start A03 from WORK_PACKAGES.md and CONTRACTS.md: strict canonical design v2 models and pure legacy reader; preserve resource/compiler IDs and deterministic duplicate legacy connection identities. Add golden fixtures and semantic hashes excluding layout/timestamps. Deploy compatible readers before gating v2 writes; retain existing API/history/export behavior. A02 CI is green; do not reimplement it.",
     "notes": [
       "A01 complete: all three Linux CI jobs passed at 97918cc.",
       "35-package programme and all release gates are not complete.",
       "Preserve unrelated .artifacts/.",
       "Customer brings existing software; agency custom-development journey is superseded."
     ],
-    "uncommitted_scope": "Reviewed source refresh, upload snapshot boundary, tests and evidence; preserve .artifacts/."
+    "uncommitted_scope": "Implementation and final evidence committed; preserve unrelated .artifacts/."
   },
   "additional_requests": [
     {
