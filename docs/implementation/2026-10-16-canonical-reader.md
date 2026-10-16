@@ -65,7 +65,9 @@ new format is not yet a customer import/provisioning interface.
   download/read actual JSON, move/rename, compare identities and inspect History.
   No intercepted API/provider responses in that workflow.
 - PostgreSQL extends the real concurrent-approval test with a canonical read and
-  raw original snapshot preservation. Final CI pending at this checkpoint.
+  raw original snapshot preservation. Final CI passed for commit `b53fe2a`: all
+  API, PostgreSQL and browser jobs succeeded.
+  [CI run 38867708400](https://github.com/vinayaksilswal/LaunchComply/actions/runs/38867708400).
 
 Shared artifacts: fixtures/architecture/design-v2.schema.json,
 fixtures/architecture/canonical-v2-golden.json and generated canonical-types.ts.
@@ -88,3 +90,11 @@ and compiler/policy identity decision.
 A03 stays IN_PROGRESS. No database migration, AWS action or paid model call was
 performed. Hosted frontend/backend delivery and release gates remain unaccepted
 by these local/CI implementation checks.
+
+Continuation seams: `architecture_workspace.latest`, `versions`,
+`historical_version`, `output` and `restore_version`;
+`workspace_state.ensure_state` and `version_spec`. They still consume v1 intent.
+Migrate readers before the native writer switch, and exercise an older v1 /
+newer v2 / unsupported-future populated history so no path silently selects an
+older compatible head. Do not treat the canonical-only GET endpoint as that
+cutover. Keep current version-specific approvals non-reusable on restore.

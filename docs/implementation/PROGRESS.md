@@ -54,9 +54,9 @@ refresh is reviewed before Apply, preserving customer configuration and layout.
   Final API, PostgreSQL concurrency and browser CI passed at `66451d8`.
   [Refresh evidence](2026-10-16-reviewed-refresh.md).
 
-- [ ] Canonical design reader, stable identities and saved-design inspector/export.
-  Local API, contract, frontend build and real browser checks passed; final CI
-  pending. [Reader evidence](2026-10-16-canonical-reader.md).
+- [x] ~~Canonical design reader, stable identities and saved-design inspector/export.~~
+  Commit `b53fe2a`; local checks and final API, PostgreSQL and browser CI passed.
+  Native saves and the full editor cutover remain part of A03. [Reader evidence](2026-10-16-canonical-reader.md).
 
 ## Your requested product direction
 
