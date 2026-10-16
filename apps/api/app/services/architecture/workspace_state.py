@@ -22,16 +22,23 @@ def source_stale(state):
     return state is not None and state.analyzed_source_epoch != state.source_epoch
 
 
-def effective_spec(architecture):
-    """Apply current eligibility without assigning to the ORM's stored JSON."""
+def version_spec(architecture):
+    """Saved intent and version activity, without current eligibility overlays."""
     spec = architecture.spec_json or {}
     activity = getattr(architecture, "_version_activity", None)
     if activity is not None:
         spec = {**snapshot_spec(spec), **activity}
-    spec = {"messages": [], "proposal": None, **spec}
+    return {"messages": [], "proposal": None, **spec}
+
+
+def effective_spec(architecture):
+    """Apply current eligibility without assigning to the ORM's stored JSON."""
+    spec = version_spec(architecture)
     if not getattr(architecture, "_workspace_source_changed", False):
         return spec
-    result = {**spec, "source_changed": True, "proposal": None}
+    proposal = spec.get("proposal") or {}
+    current_refresh = proposal.get("kind") == "SOURCE_REFRESH" and proposal.get("base_source_epoch") == getattr(architecture, "_workspace_source_epoch", None)
+    result = {**spec, "source_changed": True, "proposal": proposal if current_refresh else None}
     if result.get("design_approval"):
         result["superseded_design_approval"] = {**result["design_approval"], "invalidated_reason": "SOURCE_LINKS_CHANGED"}
     result.pop("design_approval", None)

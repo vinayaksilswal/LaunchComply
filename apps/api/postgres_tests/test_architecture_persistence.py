@@ -181,3 +181,41 @@ async def test_concurrent_design_approvals_share_activity_without_mutating_snaps
                 assert activity["design_approval"] == approvals[0].json()["design_approval"]
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_source_refresh_and_apply_have_one_winner():
+    import io
+    import zipfile
+    from sqlalchemy import select, cast, String
+    from app.models import Architecture
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as package:
+        package.writestr("package.json", '{"dependencies":{"react":"19"}}')
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            account = (await client.post("/api/v1/auth/register", json={
+                "email": f"refresh-race-{uuid.uuid4().hex}@example.com", "password": "TestOnlyPassword123!",
+                "full_name": "Refresh race", "organization_name": f"Refresh race {uuid.uuid4().hex}"})).json()
+            headers = {"Authorization": f"Bearer {account['access_token']}", "X-Organization-ID": account["organization_id"]}
+            uploaded = await client.post("/api/v1/onboarding/upload", headers=headers,
+                data={"name": "Refresh race", "request_id": str(uuid.uuid4())},
+                files={"file": ("fixture.zip", archive.getvalue(), "application/zip")})
+            assert uploaded.status_code == 200, uploaded.text
+            asset = uploaded.json()["id"]
+            path = f"/api/v1/architecture/workspace/{asset}"
+            original = (await client.get(path, headers=headers)).json()["architecture"]
+            query = select(cast(Architecture.spec_json, String), Architecture.updated_at).where(Architecture.id == original["id"])
+            async with engine.connect() as db:
+                before = (await db.execute(query)).one()
+            responses = await asyncio.gather(*[client.post(path + "/analyze", headers=headers) for _ in range(2)])
+            assert sorted(r.status_code for r in responses) == [200, 409], [r.text for r in responses]
+            proposal = next(r.json()["proposal"] for r in responses if r.status_code == 200)
+            applies = await asyncio.gather(*[client.post(path + "/apply", headers=headers,
+                json={"expected_id": original["id"], "proposal_id": proposal["id"]}) for _ in range(2)])
+            assert sorted(r.status_code for r in applies) == [200, 409], [r.text for r in applies]
+            async with engine.connect() as db:
+                assert (await db.execute(query)).one() == before
+                assert len((await db.execute(select(Architecture.id).where(Architecture.application_id == asset))).all()) == 2
+    finally:
+        await engine.dispose()

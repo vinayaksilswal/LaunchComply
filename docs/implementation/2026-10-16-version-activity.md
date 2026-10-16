@@ -32,15 +32,19 @@ over a newer head or publish after access revocation.
   approve, reload, edit, open History and restore; historical approval retained,
   new current version requires approval. No intercepted API responses in this test.
 - Full local API collection: **354 passed, 4 opt-in live checks skipped**
-  (242.24 seconds). PostgreSQL CI pending at this checkpoint.
+  (242.24 seconds). API, PostgreSQL and browser CI all passed at `1085c2b`:
+  https://github.com/vinayaksilswal/LaunchComply/actions/runs/38857710715.
+- Final focused tenant/role check: 1 passed (35.25 seconds); final populated
+  migration/constraint collection: 3 passed (123.63 seconds).
 - Disposable migration rehearsal includes legacy conversations/proposals and
   raw JSON/timestamps. PostgreSQL adds simultaneous idempotent approvals; both
   requests must see one identical activity decision and an unchanged snapshot.
 
 ## Remaining and rollout
 
-A02 remains in progress. Source analysis still creates a replacement version
-without a review step and can discard manual resource configurations. Next:
+At this activity checkpoint A02 remained in progress. The subsequent
+[reviewed refresh slice](2026-10-16-reviewed-refresh.md) replaces that behavior.
+The remaining work at this checkpoint was to:
 capture base head/source epoch before analysis, release locks for provider I/O,
 produce a proposal that preserves manual intent/layout/configurations, then add
 review/apply/discard with stale conflicts and browser coverage. Do not mark A02

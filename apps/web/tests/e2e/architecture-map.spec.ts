@@ -2,6 +2,43 @@ import { test, expect } from "@playwright/test";
 import { newBusiness } from "../workspace-fixture";
 import { randomUUID } from "node:crypto";
 
+test("source refresh can be reviewed, discarded and applied without losing manual settings", async ({ page, request }) => {
+  const { headers } = await newBusiness(page, request);
+  // Minimal ZIP containing only package.json with a React dependency. No source/network mock.
+  const buffer = Buffer.from("UEsDBBQAAAAAACtbUF2q/LNKHwAAAB8AAAAMAAAAcGFja2FnZS5qc29ueyJkZXBlbmRlbmNpZXMiOnsicmVhY3QiOiIxOSJ9fVBLAQIUABQAAAAAACtbUF2q/LNKHwAAAB8AAAAMAAAAAAAAAAAAAACAAQAAAABwYWNrYWdlLmpzb25QSwUGAAAAAAEAAQA6AAAASQAAAAAA", "base64");
+  const uploaded = await request.post("/api/backend/onboarding/upload", { headers, multipart: {
+    name: "Reviewed source workflow", request_id: randomUUID(), file: { name: "source.zip", mimeType: "application/zip", buffer },
+  } });
+  expect(uploaded.ok()).toBeTruthy();
+  const asset = await uploaded.json();
+  const path = `/api/backend/architecture/workspace/${asset.id}`;
+  const initial = (await (await request.get(path, { headers })).json()).architecture;
+  const graph = { ...initial.graph, nodes: [...initial.graph.nodes, { id: "manual_bucket", label: "Keep private storage", service: "AWS::S3::Bucket", zone: "DATA", description: "Manual choice", x: 1234, y: 678 }] };
+  const saved = await request.post(`${path}/save`, { headers, data: { expected_id: initial.id, graph } });
+  expect(saved.ok()).toBeTruthy();
+  const configured = await request.post(`${path}/resource-configuration`, { headers, data: { expected_id: (await saved.json()).id,
+    node_id: "manual_bucket", configuration: { resource_type: "AWS::S3::Bucket", properties: { versioning: true } } } });
+  expect(configured.ok()).toBeTruthy();
+  const original = await configured.json();
+  await page.goto(`/dashboard/architecture?application=${asset.id}`);
+  await page.mouse.move((page.viewportSize()?.width || 1280) - 24, 200);
+  await page.getByRole("button", { name: "Refresh code findings", exact: true }).click();
+  await expect(page.getByText("Review source update", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Discard proposal · keep saved design", exact: true }).click();
+  await expect(page.getByText("Review source update", { exact: true })).not.toBeVisible();
+  expect((await (await request.get(path, { headers })).json()).architecture.id).toBe(original.id);
+  await page.getByRole("button", { name: "Refresh code findings", exact: true }).click();
+  await expect(page.getByText("Review source update", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Apply to draft", exact: true }).click();
+  await expect(page.getByText("Review source update", { exact: true })).not.toBeVisible();
+  const current = (await (await request.get(path, { headers })).json()).architecture;
+  expect(current.id).not.toBe(original.id);
+  expect(current.graph).toEqual(original.graph);
+  expect(current.resource_configurations).toEqual(original.resource_configurations);
+  const historical = await (await request.get(`${path}/versions/${original.id}`, { headers })).json();
+  expect(historical.graph).toEqual(original.graph);
+});
+
 test("design approval survives reload and restoring history requires a new approval", async ({ page, request }) => {
   const { headers } = await newBusiness(page, request);
   const created = await request.post("/api/backend/applications/", { headers, data: { name: "Version activity workflow" } });

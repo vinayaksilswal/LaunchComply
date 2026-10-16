@@ -18,6 +18,7 @@ from app.models.source_archive import ApplicationSourceArchive
 from app.services.architecture import workspace as architecture_service
 from app.services.architecture.source_archive import inspect_archive, MAX_UPLOAD_BYTES
 from app.services.architecture.repository_links import accessible_repositories
+from app.services.architecture.workspace_state import record_head
 
 router = APIRouter(prefix="/onboarding", tags=["Onboarding"])
 upload_slots = asyncio.Semaphore(2)
@@ -83,10 +84,12 @@ async def upload_workspace(name: str = Form(min_length=1, max_length=255), reque
     db.add(ApplicationSourceArchive(organization_id=membership.organization_id, application_id=app.id,
         uploaded_by=membership.user_id, filename=filename, size_bytes=len(raw), sha256=inspected["sha256"],
         file_count=inspected["file_count"], encrypted_archive=inspected["encrypted_archive"], evidence_json=inspected["evidence"]))
-    db.add(Architecture(application_id=app.id, organization_id=membership.organization_id, name=app.name, version="v1",
+    arch = Architecture(application_id=app.id, organization_id=membership.organization_id, name=app.name, version="v1",
         status="DRAFT", spec_json={"format": "repository-draft-v1", "revision": 1,
             "graph": architecture_service.draft_graph(inspected["evidence"]), "evidence": inspected["evidence"],
-            "messages": [], "proposal": None, "deployment_status": "NOT_DEPLOYED"}))
+            "messages": [], "proposal": None, "deployment_status": "NOT_DEPLOYED"})
+    db.add(arch)
+    await record_head(db, app, arch, source_refreshed=True)
     user = await db.get(User, membership.user_id)
     db.add(AuditEvent(organization_id=membership.organization_id, actor_id=membership.user_id, actor_email=user.email,
         action="APPLICATION_CODE_UPLOADED", entity_type="application", entity_id=app.id,

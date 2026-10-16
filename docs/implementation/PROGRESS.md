@@ -45,13 +45,13 @@ flow is migrated.
   Current eligibility uses source epochs; historical JSON and timestamps remain
   unchanged. API, PostgreSQL concurrency and browser CI passed at `8cdf0f3`.
   [Evidence](2026-10-15-source-history.md).
-- [ ] Move all current writers/readers to this state, preserving historical snapshots.
-  Repository-link invalidation now uses source epochs and preserves old JSON;
-  API, PostgreSQL and browser CI passed for source invalidation. Activity writers
-  now use separate version records; focused API/migration and real browser checks
-  passed, broader checks pending. [Activity evidence](2026-10-16-version-activity.md).
-  Reviewed source refresh remains open.
+- [x] ~~Separate conversations, proposals, references and approvals from saved design JSON.~~
+  Legacy metadata remains readable; new snapshots keep activity in separate
+  version records. API, PostgreSQL and browser CI passed at `1085c2b`.
+  [Activity evidence](2026-10-16-version-activity.md).
 - [ ] Review, apply or discard source refreshes without losing manual changes.
+  Implemented and verified in focused API and real browser checks. Final broad
+  checks pending. [Refresh evidence](2026-10-16-reviewed-refresh.md).
 
 ## Your requested product direction
 

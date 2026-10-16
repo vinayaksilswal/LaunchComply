@@ -114,7 +114,7 @@ interface Draft {
   messages: { role: string; content: string; version?: string; scope?: ArchitectScope; proposal_status?: string }[];
   ai_request?: { id: string };
   last_ai_scope?: ArchitectScope;
-  proposal: { id: string; graph: Graph; resource_configurations?: Record<string, ResourceConfiguration>; resource_topology?: ResourceTopology } | null;
+  proposal: { id: string; kind?: "SOURCE_REFRESH"; notice?: string; retained_node_ids?: string[]; evidence?: Evidence; graph: Graph; resource_configurations?: Record<string, ResourceConfiguration>; resource_topology?: ResourceTopology } | null;
   created_at: string;
   aws_references?: AwsReferenceReview;
   design_approval?: { approved_at: string; version: string; scope: string; graph_fingerprint: string };
@@ -246,6 +246,7 @@ export function ArchitectureCanvas() {
       autoFit.current = true;
     }
 
+    if (result.proposal) { setChatVisible(true); setAssistantMinimized(false); }
     setPreview(false);
     setReviewApproval(false);
   };
@@ -487,7 +488,7 @@ export function ArchitectureCanvas() {
   };
   return (
     <div className="bg-white h-full min-h-0 overflow-hidden flex flex-col text-slate-900">
-      {draft?.source_changed && <div role="alert" className="shrink-0 px-5 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-900">Repository links changed. This diagram shows previous sources. <button disabled={!!busy || !canRefresh} onClick={() => operation("analyze", "analyze")} className="font-semibold underline">Refresh code findings</button> before making or approving changes.</div>}
+      {draft?.source_changed && <div role="alert" className="shrink-0 px-5 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-900">{draft.proposal?.kind === "SOURCE_REFRESH" ? "Source update ready for review. Preview and apply or discard it in the assistant." : <>Repository links changed. This diagram shows previous sources. <button disabled={!!busy || dirty || !canRefresh} onClick={() => operation("analyze", "analyze")} className="font-semibold underline">Refresh code findings</button> before making or approving changes.</>}</div>}
       <header className="px-3 py-1.5 shrink-0 border-b border-slate-200 flex flex-wrap gap-2 items-center justify-between">
         <div className="flex gap-3 items-center">
           <span className="p-1.5 rounded-lg bg-cyan-50 text-cyan-700">
@@ -588,7 +589,7 @@ export function ArchitectureCanvas() {
           {draft && workspace?.capabilities.resource_configuration && <ResourceConfigurationPanel key={appId} appId={appId} draftId={draft.id} graph={draft.graph} configurations={draft.resource_configurations} review={draft.resource_review} region={draft.requirements?.region} selectedId={selected} errorMessage={error} disabled={dirty || preview || !!busy || !!draft.proposal || !!draft.source_changed} canEdit={canEdit} onSave={(nodeId, configuration) => operation("configure-resource", "resource-configuration", { expected_id: draft.id, node_id: nodeId, configuration })} />}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs">
-          {draft && <button disabled={!!busy || dirty || !canRefresh} onClick={() => operation("analyze", "analyze")} className="font-semibold text-cyan-700 disabled:opacity-40">{busy === "analyze" ? "Inspecting source…" : "Refresh code findings"}</button>}
+          {draft && <button disabled={!!busy || dirty || !!draft.proposal || !canRefresh} onClick={() => operation("analyze", "analyze")} className="font-semibold text-cyan-700 disabled:opacity-40">{busy === "analyze" ? "Inspecting source…" : "Refresh code findings"}</button>}
           <span className="text-amber-700 bg-amber-50 rounded-full px-2 py-1 border border-amber-100">
             {dirty
               ? "Unsaved changes"
@@ -1007,8 +1008,13 @@ export function ArchitectureCanvas() {
               {draft?.proposal && (
                 <div className="p-4 rounded-xl border border-cyan-200 bg-cyan-50 space-y-3">
                   <p className="text-sm font-semibold text-cyan-900">
-                    Proposed architecture changes
+                    {draft.proposal.kind === "SOURCE_REFRESH" ? "Review source update" : "Proposed architecture changes"}
                   </p>
+                  {draft.proposal.kind === "SOURCE_REFRESH" && <div className="space-y-2 text-xs text-cyan-900">
+                    <p>{draft.proposal.notice}</p>
+                    <p>Source snapshot: {draft.evidence.commit.slice(0, 12)} → {draft.proposal.evidence?.commit.slice(0, 12)}. Your saved version changes only after Apply.</p>
+                    {!!draft.proposal.retained_node_ids?.length && <details><summary className="cursor-pointer font-semibold">Retained components to review ({draft.proposal.retained_node_ids.length})</summary><ul className="mt-2 list-disc pl-4">{draft.proposal.retained_node_ids.map(id => <li key={id}>{graph.nodes.find(node => node.id === id)?.label || id} · absent from the new source sample</li>)}</ul></details>}
+                  </div>}
                   <GraphChangeReview before={graph} after={draft.proposal.graph} />
                   <ResourceChangeReview graph={draft.proposal.graph} before={draft.resource_configurations || {}} after={draft.proposal.resource_configurations || draft.resource_configurations || {}} />
                   <button
@@ -1023,7 +1029,7 @@ export function ArchitectureCanvas() {
                     {preview ? "Return to saved draft" : "Preview proposal"}
                   </button>
                   <button
-                    disabled={dirty || !!busy || !canEdit}
+                    disabled={dirty || !!busy || !(draft.proposal.kind === "SOURCE_REFRESH" ? canRefresh : canEdit)}
                     onClick={() =>
                       operation("apply", "apply", {
                         expected_id: draft.id,
@@ -1035,7 +1041,7 @@ export function ArchitectureCanvas() {
                     <Check className="w-3.5 h-3.5" />
                     Apply to draft
                   </button>
-                  <button disabled={dirty || !!busy || !canEdit} onClick={() => { setPreview(false); void operation("discard", "discard-proposal", { expected_id: draft.id, proposal_id: draft.proposal!.id }); }} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-40">Discard proposal · keep saved design</button>
+                  <button disabled={dirty || !!busy || !(draft.proposal.kind === "SOURCE_REFRESH" ? canRefresh : canEdit)} onClick={() => { setPreview(false); void operation("discard", "discard-proposal", { expected_id: draft.id, proposal_id: draft.proposal!.id }); }} className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold disabled:opacity-40">Discard proposal · keep saved design</button>
                 </div>
               )}
               {draft && requirementsVisible && <div ref={requirementsPanel}><RequirementsForm key={appId} value={draft.requirements} disabled={!!busy || !canEdit} saveBlockedReason={dirty ? "Save your diagram changes before saving targets." : draft.proposal ? "Apply the pending AI proposal before saving targets." : undefined} saving={busy === "requirements"} onSave={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} /></div>}

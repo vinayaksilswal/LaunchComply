@@ -25,8 +25,9 @@ from app.services.architecture.resource_configuration import ResourceConfigurati
 from app.services.architecture.resource_edits import apply_resource_updates, fingerprint as resource_fingerprint
 from app.services.architecture.resource_topology import build_topology
 from typing import Annotated, Literal
-from app.services.architecture.repository_links import linked_repositories
-from app.services.architecture.workspace_state import read_state, source_stale, effective_spec, record_head
+from app.services.architecture.repository_links import linked_repositories, accessible_repositories
+from app.services.architecture.workspace_state import read_state, source_stale, effective_spec, record_head, ensure_state, version_spec
+from app.services.architecture.source_refresh import merge_findings, validate_preservation
 
 from app.services.architecture.version_activity import load_activity, write_activity, snapshot_spec
 
@@ -62,12 +63,20 @@ async def latest(db, app):
     arch = next((item for item in records if (item.spec_json or {}).get("format") == "repository-draft-v1"), None)
     if arch:
         await load_activity(db, arch)
-        arch._workspace_source_changed = source_stale(await read_state(db, app.organization_id, app.id))
+        state = await read_state(db, app.organization_id, app.id)
+        arch._workspace_source_changed = source_stale(state)
+        arch._workspace_source_epoch = state.source_epoch if state else 0
     return arch
+
+def ai_is_running(spec):
+    running = spec.get("ai_request") or {}
+    return bool(running.get("status") == "RUNNING" and running.get("started_at") and
+        (datetime.now(timezone.utc) - datetime.fromisoformat(running["started_at"])).total_seconds() < 110)
+
 
 def pending_proposal(spec):
     proposal = spec.get("proposal")
-    return proposal if proposal and (proposal.get("graph") != spec.get("graph") or
+    return proposal if proposal and (proposal.get("kind") == "SOURCE_REFRESH" or proposal.get("graph") != spec.get("graph") or
         proposal.get("resource_configurations", spec.get("resource_configurations", {})) != spec.get("resource_configurations", {})) else None
 
 def decision_messages(spec, proposal, decision):
@@ -115,7 +124,7 @@ async def read(application_id: str, membership=Depends(member), db: AsyncSession
     app = await application(db, application_id, membership)
     arch = await latest(db, app)
     return {"application_id": app.id, "application_name": app.name, "architecture": output(arch),
-        "capabilities": {"repository_analysis": service.github_available(), "ai_chat": service.ai_available(),
+        "capabilities": {"repository_analysis": service.github_available() or bool(arch and (arch.spec_json.get("evidence") or {}).get("source_type") == "UPLOAD"), "ai_chat": service.ai_available(),
                          "aws_references": knowledge.available(), "workload_scaling": True, "scoped_ai_edits": True,
                          "resource_configuration": True, "resource_ai_edits": True, "cloudformation_export": True, "empty_canvas": True}}
 
@@ -199,31 +208,60 @@ async def restore_version(application_id: str, payload: RestoreVersion, membersh
 @router.post("/{application_id}/analyze")
 async def analyze(application_id: str, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
+    previous = await latest(db, app)
+    spec = effective_spec(previous) if previous else {}
+    if pending_proposal(spec) or ai_is_running(spec):
+        raise HTTPException(409, "Review pending changes or finish the current AI request before refreshing sources.")
     repos = await linked_repositories(db, app.id, membership.organization_id)
+    repository_ids = [repo.id for repo in repos]
     upload_evidence = (await db.execute(select(ApplicationSourceArchive.evidence_json).where(
         ApplicationSourceArchive.application_id == app.id, ApplicationSourceArchive.organization_id == membership.organization_id))).scalar_one_or_none()
-    if not repos and not upload_evidence: raise HTTPException(409, "Connect GitHub or upload code before analyzing this business asset.")
+    if not repos and not upload_evidence:
+        raise HTTPException(409, "Connect GitHub or upload code before analyzing this business asset.")
+    state = await ensure_state(db, app)
+    base_id, base_epoch = previous.id if previous else None, state.source_epoch
+    state.state_version += 1
+    token = state.state_version
+    await db.commit()  # Never hold the application lock across repository I/O.
     try:
         async with asyncio.timeout(90):
             evidence = await service.inspect_repositories(repos) if repos else upload_evidence
     except TimeoutError:
-        raise HTTPException(504, "Repository analysis timed out. No draft was saved. Please try again.") from None
+        raise HTTPException(504, "Repository analysis timed out. Your saved design is unchanged. Please try again.") from None
+    app = await application(db, application_id, membership, lock=True)
+    await recheck_editor(db, app, membership)
     previous = await latest(db, app)
-    graph = service.draft_graph(evidence)
+    state = await read_state(db, app.organization_id, app.id)
+    if not state or state.source_epoch != base_epoch or state.state_version != token or (previous.id if previous else None) != base_id:
+        raise HTTPException(409, "Your design or sources changed during analysis. Reload and compare before refreshing again.")
+    if repository_ids:
+        await accessible_repositories(db, membership.organization_id, repository_ids)
+    spec = effective_spec(previous) if previous else {}
+    if pending_proposal(spec) or ai_is_running(spec):
+        raise HTTPException(409, "Another proposal or AI request started during analysis. Review it before refreshing again.")
+    generated = service.draft_graph(evidence)
     if previous:
-        saved_bindings = (previous.spec_json.get("evidence") or {}).get("environment_connections", [])
-        ids = {node["id"] for node in graph["nodes"]}
-        retained = [Connection(name=item["name"], source=item["source"], target=item.get("target") if item.get("target") in ids else None, protocol=item.get("protocol", "unknown")) for item in saved_bindings if item["source"] in ids]
-        if retained:
-            graph, records = map_connections(graph, evidence, retained)
-            evidence = {**evidence, "environment_connections": records}
-        if len(retained) < len(saved_bindings):
-            evidence = {**evidence, "environment_mapping_notice": "Some workload identities changed. Previous mapping remains in design history; review keys for the new workload identities."}
-    requirements = (previous.spec_json or {}).get("requirements") if previous else None
-    capacity_plan = None
-    if requirements:
-        graph, capacity_plan = plan_capacity(graph, requirements)
-    revision = (previous.spec_json["revision"] + 1) if previous else 1
+        try:
+            graph, retained = merge_findings(spec["graph"], generated)
+        except (ValueError, StopIteration):
+            raise HTTPException(422, "The source update exceeds this editor's limits. Your saved design is unchanged; split the workload before retrying.") from None
+        bindings = (spec.get("evidence") or {}).get("environment_connections", [])
+        evidence = {**evidence, "environment_connections": bindings}
+        proposal = {"id": str(uuid.uuid4()), "kind": "SOURCE_REFRESH", "graph": graph,
+            "base_id": previous.id, "base_source_epoch": base_epoch,
+            "base_fingerprint": knowledge.fingerprint(spec["graph"]),
+            "base_resource_fingerprint": resource_fingerprint(spec.get("resource_configurations", {})),
+            "resource_configurations": spec.get("resource_configurations", {}), "evidence": evidence,
+            "retained_node_ids": retained,
+            "notice": "Existing components, connections, configuration and placement are preserved. New findings are suggestions. Retained components absent from this source sample still need review."}
+        await write_activity(db, previous, {**version_spec(previous), "proposal": proposal})
+        state.state_version += 1
+        await audit(db, membership, app, "ARCHITECTURE_SOURCE_REFRESH_PROPOSED", {"proposal_id": proposal["id"], "base_source_epoch": base_epoch})
+        await db.commit()
+        return output(previous)
+    requirements = spec.get("requirements")
+    graph, capacity_plan = (plan_capacity(generated, requirements) if requirements else (generated, None))
+    revision = spec.get("revision", 0) + 1
     arch = Architecture(application_id=app.id, organization_id=membership.organization_id,
         name=app.name, version=f"v{revision}", status="DRAFT", spec_json={"format": "repository-draft-v1", "revision": revision,
             "graph": graph, "evidence": evidence, "messages": [], "proposal": None,
@@ -302,15 +340,15 @@ async def environment_connections(application_id: str, payload: EnvironmentConne
     graph, records = map_connections(effective_spec(arch)["graph"], evidence, payload.bindings)
     return await save_version(db, membership, app, arch, graph, "ARCHITECTURE_ENVIRONMENT_CONNECTIONS_SAVED", {"evidence": {**evidence, "environment_connections": records}})
 
-async def current(db, app, expected_id):
+async def current(db, app, expected_id, allow_source_proposal=False):
     arch = await latest(db, app)
     if not arch or arch.id != expected_id:
         raise HTTPException(409, "This architecture changed. Reload it before saving your changes.")
-    if effective_spec(arch).get("source_changed"):
+    if effective_spec(arch).get("source_changed") and not allow_source_proposal:
         raise HTTPException(409, "Repository links changed. Refresh code findings before editing or approving this architecture.")
     return arch
 
-async def save_version(db, membership, app, arch, graph, action, updates=None):
+async def save_version(db, membership, app, arch, graph, action, updates=None, *, source_refreshed=False):
     spec = {**effective_spec(arch), "revision": effective_spec(arch)["revision"] + 1, "graph": graph, "proposal": None, **(updates or {})}
     if "resource_configurations" in spec:
         ids = {node["id"] for node in graph["nodes"]}
@@ -324,7 +362,7 @@ async def save_version(db, membership, app, arch, graph, action, updates=None):
     record = Architecture(application_id=app.id, organization_id=membership.organization_id,
         name=app.name, version=f"v{spec['revision']}", status="DRAFT", spec_json=spec)
     db.add(record)
-    await record_head(db, app, record)
+    await record_head(db, app, record, source_refreshed=source_refreshed)
     await audit(db, membership, app, action)
     await db.commit()
     await db.refresh(record)
@@ -546,10 +584,28 @@ async def find_references(application_id: str, payload: ApplyReferences,
 @router.post("/{application_id}/apply")
 async def apply(application_id: str, payload: Apply, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
-    arch = await current(db, app, payload.expected_id)
+    arch = await current(db, app, payload.expected_id, allow_source_proposal=True)
     proposal = effective_spec(arch).get("proposal")
     if not proposal or proposal["id"] != payload.proposal_id:
         raise HTTPException(409, "This proposal has expired. Request a new proposal.")
+    if proposal.get("kind") == "SOURCE_REFRESH":
+        state = await read_state(db, app.organization_id, app.id)
+        spec = effective_spec(arch)
+        if not state or proposal.get("base_id") != arch.id or proposal.get("base_source_epoch") != state.source_epoch:
+            raise HTTPException(409, "The source update expired. Reload and refresh findings again.")
+        try:
+            graph = validate_preservation(spec["graph"], proposal["graph"])
+            if proposal.get("base_fingerprint") != knowledge.fingerprint(spec["graph"]) or proposal.get("base_resource_fingerprint") != resource_fingerprint(spec.get("resource_configurations", {})) or proposal.get("resource_configurations") != spec.get("resource_configurations", {}):
+                raise ValueError("Source update configuration changed")
+            if not isinstance(proposal.get("evidence"), dict) or not proposal["evidence"].get("commit"):
+                raise ValueError("Source update evidence missing")
+        except ValueError:
+            raise HTTPException(409, "This source update no longer preserves the saved design. Discard it and refresh again.") from None
+        repos = await linked_repositories(db, app.id, membership.organization_id)
+        if repos:
+            await accessible_repositories(db, membership.organization_id, [repo.id for repo in repos])
+        return await save_version(db, membership, app, arch, graph, "ARCHITECTURE_SOURCE_REFRESH_APPLIED",
+            {"evidence": proposal["evidence"], "source_changed": False}, source_refreshed=True)
     from app.services.architecture.edit_scope import enforce_scope, ScopeViolation
     if not proposal.get("scope") or proposal.get("base_fingerprint") != knowledge.fingerprint(effective_spec(arch)["graph"]):
         raise HTTPException(409, "This proposal predates the current edit scope. Discard it and request a new one.")
@@ -580,12 +636,14 @@ async def apply(application_id: str, payload: Apply, membership=Depends(editor),
 @router.post("/{application_id}/discard-proposal")
 async def discard_proposal(application_id: str, payload: Apply, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
-    arch = await current(db, app, payload.expected_id)
+    arch = await current(db, app, payload.expected_id, allow_source_proposal=True)
     proposal = effective_spec(arch).get("proposal")
     if not proposal or proposal["id"] != payload.proposal_id:
         raise HTTPException(409, "This proposal has expired. Reload the design.")
-    await write_activity(db, arch, {**effective_spec(arch), "proposal": None, "last_ai_questions": [],
-                     "messages": decision_messages(effective_spec(arch), proposal, "DISCARDED")})
+    updates = {"proposal": None}
+    if proposal.get("kind") != "SOURCE_REFRESH":
+        updates.update(last_ai_questions=[], messages=decision_messages(effective_spec(arch), proposal, "DISCARDED"))
+    await write_activity(db, arch, {**version_spec(arch), **updates})
     await audit(db, membership, app, "ARCHITECTURE_AI_PROPOSAL_DISCARDED", {"proposal_id": payload.proposal_id})
     await db.commit()
     return output(arch)
