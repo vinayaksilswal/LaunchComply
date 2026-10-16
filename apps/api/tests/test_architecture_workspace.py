@@ -115,7 +115,10 @@ async def test_ai_proposal_requires_explicit_apply_and_invalid_provider_response
     from app.models.entities import Architecture
     async with AsyncSessionLocal() as db:
         record = await db.get(Architecture, applied.json()["id"])
-        record.spec_json = {key: value for key, value in record.spec_json.items() if key != "last_ai_at"}
+        from app.services.architecture.version_activity import load_activity, write_activity
+        from app.services.architecture.workspace_state import effective_spec
+        await load_activity(db, record)
+        await write_activity(db, record, {key: value for key, value in effective_spec(record).items() if key != "last_ai_at"})
         await db.commit()
     malformed = {"message": "bad graph", "graph": {"nodes": proposed["nodes"], "edges": [{"source": "not-a-node", "target": "edge", "label": "invalid"}]}}
     monkeypatch.setattr(service, "http_client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(lambda req:

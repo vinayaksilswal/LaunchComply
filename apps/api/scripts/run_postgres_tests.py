@@ -64,7 +64,7 @@ def main():
                         'Migration fixture',true,false,false,false,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)""")
                 run("-m", "alembic", "upgrade", "ae1f5a6b7c8d")
                 from sqlalchemy import create_engine
-                from scripts.architecture_state_fixture import seed_legacy_architectures, assert_workspace_backfill, assert_workspace_constraints
+                from scripts.architecture_state_fixture import seed_legacy_architectures, assert_workspace_backfill, assert_workspace_constraints, assert_activity_constraints
                 fixture_engine = create_engine(runtime.set(drivername="postgresql+psycopg"))
                 try:
                     with fixture_engine.begin() as connection:
@@ -73,6 +73,7 @@ def main():
                     with fixture_engine.begin() as connection:
                         assert_workspace_backfill(connection, before)
                         assert_workspace_constraints(connection)
+                        assert_activity_constraints(connection)
                     print("Workspace migration preserved history and enforced tenant/environment constraints.")
                 finally:
                     fixture_engine.dispose()

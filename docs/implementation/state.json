@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "plan_version": "1.0",
-  "updated_at": "2026-10-15",
+  "updated_at": "2026-10-16",
   "audited_baseline_commit": "83a5d87",
   "planning_complete": true,
   "implementation_started_under_this_plan": true,
@@ -70,7 +70,7 @@
       ],
       "release": "R1",
       "status": "IN_PROGRESS",
-      "checkpoint": "Repository edits invalidate the current source epoch without rewriting history. Current readers and late AI checks use source eligibility. API, PostgreSQL simultaneous-edit and browser CI passed at 8cdf0f3 (run 38767930847). Remaining: separate mutable AI/reference/approval records and reviewed source-refresh preservation. See 2026-10-15-source-history.md.",
+      "checkpoint": "Version activity cutover implemented: chat/proposals/receipts, references and approvals stored outside snapshots; legacy reader adapter; source eligibility retained. Focused 24 passed and real approval/history browser passed. Full API 354 passed/4 opt-in live checks skipped; PostgreSQL CI pending. Next reviewed source refresh preserving manual intent/configuration/layout with expected head/epoch. See 2026-10-16-version-activity.md.",
       "evidence": [
         {
           "kind": "test",
@@ -92,6 +92,13 @@
           "commit": "8cdf0f392a264f304af652d92484fffd3e74e801",
           "observed_at": "2026-10-15",
           "summary": "Repository invalidation preserves historical snapshots; API, PostgreSQL concurrency and browser CI all passed: https://github.com/vinayaksilswal/LaunchComply/actions/runs/38767930847"
+        },
+        {
+          "kind": "test",
+          "path_or_url": "2026-10-16-version-activity.md",
+          "commit": "working-tree",
+          "observed_at": "2026-10-16",
+          "summary": "Version activity cutover; full API 354 passed/4 opt-in live checks skipped, focused migrations and real browser workflow passed; PostgreSQL CI pending."
         }
       ]
     },
@@ -580,14 +587,14 @@
   "handoff": {
     "current_task": "A02",
     "next_task": "A02",
-    "next_action": "Finish A02: move mutable chat/proposals/references/approvals outside snapshot JSON, then implement reviewed source refresh preserving manual configuration with expected head/epoch. Source epochs are now active for repository-link changes; see 2026-10-15-source-history.md.",
+    "next_action": "Finish A02 reviewed source refresh: capture base head/source epoch and release locks before analysis; preserve manual nodes/edges/configurations/bindings/layout; propose first, then apply/discard under expected head/epoch with stale conflicts. Verify final activity cutover CI before marking its substep complete.",
     "notes": [
       "A01 complete: all three Linux CI jobs passed at 97918cc.",
       "35-package programme and all release gates are not complete.",
       "Preserve unrelated .artifacts/.",
       "Customer brings existing software; agency custom-development journey is superseded."
     ],
-    "uncommitted_scope": "Implementation and evidence committed; preserve unrelated .artifacts/."
+    "uncommitted_scope": "Version activity cutover, migration and tests/evidence; preserve .artifacts/."
   },
   "additional_requests": [
     {

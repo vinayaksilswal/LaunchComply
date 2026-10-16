@@ -33,7 +33,7 @@ def test_clean_database_migrates_and_matches_models(workspace_temp_dir):
 
 
 def test_workspace_state_backfill_preserves_history_and_tenant_constraints(workspace_temp_dir):
-    from scripts.architecture_state_fixture import seed_legacy_architectures, assert_workspace_backfill, assert_workspace_constraints
+    from scripts.architecture_state_fixture import seed_legacy_architectures, assert_workspace_backfill, assert_workspace_constraints, assert_activity_constraints
     path = workspace_temp_dir.resolve() / "workspace-state.db"
     migrate(path, "upgrade", "ae1f5a6b7c8d")
     engine = create_engine(f"sqlite:///{path.as_posix()}")
@@ -46,6 +46,7 @@ def test_workspace_state_backfill_preserves_history_and_tenant_constraints(works
             connection.execute(text("PRAGMA foreign_keys=ON"))
             assert_workspace_backfill(connection, before)
             assert_workspace_constraints(connection)
+            assert_activity_constraints(connection)
         assert "No new upgrade operations detected" in migrate(path, "check")
     finally:
         engine.dispose()

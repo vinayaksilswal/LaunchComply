@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import insert, select, text
 from sqlalchemy.exc import IntegrityError
 
-from app.models import Application, Architecture, ArchitectureWorkspaceState, Environment, Organization
+from app.models import Application, Architecture, ArchitectureWorkspaceState, ArchitectureVersionActivity, Environment, Organization
 
 
 def seed_legacy_architectures(connection):
@@ -16,7 +16,7 @@ def seed_legacy_architectures(connection):
     timestamp = datetime(2026, 1, 1, tzinfo=timezone.utc)
     for identifier, org, asset, spec in (
         ("state-arch-a1", "a", "a", {"format": "repository-draft-v1", "graph": {"nodes": [{"id": "manual"}], "edges": []}, "resource_configurations": {"manual": {"preserve": True}}}),
-        ("state-arch-a2", "a", "a", {"format": "repository-draft-v1", "graph": {"nodes": [], "edges": []}, "design_approval": {"historical": True}}),
+        ("state-arch-a2", "a", "a", {"format": "repository-draft-v1", "graph": {"nodes": [], "edges": []}, "design_approval": {"historical": True}, "messages": [{"role": "assistant", "content": "Legacy migration evidence"}], "proposal": {"id": "legacy-pending"}}),
         ("state-arch-a3", "a", "a", {"format": "unsupported", "graph": {}}),
         ("state-arch-b1", "b", "b", {"format": "repository-draft-v1", "source_changed": True, "graph": {"nodes": [], "edges": []}}),
         # A malformed legacy tenant link must never become a workspace head.
@@ -43,6 +43,30 @@ def assert_workspace_backfill(connection, before):
     assert states["state-app-b"]["source_epoch"] == 1
     assert states["state-app-b"]["analyzed_source_epoch"] is None
     assert all(row["environment_id"] is None and row["state_version"] == 0 for row in rows)
+
+
+def assert_activity_constraints(connection):
+    table = ArchitectureVersionActivity.__table__
+    valid = dict(organization_id="state-org-a", application_id="state-app-a",
+                 architecture_id="state-arch-a1", payload={"messages": []})
+    for values in (valid | {"organization_id": "state-org-b"},
+                   valid | {"application_id": "state-app-empty"},
+                   valid | {"organization_id": "state-org-b", "architecture_id": "state-arch-invalid"},
+                   valid | {"architecture_id": "missing-architecture"}):
+        try:
+            with connection.begin_nested():
+                connection.execute(insert(table).values(**values))
+        except IntegrityError:
+            continue
+        raise AssertionError("Activity accepted an invalid tenant/version reference")
+    connection.execute(insert(table).values(**valid))
+    try:
+        with connection.begin_nested():
+            connection.execute(insert(table).values(**valid))
+    except IntegrityError:
+        pass
+    else:
+        raise AssertionError("Duplicate version activity was accepted")
 
 
 def assert_workspace_constraints(connection):

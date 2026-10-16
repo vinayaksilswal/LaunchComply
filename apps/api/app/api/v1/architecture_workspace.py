@@ -28,6 +28,8 @@ from typing import Annotated, Literal
 from app.services.architecture.repository_links import linked_repositories
 from app.services.architecture.workspace_state import read_state, source_stale, effective_spec, record_head
 
+from app.services.architecture.version_activity import load_activity, write_activity, snapshot_spec
+
 router = APIRouter(prefix="/architecture/workspace", tags=["Architecture Workspace"])
 
 async def member(request: Request, membership: OrganizationMembership = Depends(get_current_membership)):
@@ -47,12 +49,19 @@ async def application(db, application_id, membership, lock=False):
     if not app: raise HTTPException(404, "Application not found in your business.")
     return app
 
+async def recheck_editor(db, app, membership):
+    fresh_member = await db.get(OrganizationMembership, membership.id, populate_existing=True)
+    fresh_user = await db.get(User, membership.user_id, populate_existing=True)
+    if not fresh_member or not fresh_member.is_active or fresh_member.organization_id != app.organization_id or fresh_member.role not in (MembershipRole.OWNER, MembershipRole.ADMIN) or not fresh_user or not fresh_user.is_active:
+        raise HTTPException(403, "Your business editing access changed during this request. No activity was saved.")
+
 async def latest(db, app):
     records = (await db.execute(select(Architecture).where(Architecture.application_id == app.id,
         Architecture.organization_id == app.organization_id).order_by(Architecture.created_at.desc(), Architecture.id.desc()).execution_options(populate_existing=True))).scalars().all()
     # Legacy sample topologies have no verified provenance; never present them as code analysis.
     arch = next((item for item in records if (item.spec_json or {}).get("format") == "repository-draft-v1"), None)
     if arch:
+        await load_activity(db, arch)
         arch._workspace_source_changed = source_stale(await read_state(db, app.organization_id, app.id))
     return arch
 
@@ -146,14 +155,16 @@ async def versions(application_id: str, offset: int = Query(default=0, ge=0, le=
 async def historical_version(db, app, version_id):
     arch = (await db.execute(select(Architecture).where(Architecture.id == version_id,
         Architecture.application_id == app.id, Architecture.organization_id == app.organization_id))).scalar_one_or_none()
-    if not arch or (arch.spec_json or {}).get("format") != "repository-draft-v1":
+    if not arch or (effective_spec(arch) or {}).get("format") != "repository-draft-v1":
         raise HTTPException(404, "Saved architecture not found for this business asset.")
     return arch
 
 @router.get("/{application_id}/versions/{version_id}")
 async def version_preview(application_id: str, version_id: str, membership=Depends(member), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership)
-    return output(await historical_version(db, app, version_id))
+    arch = await historical_version(db, app, version_id)
+    await load_activity(db, arch)
+    return output(arch)
 
 class RestoreVersion(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -170,12 +181,12 @@ async def restore_version(application_id: str, payload: RestoreVersion, membersh
     if old.id == arch.id:
         raise HTTPException(409, "This version is already current.")
     graph = service.Graph.model_validate(old.spec_json["graph"]).model_dump()
-    spec = {**old.spec_json, "revision": arch.spec_json["revision"] + 1, "graph": graph, "proposal": None,
+    spec = {**snapshot_spec(old.spec_json), "revision": effective_spec(arch)["revision"] + 1, "graph": graph, "proposal": None,
         "messages": [], "restored_from": {"id": old.id, "version": old.version}, "deployment_status": "NOT_DEPLOYED"}
     for key in ("design_approval", "aws_references", "ai_request", "last_ai_questions", "last_ai_workflow", "last_ai_diagnostics"):
         spec.pop(key, None)
     spec["source_changed"] = bool(effective_spec(arch).get("source_changed") or old.spec_json.get("source_changed")
-        or (old.spec_json.get("evidence") or {}).get("commit") != (arch.spec_json.get("evidence") or {}).get("commit"))
+        or (old.spec_json.get("evidence") or {}).get("commit") != (effective_spec(arch).get("evidence") or {}).get("commit"))
     record = Architecture(application_id=app.id, organization_id=membership.organization_id, name=app.name,
         version=f"v{spec['revision']}", status="DRAFT", spec_json=spec)
     db.add(record)
@@ -260,21 +271,21 @@ async def requirements(application_id: str, payload: Requirements, membership=De
     arch = await current(db, app, payload.expected_id)
     values = payload.model_dump(exclude={"expected_id"})
     if "workload_policies" not in payload.model_fields_set:
-        values["workload_policies"] = (arch.spec_json.get("requirements") or {}).get("workload_policies", [])
-    if pending_proposal(arch.spec_json):
+        values["workload_policies"] = (effective_spec(arch).get("requirements") or {}).get("workload_policies", [])
+    if pending_proposal(effective_spec(arch)):
         raise HTTPException(409, "Apply or resolve the pending AI proposal before changing deployment targets.")
     regions = Requirements.model_fields["region"].annotation.__args__
     if payload.availability == "MULTI_REGION" and (payload.secondary_region not in regions or payload.secondary_region == payload.region):
         raise HTTPException(422, "Choose a different supported recovery region for a multi-region design.")
     if payload.availability != "MULTI_REGION": values["secondary_region"] = None
-    if payload.sizing_workload_id and not any(node["id"] == payload.sizing_workload_id and node["zone"] == "APPLICATION" for node in arch.spec_json["graph"]["nodes"]):
+    if payload.sizing_workload_id and not any(node["id"] == payload.sizing_workload_id and node["zone"] == "APPLICATION" for node in effective_spec(arch)["graph"]["nodes"]):
         raise HTTPException(422, "Choose a workload from this saved architecture for sizing.")
     if payload.requests_per_second_per_replica and not payload.sizing_workload_id:
         raise HTTPException(422, "Select a workload before entering its benchmark throughput.")
-    issues = policy_issues(arch.spec_json["graph"], values["workload_policies"])
+    issues = policy_issues(effective_spec(arch)["graph"], values["workload_policies"])
     if issues:
         raise HTTPException(422, "Review workload scaling and load-balancer settings: " + " ".join(issues))
-    graph, plan = plan_capacity(arch.spec_json["graph"], values)
+    graph, plan = plan_capacity(effective_spec(arch)["graph"], values)
     return await save_version(db, membership, app, arch, graph, "ARCHITECTURE_REQUIREMENTS_SAVED", {"requirements": values, "capacity_plan": plan})
 
 class EnvironmentConnections(BaseModel):
@@ -285,10 +296,10 @@ class EnvironmentConnections(BaseModel):
 async def environment_connections(application_id: str, payload: EnvironmentConnections, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
     arch = await current(db, app, payload.expected_id)
-    if pending_proposal(arch.spec_json):
+    if pending_proposal(effective_spec(arch)):
         raise HTTPException(409, "Apply or resolve the pending AI proposal before mapping connections.")
-    evidence = arch.spec_json["evidence"]
-    graph, records = map_connections(arch.spec_json["graph"], evidence, payload.bindings)
+    evidence = effective_spec(arch)["evidence"]
+    graph, records = map_connections(effective_spec(arch)["graph"], evidence, payload.bindings)
     return await save_version(db, membership, app, arch, graph, "ARCHITECTURE_ENVIRONMENT_CONNECTIONS_SAVED", {"evidence": {**evidence, "environment_connections": records}})
 
 async def current(db, app, expected_id):
@@ -300,7 +311,7 @@ async def current(db, app, expected_id):
     return arch
 
 async def save_version(db, membership, app, arch, graph, action, updates=None):
-    spec = {**arch.spec_json, "revision": arch.spec_json["revision"] + 1, "graph": graph, "proposal": None, **(updates or {})}
+    spec = {**effective_spec(arch), "revision": effective_spec(arch)["revision"] + 1, "graph": graph, "proposal": None, **(updates or {})}
     if "resource_configurations" in spec:
         ids = {node["id"] for node in graph["nodes"]}
         spec["resource_configurations"] = {key: value for key, value in spec["resource_configurations"].items() if key in ids}
@@ -308,7 +319,7 @@ async def save_version(db, membership, app, arch, graph, action, updates=None):
     spec.pop("design_approval", None)
     spec.pop("ai_request", None)
     spec.pop("last_ai_questions", None)
-    if graph != arch.spec_json["graph"] or updates:
+    if graph != effective_spec(arch)["graph"] or updates:
         spec.pop("aws_references", None)
     record = Architecture(application_id=app.id, organization_id=membership.organization_id,
         name=app.name, version=f"v{spec['revision']}", status="DRAFT", spec_json=spec)
@@ -338,25 +349,25 @@ async def configure_resource(application_id: str, payload: ConfigureResource,
                              membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
     arch = await current(db, app, payload.expected_id)
-    if pending_proposal(arch.spec_json):
+    if pending_proposal(effective_spec(arch)):
         raise HTTPException(409, "Apply or discard the pending proposal before configuring resources.")
-    if arch.spec_json.get("resource_schema_version") not in (None, 1):
+    if effective_spec(arch).get("resource_schema_version") not in (None, 1):
         raise HTTPException(409, "This resource schema needs an explicit migration before editing.")
-    if payload.node_id not in {node["id"] for node in arch.spec_json["graph"]["nodes"]}:
+    if payload.node_id not in {node["id"] for node in effective_spec(arch)["graph"]["nodes"]}:
         raise HTTPException(422, "Select a component in this saved architecture.")
-    configs = dict(arch.spec_json.get("resource_configurations", {}))
+    configs = dict(effective_spec(arch).get("resource_configurations", {}))
     if payload.configuration is None:
         configs.pop(payload.node_id, None)
     else:
         configs[payload.node_id] = payload.configuration.model_dump()
-        review = validate_resources(arch.spec_json["graph"], configs, (arch.spec_json.get("requirements") or {}).get("region"))
+        review = validate_resources(effective_spec(arch)["graph"], configs, (effective_spec(arch).get("requirements") or {}).get("region"))
         # Validate all configured resources: a VPC resize must not invalidate
         # already configured children or introduce overlapping subnet ranges.
         if review["issues"]:
             raise HTTPException(422, {"code": "RESOURCE_CONFIGURATION_INVALID", "message": " ".join(issue["message"] for issue in review["issues"][:5])})
-    if configs == arch.spec_json.get("resource_configurations", {}):
+    if configs == effective_spec(arch).get("resource_configurations", {}):
         return output(arch)
-    return await save_version(db, membership, app, arch, arch.spec_json["graph"], "ARCHITECTURE_RESOURCE_CONFIGURED",
+    return await save_version(db, membership, app, arch, effective_spec(arch)["graph"], "ARCHITECTURE_RESOURCE_CONFIGURED",
                               {"resource_schema_version": 1, "resource_configurations": configs})
 
 
@@ -371,13 +382,13 @@ async def export_cloudformation(application_id: str, payload: ExportResources,
                                membership=Depends(member), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
     arch = await current(db, app, payload.expected_id)
-    if pending_proposal(arch.spec_json):
+    if pending_proposal(effective_spec(arch)):
         raise HTTPException(409, "Apply or discard the pending proposal before exporting saved infrastructure definitions.")
-    if arch.spec_json.get("resource_schema_version") not in (None, 1):
+    if effective_spec(arch).get("resource_schema_version") not in (None, 1):
         raise HTTPException(409, "This resource schema needs an explicit migration before export.")
     try:
-        result = compile_template(arch.spec_json["graph"], arch.spec_json.get("resource_configurations", {}),
-                                  (arch.spec_json.get("requirements") or {}).get("region"), payload.resource_ids)
+        result = compile_template(effective_spec(arch)["graph"], effective_spec(arch).get("resource_configurations", {}),
+                                  (effective_spec(arch).get("requirements") or {}).get("region"), payload.resource_ids)
     except ValueError as error:
         raise HTTPException(422, str(error)) from None
     await audit(db, membership, app, "ARCHITECTURE_CLOUDFORMATION_EXPORTED", {"architecture_id": arch.id,
@@ -391,25 +402,25 @@ async def approve_design(application_id: str, payload: ApplyReferences,
                          membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
     arch = await current(db, app, payload.expected_id)
-    if not arch.spec_json["graph"]["nodes"]:
+    if not effective_spec(arch)["graph"]["nodes"]:
         raise HTTPException(409, "Add and save a cloud design before approving it.")
-    if not arch.spec_json.get("requirements"):
+    if not effective_spec(arch).get("requirements"):
         raise HTTPException(409, "Set expected traffic, region and availability before approving the design.")
-    if pending_proposal(arch.spec_json):
+    if pending_proposal(effective_spec(arch)):
         raise HTTPException(409, "Apply and save the pending proposal before approving this design.")
-    running = arch.spec_json.get("ai_request") or {}
+    running = effective_spec(arch).get("ai_request") or {}
     if running.get("status") == "RUNNING" and (datetime.now(timezone.utc) - datetime.fromisoformat(running["started_at"])).total_seconds() < 110:
         raise HTTPException(409, "Wait for the current architecture request to finish before approving this design.")
-    if arch.spec_json.get("design_approval"):
+    if effective_spec(arch).get("design_approval"):
         return output(arch)
-    arch.spec_json = {**arch.spec_json, "design_approval": {
+    await write_activity(db, arch, {**effective_spec(arch), "design_approval": {
         "architecture_id": arch.id, "version": arch.version,
-        "graph_fingerprint": knowledge.fingerprint(arch.spec_json["graph"]),
-        "repository_commit": arch.spec_json["evidence"]["commit"],
+        "graph_fingerprint": knowledge.fingerprint(effective_spec(arch)["graph"]),
+        "repository_commit": effective_spec(arch)["evidence"]["commit"],
         "approved_by": membership.user_id,
         "approved_at": datetime.now(timezone.utc).isoformat(),
         "scope": "Saved design only. AWS access, infrastructure plan and deployment approval are still required.",
-    }}
+    }})
     await audit(db, membership, app, "ARCHITECTURE_DESIGN_APPROVED")
     await db.commit()
     return output(arch)
@@ -418,7 +429,7 @@ async def approve_design(application_id: str, payload: ApplyReferences,
 async def chat(application_id: str, payload: Chat, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
     arch = await current(db, app, payload.expected_id)
-    spec = dict(arch.spec_json)
+    spec = dict(effective_spec(arch))
     from app.services.architecture.edit_scope import EditScope, ScopeViolation, validate_selection
     if pending_proposal(spec):
         raise HTTPException(409, "Apply or discard the pending proposal before asking for another change.")
@@ -449,7 +460,7 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
     request_id = str(uuid.uuid4())
     spec["ai_request"] = {"id": request_id, "status": "RUNNING", "started_at": now.isoformat()}
     spec["last_ai_at"] = now.isoformat()
-    arch.spec_json = spec
+    await write_activity(db, arch, spec)
     await db.commit()  # Do not keep row locks or a database transaction open across model I/O.
     failure = None
     answer = None
@@ -466,17 +477,14 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
         # context or arbitrary exception text from agent/provider libraries.
         failure = HTTPException(503, {"code": "ARCHITECTURE_AI_UNAVAILABLE", "message": "The architecture review could not complete. Your saved design is unchanged."})
     app = await application(db, application_id, membership, lock=True)
-    fresh_member = await db.get(OrganizationMembership, membership.id, populate_existing=True)
-    fresh_user = await db.get(User, membership.user_id, populate_existing=True)
-    if not fresh_member or not fresh_member.is_active or fresh_member.organization_id != app.organization_id or fresh_member.role not in (MembershipRole.OWNER, MembershipRole.ADMIN) or not fresh_user or not fresh_user.is_active:
-        raise HTTPException(403, "Your business editing access changed during this request. No proposal was saved.")
+    await recheck_editor(db, app, membership)
     latest_arch = await latest(db, app)
-    if not latest_arch or latest_arch.id != payload.expected_id or effective_spec(latest_arch).get("source_changed") or (latest_arch.spec_json.get("ai_request") or {}).get("id") != request_id:
+    if not latest_arch or latest_arch.id != payload.expected_id or effective_spec(latest_arch).get("source_changed") or (effective_spec(latest_arch).get("ai_request") or {}).get("id") != request_id:
         await audit(db, membership, app, "ARCHITECTURE_AI_REQUEST_DISCARDED", {"request_id": request_id, "code": "DESIGN_CHANGED"})
         await db.commit()
         raise HTTPException(409, "Your design or source changed while AI was responding. Reload before requesting a new proposal.")
     arch = latest_arch
-    spec = dict(arch.spec_json)
+    spec = dict(effective_spec(arch))
     finished = datetime.now(timezone.utc).isoformat()
     if failure:
         code = failure.detail.get("code", "ARCHITECTURE_AI_UNAVAILABLE") if isinstance(failure.detail, dict) else "ARCHITECTURE_AI_UNAVAILABLE"
@@ -484,7 +492,7 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
             "attempts": getattr(failure, "attempts", []), "finished_at": finished}
         spec["last_ai_failure"] = diagnostics
         spec["ai_request"] = {**spec["ai_request"], "status": "FAILED", "finished_at": finished}
-        arch.spec_json = spec
+        await write_activity(db, arch, spec)
         await audit(db, membership, app, "ARCHITECTURE_AI_REQUEST_FAILED", diagnostics)
         await db.commit()
         raise HTTPException(failure.status_code, {"code": code, "request_id": request_id, "message": "AI tried to change components outside your selected scope. Your saved design is unchanged. Narrow the request or select the required components." if code == "ARCHITECTURE_AI_SCOPE_REJECTED" else "The architecture request failed. Your saved design is unchanged."})
@@ -508,7 +516,7 @@ async def chat(application_id: str, payload: Chat, membership=Depends(editor), d
     spec["last_ai_at"] = now.isoformat()
     if answer.get("ai_model"): spec["last_ai_model"] = answer["ai_model"]
     if answer.get("agent_workflow"): spec["last_ai_workflow"] = answer["agent_workflow"]
-    arch.spec_json = spec
+    await write_activity(db, arch, spec)
     await audit(db, membership, app, "ARCHITECTURE_AI_PROPOSAL_CREATED", {"request_id": request_id,
         "provider": settings.ARCHITECTURE_AI_PROVIDER, "model": answer.get("ai_model"), "attempts": answer.get("provider_attempts", []), "graph_changed": graph_changed, "resource_changed": resource_changed})
     await db.commit()
@@ -519,13 +527,18 @@ async def find_references(application_id: str, payload: ApplyReferences,
                           membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
     arch = await current(db, app, payload.expected_id)
-    previous = arch.spec_json.get("aws_references")
-    if previous and previous.get("graph_fingerprint") == knowledge.fingerprint(arch.spec_json["graph"]):
+    previous = effective_spec(arch).get("aws_references")
+    if previous and previous.get("graph_fingerprint") == knowledge.fingerprint(effective_spec(arch)["graph"]):
         age = (datetime.now(timezone.utc) - datetime.fromisoformat(previous["checked_at"])).total_seconds()
         if age < 300:
             return output(arch)
-    review = await knowledge.lookup(arch.spec_json["graph"])
-    arch.spec_json = {**arch.spec_json, "aws_references": review}
+    graph = effective_spec(arch)["graph"]
+    await db.commit()  # Release locks before external documentation I/O.
+    review = await knowledge.lookup(graph)
+    app = await application(db, application_id, membership, lock=True)
+    await recheck_editor(db, app, membership)
+    arch = await current(db, app, payload.expected_id)
+    await write_activity(db, arch, {**effective_spec(arch), "aws_references": review})
     await audit(db, membership, app, "ARCHITECTURE_AWS_REFERENCES_RETRIEVED")
     await db.commit()
     return output(arch)
@@ -534,25 +547,25 @@ async def find_references(application_id: str, payload: ApplyReferences,
 async def apply(application_id: str, payload: Apply, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
     arch = await current(db, app, payload.expected_id)
-    proposal = arch.spec_json.get("proposal")
+    proposal = effective_spec(arch).get("proposal")
     if not proposal or proposal["id"] != payload.proposal_id:
         raise HTTPException(409, "This proposal has expired. Request a new proposal.")
     from app.services.architecture.edit_scope import enforce_scope, ScopeViolation
-    if not proposal.get("scope") or proposal.get("base_fingerprint") != knowledge.fingerprint(arch.spec_json["graph"]):
+    if not proposal.get("scope") or proposal.get("base_fingerprint") != knowledge.fingerprint(effective_spec(arch)["graph"]):
         raise HTTPException(409, "This proposal predates the current edit scope. Discard it and request a new one.")
     try:
-        enforce_scope(arch.spec_json["graph"], proposal["graph"], proposal["scope"])
+        enforce_scope(effective_spec(arch)["graph"], proposal["graph"], proposal["scope"])
         from app.services.architecture.edit_scope import enforce_resource_identity
-        enforce_resource_identity(arch.spec_json["graph"], proposal["graph"], arch.spec_json.get("resource_configurations", {}))
+        enforce_resource_identity(effective_spec(arch)["graph"], proposal["graph"], effective_spec(arch).get("resource_configurations", {}))
         from app.services.architecture.proposal_policy import check_transition
-        check_transition(arch.spec_json["graph"], proposal["graph"], "Apply reviewed scoped proposal")
+        check_transition(effective_spec(arch)["graph"], proposal["graph"], "Apply reviewed scoped proposal")
         remaining = {node["id"] for node in proposal["graph"]["nodes"]}
-        configs = {key: value for key, value in arch.spec_json.get("resource_configurations", {}).items() if key in remaining}
-        if proposal.get("base_resource_fingerprint") and proposal["base_resource_fingerprint"] != resource_fingerprint(arch.spec_json.get("resource_configurations", {})):
+        configs = {key: value for key, value in effective_spec(arch).get("resource_configurations", {}).items() if key in remaining}
+        if proposal.get("base_resource_fingerprint") and proposal["base_resource_fingerprint"] != resource_fingerprint(effective_spec(arch).get("resource_configurations", {})):
             raise HTTPException(409, "Resource settings changed after this proposal. Discard it and request a new one.")
         configs = apply_resource_updates(proposal["graph"], configs, proposal.get("resource_updates", []),
-            proposal["scope"], (arch.spec_json.get("requirements") or {}).get("region"))
-        if proposal.get("resource_updates") and arch.spec_json.get("resource_schema_version") not in (None, 1):
+            proposal["scope"], (effective_spec(arch).get("requirements") or {}).get("region"))
+        if proposal.get("resource_updates") and effective_spec(arch).get("resource_schema_version") not in (None, 1):
             raise HTTPException(409, "This resource schema needs an explicit migration before applying property changes.")
         if "resource_configurations" in proposal and proposal["resource_configurations"] != configs:
             raise ValueError("Proposal properties do not match the reviewed operations.")
@@ -561,18 +574,18 @@ async def apply(application_id: str, payload: Apply, membership=Depends(editor),
     except ValueError:
         raise HTTPException(409, "The proposal contains invalid resource settings. Discard it and request a new one.") from None
     return await save_version(db, membership, app, arch, proposal["graph"], "ARCHITECTURE_AI_PROPOSAL_APPLIED",
-                              {"messages": decision_messages(arch.spec_json, proposal, "APPLIED"),
-                               "resource_schema_version": arch.spec_json.get("resource_schema_version", 1), "resource_configurations": configs})
+                              {"messages": decision_messages(effective_spec(arch), proposal, "APPLIED"),
+                               "resource_schema_version": effective_spec(arch).get("resource_schema_version", 1), "resource_configurations": configs})
 
 @router.post("/{application_id}/discard-proposal")
 async def discard_proposal(application_id: str, payload: Apply, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
     arch = await current(db, app, payload.expected_id)
-    proposal = arch.spec_json.get("proposal")
+    proposal = effective_spec(arch).get("proposal")
     if not proposal or proposal["id"] != payload.proposal_id:
         raise HTTPException(409, "This proposal has expired. Reload the design.")
-    arch.spec_json = {**arch.spec_json, "proposal": None, "last_ai_questions": [],
-                     "messages": decision_messages(arch.spec_json, proposal, "DISCARDED")}
+    await write_activity(db, arch, {**effective_spec(arch), "proposal": None, "last_ai_questions": [],
+                     "messages": decision_messages(effective_spec(arch), proposal, "DISCARDED")})
     await audit(db, membership, app, "ARCHITECTURE_AI_PROPOSAL_DISCARDED", {"proposal_id": payload.proposal_id})
     await db.commit()
     return output(arch)

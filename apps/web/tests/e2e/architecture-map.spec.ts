@@ -2,6 +2,45 @@ import { test, expect } from "@playwright/test";
 import { newBusiness } from "../workspace-fixture";
 import { randomUUID } from "node:crypto";
 
+test("design approval survives reload and restoring history requires a new approval", async ({ page, request }) => {
+  const { headers } = await newBusiness(page, request);
+  const created = await request.post("/api/backend/applications/", { headers, data: { name: "Version activity workflow" } });
+  expect(created.ok()).toBeTruthy();
+  const asset = await created.json();
+  const path = `/api/backend/architecture/workspace/${asset.id}`;
+  const initialized = await (await request.post(`${path}/initialize`, { headers })).json();
+  const saved = await request.post(`${path}/save`, { headers, data: { expected_id: initialized.id,
+    graph: { nodes: [{ id: "logs", label: "Retained logs", service: "Amazon CloudWatch", zone: "SUPPORT", description: "Manual design", x: 120, y: 180 }], edges: [] } } });
+  expect(saved.ok()).toBeTruthy();
+  const design = await saved.json();
+  const planned = await request.post(`${path}/requirements`, { headers, data: { expected_id: design.id,
+    region: "ap-south-1", availability: "MULTI_AZ", peak_requests_per_minute: 500, concurrent_users: 100 } });
+  expect(planned.ok()).toBeTruthy();
+  const original = await planned.json();
+  await page.goto(`/dashboard/architecture?application=${asset.id}`);
+  await page.mouse.move((page.viewportSize()?.width || 1280) - 24, 200);
+  await page.getByRole("button", { name: "Services & sizing", exact: true }).click();
+  await page.getByRole("button", { name: "Review design approval", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm design approval", exact: true }).click();
+  await expect(page.getByText(new RegExp(`Design ${original.version} approved`))).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Services & sizing", exact: true }).click();
+  await expect(page.getByText(new RegExp(`Design ${original.version} approved`))).toBeVisible();
+  const edited = await request.post(`${path}/save`, { headers, data: { expected_id: original.id,
+    graph: { ...original.graph, nodes: original.graph.nodes.map((node: { id: string }) => ({ ...node, label: "Changed logs" })) } } });
+  expect(edited.ok()).toBeTruthy();
+  await page.reload();
+  await page.getByRole("button", { name: "History", exact: true }).click();
+  await page.getByRole("button").filter({ has: page.locator("strong", { hasText: new RegExp(`^${original.version}$`) }) }).click();
+  await page.getByRole("button", { name: "Restore this architecture", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Saved architecture history" })).not.toBeVisible();
+  const current = await (await request.get(path, { headers })).json();
+  expect(current.architecture.graph).toEqual(original.graph);
+  expect(current.architecture.design_approval).toBeUndefined();
+  const historical = await (await request.get(`${path}/versions/${original.id}`, { headers })).json();
+  expect(historical.design_approval.architecture_id).toBe(original.id);
+});
+
 test("removing a source preserves saved history and warns in the architecture workspace", async ({ page, request }) => {
   const { headers } = await newBusiness(page, request);
   // Isolated test server's explicit fixture adapter; no live GitHub authorization claim.

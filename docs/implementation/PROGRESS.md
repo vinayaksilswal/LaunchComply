@@ -1,6 +1,6 @@
 # LaunchComply — your requests and implementation progress
 
-Updated: **15 October 2026**. This is the visible checklist for our ongoing work.
+Updated: **16 October 2026**. This is the visible checklist for our ongoing work.
 
 **Rule:** Keep every request. When work is implemented and verified, mark it
 **[x] ~~Done~~** and retain its evidence. Never delete it to make the backlog shorter.
@@ -47,8 +47,10 @@ flow is migrated.
   [Evidence](2026-10-15-source-history.md).
 - [ ] Move all current writers/readers to this state, preserving historical snapshots.
   Repository-link invalidation now uses source epochs and preserves old JSON;
-  API, PostgreSQL and browser CI passed. Remaining mutable AI/reference/approval
-  writers and reviewed source refresh are still in progress (15 October 2026).
+  API, PostgreSQL and browser CI passed for source invalidation. Activity writers
+  now use separate version records; focused API/migration and real browser checks
+  passed, broader checks pending. [Activity evidence](2026-10-16-version-activity.md).
+  Reviewed source refresh remains open.
 - [ ] Review, apply or discard source refreshes without losing manual changes.
 
 ## Your requested product direction

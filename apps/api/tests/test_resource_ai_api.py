@@ -109,9 +109,12 @@ async def test_tampered_property_proposal_cannot_apply(configured_asset, monkeyp
     pending = (await client.post(url + "/chat", headers=headers, json={"expected_id": original["id"], "message": "Change retention only.", "edit_scope": {"mode": "EDIT", "node_ids": ["logs"]}})).json()
     async with AsyncSessionLocal() as db:
         record = await db.get(Architecture, original["id"])
-        spec = copy.deepcopy(record.spec_json)
+        from app.services.architecture.version_activity import load_activity, write_activity
+        from app.services.architecture.workspace_state import effective_spec
+        await load_activity(db, record)
+        spec = copy.deepcopy(effective_spec(record))
         spec["proposal"]["resource_configurations"]["logs"]["properties"]["retention_days"] = 365
-        record.spec_json = spec
+        await write_activity(db, record, spec)
         await db.commit()
     rejected = await client.post(url + "/apply", headers=headers, json={"expected_id": original["id"], "proposal_id": pending["proposal"]["id"]})
     assert rejected.status_code == 409
@@ -164,7 +167,9 @@ async def test_clarification_cannot_bypass_future_resource_schema_migration(conf
         spec.update(resource_schema_version=2, ai_request={"id": "old-question"},
             last_ai_scope={"mode": "EDIT", "node_ids": ["logs"]}, last_ai_intent="Change retention",
             last_ai_questions=[{"id": "retention", "question": "Which retention?", "options": ["90 days"]}])
-        record.spec_json = spec
+        from app.services.architecture.version_activity import write_activity, snapshot_spec
+        record.spec_json = snapshot_spec(spec)
+        await write_activity(db, record, spec)
         await db.commit()
     provider = AsyncMock()
     monkeypatch.setattr(service, "refine", provider)

@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from app.models.architecture_state import ArchitectureWorkspaceState
 from app.models.entities import Architecture
+from .version_activity import snapshot_spec, write_activity
 
 
 async def read_state(db, organization_id, application_id):
@@ -24,6 +25,10 @@ def source_stale(state):
 def effective_spec(architecture):
     """Apply current eligibility without assigning to the ORM's stored JSON."""
     spec = architecture.spec_json or {}
+    activity = getattr(architecture, "_version_activity", None)
+    if activity is not None:
+        spec = {**snapshot_spec(spec), **activity}
+    spec = {"messages": [], "proposal": None, **spec}
     if not getattr(architecture, "_workspace_source_changed", False):
         return spec
     result = {**spec, "source_changed": True, "proposal": None}
@@ -63,7 +68,10 @@ async def invalidate_sources(db, app):
 
 
 async def record_head(db, app, architecture, *, source_refreshed=False):
+    original = architecture.spec_json
+    architecture.spec_json = snapshot_spec(original)
     await db.flush()  # Assign the new architecture ID before the composite FK.
+    await write_activity(db, architecture, original)
     state = await ensure_state(db, app)
     state.head_architecture_id = architecture.id
     state.state_version += 1

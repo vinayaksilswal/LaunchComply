@@ -1,9 +1,9 @@
 """Current workspace identity, separate from saved architecture snapshots.
 
-Additive foundation: existing endpoints are migrated to this record in A02.
-Until that cutover, backfilled heads must not be used as current authority.
+Source eligibility uses this record. Latest-version reads remain authoritative
+for head identity during the A02 cutover.
 """
-from sqlalchemy import CheckConstraint, Column, ForeignKeyConstraint, Index, Integer, String, text
+from sqlalchemy import CheckConstraint, Column, ForeignKeyConstraint, Index, Integer, String, JSON, UniqueConstraint, text
 
 from app.models.base import BaseModel
 
@@ -45,4 +45,28 @@ class ArchitectureWorkspaceState(BaseModel):
               sqlite_where=text("environment_id IS NULL"), postgresql_where=text("environment_id IS NULL")),
         Index("uq_arch_workspace_environment", "organization_id", "application_id", "environment_id", unique=True,
               sqlite_where=text("environment_id IS NOT NULL"), postgresql_where=text("environment_id IS NOT NULL")),
+    )
+
+
+class ArchitectureVersionActivity(BaseModel):
+    """Version-linked conversation/review state; never deployment intent."""
+    __tablename__ = "architecture_version_activity"
+
+    organization_id = Column(String(36), nullable=False)
+    application_id = Column(String(36), nullable=False)
+    architecture_id = Column(String(36), nullable=False)
+    payload = Column(JSON, nullable=False)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["organization_id", "application_id"],
+            ["applications.organization_id", "applications.id"],
+            name="fk_arch_activity_application", ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["organization_id", "application_id", "architecture_id"],
+            ["architectures.organization_id", "architectures.application_id", "architectures.id"],
+            name="fk_arch_activity_version", ondelete="CASCADE",
+        ),
+        UniqueConstraint("architecture_id", name="uq_arch_activity_version"),
     )

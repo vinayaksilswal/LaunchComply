@@ -143,3 +143,41 @@ async def test_concurrent_repository_edits_have_one_winner_and_preserve_snapshot
                 assert tuple(state) == (1, 0)
     finally:
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_design_approvals_share_activity_without_mutating_snapshot():
+    from sqlalchemy import select, cast, String
+    from app.models import Architecture, ArchitectureVersionActivity
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            registered = await client.post("/api/v1/auth/register", json={
+                "email": f"approval-race-{uuid.uuid4().hex}@example.com", "password": "TestOnlyPassword123!",
+                "full_name": "Approval race", "organization_name": f"Approval race {uuid.uuid4().hex}"})
+            assert registered.status_code == 200, registered.text
+            account = registered.json()
+            headers = {"Authorization": f"Bearer {account['access_token']}", "X-Organization-ID": account["organization_id"]}
+            asset = (await client.post("/api/v1/applications/", headers=headers, json={"name": "Approval race"})).json()["id"]
+            path = f"/api/v1/architecture/workspace/{asset}"
+            initialized = (await client.post(path + "/initialize", headers=headers)).json()
+            graph = {"nodes": [{"id": "logs", "label": "Logs", "service": "Amazon CloudWatch", "zone": "SUPPORT", "description": "Test", "x": 120, "y": 180}], "edges": []}
+            saved = await client.post(path + "/save", headers=headers, json={"expected_id": initialized["id"], "graph": graph})
+            assert saved.status_code == 200, saved.text
+            planned = await client.post(path + "/requirements", headers=headers, json={"expected_id": saved.json()["id"],
+                "region": "ap-south-1", "availability": "MULTI_AZ", "peak_requests_per_minute": 500, "concurrent_users": 100})
+            assert planned.status_code == 200, planned.text
+            identifier = planned.json()["id"]
+            query = select(cast(Architecture.spec_json, String), Architecture.updated_at).where(Architecture.id == identifier)
+            async with engine.connect() as db:
+                before = (await db.execute(query)).one()
+            approvals = await asyncio.gather(*[client.post(path + "/approve-design", headers=headers,
+                json={"expected_id": identifier}) for _ in range(2)])
+            assert all(response.status_code == 200 for response in approvals), [r.text for r in approvals]
+            assert approvals[0].json()["design_approval"] == approvals[1].json()["design_approval"]
+            async with engine.connect() as db:
+                assert (await db.execute(query)).one() == before
+                activity = (await db.execute(select(ArchitectureVersionActivity.payload).where(
+                    ArchitectureVersionActivity.architecture_id == identifier))).scalar_one()
+                assert activity["design_approval"] == approvals[0].json()["design_approval"]
+    finally:
+        await engine.dispose()
