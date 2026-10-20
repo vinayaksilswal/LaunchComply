@@ -96,7 +96,7 @@ async def create(payload: CreateRequest, membership=Depends(editor), db: AsyncSe
         arch = await latest(db, app)
         if not arch or arch.id != payload.architecture_id or effective_spec(arch).get("source_changed"):
             raise HTTPException(409, "The saved design changed. Refresh deployment preparation before submitting this review.")
-        spec = arch.spec_json or {}
+        spec = effective_spec(arch)
         evidence = spec.get("evidence") or {}
         targets = spec.get("requirements") or {}
         from app.services.architecture.design_review import build_review

@@ -188,6 +188,57 @@ async def test_concurrent_design_approvals_share_activity_without_mutating_snaps
 
 
 @pytest.mark.asyncio
+async def test_native_head_survives_concurrent_source_invalidation_and_history_reads():
+    from sqlalchemy import select, cast, String
+    from app.core.database import AsyncSessionLocal
+    from app.models import Architecture, Application, ArchitectureWorkspaceState
+    from app.services.architecture.design_adapter import from_legacy
+    from app.services.architecture.workspace_state import record_head, invalidate_sources
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            account = (await client.post("/api/v1/auth/register", json={"email": f"native-pg-{uuid.uuid4().hex}@example.com",
+                "password": "TestOnlyPassword123!", "full_name": "Native history", "organization_name": "Native PostgreSQL"})).json()
+            headers = {"Authorization": f"Bearer {account['access_token']}", "X-Organization-ID": account["organization_id"]}
+            asset = (await client.post("/api/v1/applications/", headers=headers, json={"name": "Native history"})).json()["id"]
+            path = f"/api/v1/architecture/workspace/{asset}"
+            base_id = (await client.post(path + "/initialize", headers=headers)).json()["id"]
+            native_id = str(uuid.uuid4())
+            async with AsyncSessionLocal() as db:
+                base = await db.get(Architecture, base_id)
+                target = (await db.execute(select(Application).where(Application.id == asset).with_for_update())).scalar_one()
+                spec = from_legacy(base.spec_json, revision_id=native_id, organization_id=target.organization_id,
+                    application_id=asset, parent_revision_id=base_id).model_dump(mode="json")
+                spec["extensions"]["customer.notes"] = {"version": 3, "data": {"retained": True}}
+                arch = Architecture(id=native_id, organization_id=target.organization_id, application_id=asset,
+                    name=target.name, version="v2", status="DRAFT", spec_json=spec)
+                db.add(arch)
+                await record_head(db, target, arch)
+                await db.commit()
+            query = select(Architecture.id, cast(Architecture.spec_json, String), Architecture.updated_at).where(Architecture.application_id == asset).order_by(Architecture.id)
+            async with engine.connect() as db:
+                before = (await db.execute(query)).all()
+            async def invalidate():
+                async with AsyncSessionLocal() as db:
+                    target = (await db.execute(select(Application).where(Application.id == asset).with_for_update())).scalar_one()
+                    await invalidate_sources(db, target)
+                    await db.commit()
+            await asyncio.gather(invalidate(), invalidate())
+            current = await client.get(path, headers=headers)
+            assert current.status_code == 200, current.text
+            assert current.json()["architecture"]["id"] == native_id and current.json()["architecture"]["source_changed"]
+            assert current.json()["architecture"]["read_only"]
+            history = (await client.get(path + "/versions", headers=headers)).json()["versions"]
+            assert [item["id"] for item in history] == [native_id, base_id]
+            async with engine.connect() as db:
+                assert (await db.execute(query)).all() == before
+                state = (await db.execute(select(ArchitectureWorkspaceState.head_architecture_id,
+                    ArchitectureWorkspaceState.source_epoch).where(ArchitectureWorkspaceState.application_id == asset))).one()
+                assert tuple(state) == (native_id, 2)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.asyncio
 async def test_concurrent_source_refresh_and_apply_have_one_winner():
     import io
     import zipfile

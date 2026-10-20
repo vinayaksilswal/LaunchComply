@@ -99,6 +99,9 @@ interface Evidence {
   }[];
 }
 interface Draft {
+  saved_format?: string;
+  read_only?: boolean;
+  read_only_reason?: string;
   resource_topology?: ResourceTopology;
   resource_schema_version?: number;
   resource_configurations?: Record<string, ResourceConfiguration>;
@@ -161,6 +164,7 @@ export function ArchitectureCanvas() {
   const [loading, setLoading] = useState(true);
   const [reload, setReload] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [historyRecovery, setHistoryRecovery] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [aiScope, setAiScope] = useState<ArchitectScope>({ mode: "REVIEW", node_ids: [] });
   const [catalogOpen, setCatalogOpen] = useState(0);
@@ -202,7 +206,7 @@ export function ArchitectureCanvas() {
   const draft = workspace?.architecture;
   const draftId = draft?.id;
   const dirty = !!draft && JSON.stringify(graph) !== JSON.stringify(draft.graph);
-  const canRefresh = ["OWNER", "ADMIN"].includes(
+  const canRefresh = !draft?.read_only && ["OWNER", "ADMIN"].includes(
     organization?.role.toUpperCase() || "",
   );
   const canEdit = canRefresh && !draft?.source_changed;
@@ -294,6 +298,7 @@ export function ArchitectureCanvas() {
     setReviewApproval(false);
     setLoading(true);
     setError(null);
+    setHistoryRecovery(false);
 
     setPreview(false);
     setAiScope({ mode: "REVIEW", node_ids: [] });
@@ -306,7 +311,10 @@ export function ArchitectureCanvas() {
         }
       })
       .catch((failure) => {
-        if (active) setError(failure.message);
+        if (active) {
+          setError(failure.message);
+          setHistoryRecovery(failure instanceof ApiError && ["DESIGN_FORMAT_UNSUPPORTED", "DESIGN_PROJECTION_UNAVAILABLE"].includes(failure.code));
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -458,8 +466,21 @@ export function ArchitectureCanvas() {
     observer.observe(canvas.current);
     return () => { cancelAnimationFrame(frame); observer.disconnect(); };
   }, [draftId, layoutKey, view, width, height]);
-  const exportDraft = () => {
+  const exportDraft = async () => {
     if (!draft) return;
+    if (draft.read_only) {
+      if (busy) return;
+      setBusy("export");
+      try {
+        const result = await apiClient<{ design: unknown }>(`/architecture/designs/${appId}`, { params: { expected_id: draft.id } });
+        const url = URL.createObjectURL(new Blob([JSON.stringify(result.design, null, 2)], { type: "application/json" }));
+        const anchor = document.createElement("a"); anchor.href = url;
+        anchor.download = `launchcomply-design-${draft.version}.json`; anchor.click(); URL.revokeObjectURL(url);
+      } catch (failure) {
+        setError(failure instanceof Error ? failure.message : "Unable to export this saved design.");
+      } finally { setBusy(null); }
+      return;
+    }
     const blob = new Blob(
       [
         JSON.stringify(
@@ -489,6 +510,7 @@ export function ArchitectureCanvas() {
   };
   return (
     <div className="bg-white h-full min-h-0 overflow-hidden flex flex-col text-slate-900">
+      {draft?.read_only && <div role="status" className="shrink-0 flex flex-wrap items-center gap-3 border-b border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-950"><span>{draft.read_only_reason}</span><CanonicalDesignPanel applicationId={appId} savedId={draft.id} disabled={!!busy} /></div>}
       {draft?.source_changed && <div role="alert" className="shrink-0 px-5 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-900">{draft.proposal?.kind === "SOURCE_REFRESH" ? "Source update ready for review. Preview and apply or discard it in the assistant." : <>Repository links changed. This diagram shows previous sources. <button disabled={!!busy || dirty || !canRefresh} onClick={() => operation("analyze", "analyze")} className="font-semibold underline">Refresh code findings</button> before making or approving changes.</>}</div>}
       <header className="px-3 py-1.5 shrink-0 border-b border-slate-200 flex flex-wrap gap-2 items-center justify-between">
         <div className="flex gap-3 items-center">
@@ -505,6 +527,7 @@ export function ArchitectureCanvas() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {historyRecovery && <ArchitectureHistory applicationId={appId} currentId="" dirty={false} disabled={!!busy} canRestore={false} onRestore={async () => false} />}
           {draft && <ArchitectureHistory applicationId={appId} currentId={draft.id} currentConfigurations={draft.resource_configurations} dirty={dirty} disabled={!!busy} canRestore={canEdit} onRestore={versionId => operation("restore", "restore", { expected_id: draft.id, version_id: versionId })} />}
           {draft && <ArchitectureSettings key={appId} graph={graph} requirements={draft.requirements} scalingAvailable={!!workspace?.capabilities.workload_scaling} version={draft.version} connections={draft.evidence.environment_connections || noConnections} modules={draft.evidence.modules || []} disabled={!canEditGraph || !!busy} proposalPending={!!draft.proposal} saving={!!busy} errorMessage={error} blockedReason={dirty ? "Save your diagram changes before saving settings." : draft.proposal ? "Apply the pending AI proposal before saving settings." : undefined} onRequirements={value => operation("requirements", "requirements", { expected_id: draft.id, ...value })} onConnections={bindings => operation("environment", "environment-connections", { expected_id: draft.id, bindings })} onGraph={value => { setGraph(value); setArrangedView(false); setView("cloud"); }} />}
           <select
@@ -587,7 +610,7 @@ export function ArchitectureCanvas() {
             });
             setArrangedView(false); setView("cloud"); setSelected(id); setChatVisible(true); setAssistantMinimized(false); autoFit.current = true;
           }} />
-          {draft && workspace?.capabilities.resource_configuration && <ResourceConfigurationPanel key={appId} appId={appId} draftId={draft.id} graph={draft.graph} configurations={draft.resource_configurations} review={draft.resource_review} region={draft.requirements?.region} selectedId={selected} errorMessage={error} disabled={dirty || preview || !!busy || !!draft.proposal || !!draft.source_changed} canEdit={canEdit} onSave={(nodeId, configuration) => operation("configure-resource", "resource-configuration", { expected_id: draft.id, node_id: nodeId, configuration })} />}
+          {draft && workspace?.capabilities.resource_configuration && <ResourceConfigurationPanel key={appId} appId={appId} draftId={draft.id} graph={draft.graph} configurations={draft.resource_configurations} review={draft.resource_review} region={draft.requirements?.region} selectedId={selected} errorMessage={error} disabled={!!draft.read_only || dirty || preview || !!busy || !!draft.proposal || !!draft.source_changed} canEdit={canEdit} onSave={(nodeId, configuration) => operation("configure-resource", "resource-configuration", { expected_id: draft.id, node_id: nodeId, configuration })} />}
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs">
           {draft && <button disabled={!!busy || dirty || !!draft.proposal || !canRefresh} onClick={() => operation("analyze", "analyze")} className="font-semibold text-cyan-700 disabled:opacity-40">{busy === "analyze" ? "Inspecting source…" : "Refresh code findings"}</button>}

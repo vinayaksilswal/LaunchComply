@@ -13,6 +13,8 @@ from app.models.audit import AuditEvent
 from app.core.config import settings
 from app.models.architecture_state import ArchitectureWorkspaceState
 from app.services.architecture.workspace_state import source_stale
+from app.services.architecture.saved_designs import design_record_filter
+from app.services.architecture.design_view import saved_view
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 
@@ -27,7 +29,7 @@ async def architecture_map(request: Request, offset: int = Query(0, ge=0),
         raise HTTPException(403, "You are not a member of this organization.")
     latest_id = (select(Architecture.id).where(
         Architecture.application_id == Application.id, Architecture.organization_id == org_id,
-        Architecture.spec_json["format"].as_string() == "repository-draft-v1")
+        design_record_filter())
         .order_by(Architecture.created_at.desc(), Architecture.id.desc()).limit(1).correlate(Application).scalar_subquery())
     rows = (await db.execute(select(Application, Architecture, ArchitectureWorkspaceState).outerjoin(Architecture, Architecture.id == latest_id)
         .outerjoin(ArchitectureWorkspaceState, (ArchitectureWorkspaceState.application_id == Application.id)
@@ -35,7 +37,12 @@ async def architecture_map(request: Request, offset: int = Query(0, ge=0),
         .where(Application.organization_id == org_id).order_by(Application.id).offset(offset).limit(101))).all()
     items = []
     for app, architecture, workspace_state in rows[:100]:
-        spec = architecture.spec_json if architecture else {}
+        design_status = "NO_DESIGN"
+        try:
+            spec = saved_view(architecture) if architecture else {}
+            if architecture: design_status = "READ_ONLY" if spec.get("read_only") else "DRAFT"
+        except HTTPException:
+            spec, design_status = {}, "UNSUPPORTED_VERSION"
         requirements = spec.get("requirements") or {}
         graph = spec.get("graph") or {}
         configurations = spec.get("resource_configurations") or {}
@@ -43,6 +50,7 @@ async def architecture_map(request: Request, offset: int = Query(0, ge=0),
         labels = {node["id"]: node.get("label", node["id"]) for node in graph.get("nodes", [])}
         edges = graph.get("edges", [])
         items.append({"id": app.id, "name": app.name,
+            "design_status": design_status,
             "version": architecture.version if architecture else None,
             "saved_at": architecture.created_at if architecture else None,
             "region": requirements.get("region"),

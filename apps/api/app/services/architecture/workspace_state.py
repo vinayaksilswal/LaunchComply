@@ -6,8 +6,9 @@ latest-version queries remain authoritative; head pointers are reconciled on wri
 from sqlalchemy import select
 
 from app.models.architecture_state import ArchitectureWorkspaceState
-from app.models.entities import Architecture
 from .version_activity import snapshot_spec, write_activity
+from .saved_designs import latest_saved
+from .design_view import saved_view
 
 
 async def read_state(db, organization_id, application_id):
@@ -24,10 +25,15 @@ def source_stale(state):
 
 def version_spec(architecture):
     """Saved intent and version activity, without current eligibility overlays."""
-    spec = architecture.spec_json or {}
+    spec = saved_view(architecture)
     activity = getattr(architecture, "_version_activity", None)
     if activity is not None:
         spec = {**snapshot_spec(spec), **activity}
+    if spec.get("read_only"):
+        # This legacy projection cannot prove native approval/proposal semantics.
+        spec = {key: value for key, value in spec.items() if key not in {
+            "design_approval", "superseded_design_approval", "aws_references", "ai_request", "last_ai_questions"}}
+        spec["proposal"] = None
     return {"messages": [], "proposal": None, **spec}
 
 
@@ -48,10 +54,7 @@ def effective_spec(architecture):
 
 async def ensure_state(db, app):
     state = await read_state(db, app.organization_id, app.id)
-    head = (await db.execute(select(Architecture).where(
-        Architecture.organization_id == app.organization_id, Architecture.application_id == app.id,
-        Architecture.spec_json["format"].as_string() == "repository-draft-v1",
-    ).order_by(Architecture.created_at.desc(), Architecture.id.desc()).limit(1))).scalar_one_or_none()
+    head = await latest_saved(db, app)
     if state is None:
         stale = bool(head and (head.spec_json or {}).get("source_changed"))
         state = ArchitectureWorkspaceState(organization_id=app.organization_id, application_id=app.id,

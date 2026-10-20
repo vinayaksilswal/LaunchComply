@@ -23,3 +23,18 @@ export async function operatorHeaders(request: APIRequestContext) {
   const account = await response.json();
   return { Authorization: `Bearer ${account.access_token}`, "X-Organization-ID": account.organization_id };
 }
+
+// Native/future records are installed only in the disposable database owned by
+// this Playwright run. No test-only HTTP write capability is added to the API.
+export async function nativeDesignFixture(baseId: string, future = false) {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const { resolve } = await import("node:path");
+  const api = resolve(__dirname, "../../api");
+  const python = resolve(api, process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python");
+  const database = process.env.LC_BROWSER_TEST_DATABASE;
+  if (!database) throw new Error("Disposable browser database is required");
+  await promisify(execFile)(python, ["-m", "scripts.seed_browser_canonical", database, baseId, ...(future ? ["--future"] : [])], {
+    cwd: api, timeout: 30000, env: { ...process.env, ENVIRONMENT: "test", DEMO_MODE: "true", DEBUG: "false" },
+  });
+}

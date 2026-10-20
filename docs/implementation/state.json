@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "plan_version": "1.0",
-  "updated_at": "2026-10-16",
+  "updated_at": "2026-10-20",
   "audited_baseline_commit": "83a5d87",
   "planning_complete": true,
   "implementation_started_under_this_plan": true,
@@ -125,7 +125,7 @@
       ],
       "release": "R1",
       "status": "IN_PROGRESS",
-      "checkpoint": "Reader-first slice verified at b53fe2a: strict v2 models, pure lossless legacy adapter, stable duplicate-edge/configuration-reference IDs, semantic/layout/artifact-input identity, shared schema/generated TS and tenant-scoped inspector/export for current/history versions. Full local API 397 passed/4 live skips before final cases, final focused 32 passed, frontend build and real browser passed; final API/PostgreSQL/browser CI all succeeded (38867708400). Native v2 writers and normal mixed-version head/history/editor/export migration remain; A03 is not complete.",
+      "checkpoint": "Reader-first contract verified at b53fe2a. Mixed-format head/history/map readers and native read-only projections now implemented, with full native JSON download and recovery history for unsupported versions. Legacy mutation/export/approval/restore guards preserve native fields and prevent silent fallback. Final local targeted 19 passed, frontend production build/lint/type checks and 2 real browser journeys passed. Full local API initially found 9 AST harness dependency failures; corrected harness passed targeted tests. Final CI pending. Native migration/save/mutations/restore and consumer round-trips remain; A03 is not complete.",
       "evidence": [
         {
           "kind": "test",
@@ -133,6 +133,13 @@
           "commit": "b53fe2ab8ce4457f064b6191e62c7b2f54fb322b",
           "observed_at": "2026-10-16",
           "summary": "Read contract and real inspector/download/current/history workflow locally verified; all API/PostgreSQL/browser CI passed: https://github.com/vinayaksilswal/LaunchComply/actions/runs/38867708400. Native writers remain disabled."
+        },
+        {
+          "kind": "test",
+          "path_or_url": "2026-10-20-mixed-design-history.md",
+          "commit": "working-tree",
+          "observed_at": "2026-10-20",
+          "summary": "Mixed readers and safe native read-only boundary; 19 targeted API tests and 2 real browser workflows passed; final CI pending."
         }
       ]
     },
@@ -609,14 +616,14 @@
   "handoff": {
     "current_task": "A03",
     "next_task": "A03",
-    "next_action": "Finish A03: migrate workspace.latest/history/output/restore and workspace_state.ensure_state to persisted v2 without falling back to old v1 heads; then gate native writes with server-owned IDs and expected head/epoch. Preserve unknown extensions and stable connections. Migrate editor/proposal/source/config/export consumers and verify mixed-history round-trips before enabling v2 writes. Reader-first API/PostgreSQL/browser CI passed at b53fe2a; do not redo its implemented adapter/inspector.",
+    "next_action": "Finish A03 native writer transition: add a gated explicit migrate/save contract with expected head/source epoch, locked tenant asset, server revision/parent/tenant identity and immutable append. Mutate canonical owners, preserve typed connections/targets/view/extensions and stable IDs; never save the legacy read-only projection. Implement native restore-as-new, then source/proposal/resource/compiler round-trips before enabling writers. Mixed-history/current/map readers and recovery UI are implemented; verify final CI evidence, do not redo them.",
     "notes": [
       "A01 complete: all three Linux CI jobs passed at 97918cc.",
       "35-package programme and all release gates are not complete.",
       "Preserve unrelated .artifacts/.",
       "Customer brings existing software; agency custom-development journey is superseded."
     ],
-    "uncommitted_scope": "None after documentation checkpoint commit; preserve unrelated .artifacts/."
+    "uncommitted_scope": "A03 mixed-history readers, native read-only UI/export and legacy writer guards, test fixtures and evidence; preserve unrelated .artifacts/."
   },
   "additional_requests": [
     {

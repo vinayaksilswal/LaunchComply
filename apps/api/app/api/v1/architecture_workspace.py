@@ -30,6 +30,8 @@ from app.services.architecture.workspace_state import read_state, source_stale, 
 from app.services.architecture.source_refresh import merge_findings, validate_preservation
 
 from app.services.architecture.version_activity import load_activity, write_activity, snapshot_spec
+from app.services.architecture.saved_designs import latest_saved, design_record_filter, DESIGN_FORMATS
+from app.services.architecture.design_view import saved_view, version_summary, require_legacy_writer
 
 router = APIRouter(prefix="/architecture/workspace", tags=["Architecture Workspace"])
 
@@ -57,11 +59,10 @@ async def recheck_editor(db, app, membership):
         raise HTTPException(403, "Your business editing access changed during this request. No activity was saved.")
 
 async def latest(db, app):
-    records = (await db.execute(select(Architecture).where(Architecture.application_id == app.id,
-        Architecture.organization_id == app.organization_id).order_by(Architecture.created_at.desc(), Architecture.id.desc()).execution_options(populate_existing=True))).scalars().all()
-    # Legacy sample topologies have no verified provenance; never present them as code analysis.
-    arch = next((item for item in records if (item.spec_json or {}).get("format") == "repository-draft-v1"), None)
+    # Never fall back to an older v1 head when a newer native/future version exists.
+    arch = await latest_saved(db, app)
     if arch:
+        saved_view(arch)  # Fail closed on unsupported future versions, without rewriting them.
         await load_activity(db, arch)
         state = await read_state(db, app.organization_id, app.id)
         arch._workspace_source_changed = source_stale(state)
@@ -99,7 +100,7 @@ def output(arch):
             "design_review": build_review(spec["graph"], spec.get("evidence"), spec.get("requirements"), spec.get("source_changed", False))}
 
 def design_is_approved(arch):
-    if not arch:
+    if not arch or (arch.spec_json or {}).get("format") != "repository-draft-v1":
         return False
     spec = effective_spec(arch)
     approval = spec.get("design_approval") or {}
@@ -123,10 +124,11 @@ async def configuration_schemas(membership=Depends(member)):
 async def read(application_id: str, membership=Depends(member), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership)
     arch = await latest(db, app)
+    writable = not arch or (arch.spec_json or {}).get("format") == "repository-draft-v1"
     return {"application_id": app.id, "application_name": app.name, "architecture": output(arch),
-        "capabilities": {"repository_analysis": service.github_available() or bool(arch and (arch.spec_json.get("evidence") or {}).get("source_type") == "UPLOAD"), "ai_chat": service.ai_available(),
-                         "aws_references": knowledge.available(), "workload_scaling": True, "scoped_ai_edits": True,
-                         "resource_configuration": True, "resource_ai_edits": True, "cloudformation_export": True, "empty_canvas": True}}
+        "capabilities": {"repository_analysis": writable and (service.github_available() or bool(arch and (arch.spec_json.get("evidence") or {}).get("source_type") == "UPLOAD")), "ai_chat": writable and service.ai_available(),
+                         "aws_references": writable and knowledge.available(), "workload_scaling": writable, "scoped_ai_edits": writable,
+                         "resource_configuration": True, "resource_ai_edits": writable, "cloudformation_export": writable, "empty_canvas": writable}}
 
 @router.post("/{application_id}/initialize")
 async def initialize(application_id: str, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
@@ -152,19 +154,15 @@ async def versions(application_id: str, offset: int = Query(default=0, ge=0, le=
     app = await application(db, application_id, membership)
     rows = (await db.execute(select(Architecture).where(Architecture.application_id == app.id,
         Architecture.organization_id == membership.organization_id,
-        Architecture.spec_json["format"].as_string() == "repository-draft-v1")
+        design_record_filter())
         .order_by(Architecture.created_at.desc(), Architecture.id.desc()).offset(offset).limit(21))).scalars().all()
-    return {"versions": [{"id": item.id, "version": item.version, "created_at": item.created_at,
-        "components": len((item.spec_json.get("graph") or {}).get("nodes", [])),
-        "configured_resources": len(item.spec_json.get("resource_configurations", {})),
-        "source_commit": (item.spec_json.get("evidence") or {}).get("commit"),
-        "restored_from": item.spec_json.get("restored_from")} for item in rows[:20]],
+    return {"versions": [version_summary(item) for item in rows[:20]],
         "has_more": len(rows) > 20, "offset": offset}
 
 async def historical_version(db, app, version_id):
     arch = (await db.execute(select(Architecture).where(Architecture.id == version_id,
         Architecture.application_id == app.id, Architecture.organization_id == app.organization_id))).scalar_one_or_none()
-    if not arch or (effective_spec(arch) or {}).get("format") != "repository-draft-v1":
+    if not arch or (arch.spec_json or {}).get("format") not in DESIGN_FORMATS:
         raise HTTPException(404, "Saved architecture not found for this business asset.")
     return arch
 
@@ -186,7 +184,9 @@ async def restore_version(application_id: str, payload: RestoreVersion, membersh
     arch = await latest(db, app)
     if not arch or arch.id != payload.expected_id:
         raise HTTPException(409, "The current architecture changed. Refresh before restoring a saved version.")
+    require_legacy_writer(arch)
     old = await historical_version(db, app, payload.version_id)
+    require_legacy_writer(old)
     if old.id == arch.id:
         raise HTTPException(409, "This version is already current.")
     graph = service.Graph.model_validate(old.spec_json["graph"]).model_dump()
@@ -209,6 +209,7 @@ async def restore_version(application_id: str, payload: RestoreVersion, membersh
 async def analyze(application_id: str, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
     previous = await latest(db, app)
+    require_legacy_writer(previous)
     spec = effective_spec(previous) if previous else {}
     if pending_proposal(spec) or ai_is_running(spec):
         raise HTTPException(409, "Review pending changes or finish the current AI request before refreshing sources.")
@@ -344,11 +345,13 @@ async def current(db, app, expected_id, allow_source_proposal=False):
     arch = await latest(db, app)
     if not arch or arch.id != expected_id:
         raise HTTPException(409, "This architecture changed. Reload it before saving your changes.")
+    require_legacy_writer(arch)
     if effective_spec(arch).get("source_changed") and not allow_source_proposal:
         raise HTTPException(409, "Repository links changed. Refresh code findings before editing or approving this architecture.")
     return arch
 
 async def save_version(db, membership, app, arch, graph, action, updates=None, *, source_refreshed=False):
+    require_legacy_writer(arch)
     spec = {**effective_spec(arch), "revision": effective_spec(arch)["revision"] + 1, "graph": graph, "proposal": None, **(updates or {})}
     if "resource_configurations" in spec:
         ids = {node["id"] for node in graph["nodes"]}

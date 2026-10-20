@@ -9,6 +9,7 @@ export type MapAsset = {
   region: string | null; secondary_region: string | null; availability: string | null;
   components: number; connections: number; availability_zones: string[];
   source_changed: boolean; runtime_status: "NOT_VERIFIED";
+  design_status?: "NO_DESIGN" | "DRAFT" | "READ_ONLY" | "UNSUPPORTED_VERSION";
   connection_preview?: { source: string; target: string; label: string }[]; connections_truncated?: boolean;
 };
 
@@ -80,6 +81,8 @@ export function ArchitectureMap({ assets }: { assets: MapAsset[] }) {
         <p className="mt-2 text-sm text-slate-600">{availability(a.availability)} · {a.components} components · {a.connections} designed connections</p>
         <p className="mt-2 text-xs text-slate-500">{a.region || "Region not set"}{a.secondary_region ? ` → ${a.secondary_region} (secondary)` : ""}</p>
         <p className="mt-2 text-xs text-slate-500">AZ configuration: {a.availability_zones.length ? a.availability_zones.join(", ") : "Not configured"}. Access rules and secure traffic paths are in the architecture editor.</p>
+        {a.design_status === "READ_ONLY" && <p className="mt-2 text-xs text-cyan-800">New-format design · Read only. Open the architecture to inspect or export it.</p>}
+        {a.design_status === "UNSUPPORTED_VERSION" && <p className="mt-2 text-xs text-amber-800">This saved version needs a compatible reader. No older design is substituted.</p>}
         {a.source_changed && <p className="mt-2 text-xs text-amber-700">Source changed since this design. Review the architecture.</p>}
         {!!a.connection_preview?.length && <details className="mt-3 text-sm"><summary className="cursor-pointer font-medium text-slate-700">Inspect designed connections</summary><ul className="mt-2 space-y-2 border-l-2 border-cyan-100 pl-3">{a.connection_preview.map((connection, index) => <li key={index}><span>{connection.source} → {connection.target}</span><span className="block text-xs text-slate-500">{connection.label}</span></li>)}</ul>{a.connections_truncated && <p className="mt-2 text-xs text-slate-500">First 8 connections shown. Open the architecture for all connections.</p>}</details>}
         <div className="mt-4 flex flex-wrap gap-5 text-sm font-semibold text-cyan-700"><Link href={`/dashboard/architecture?application=${encodeURIComponent(a.id)}`} className="inline-flex items-center gap-1">View architecture <ArrowUpRight size={16} /></Link><Link href={`/dashboard/deployments?application=${encodeURIComponent(a.id)}`}>Deploy application →</Link></div>

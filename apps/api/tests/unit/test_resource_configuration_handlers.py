@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.services.architecture.resource_configuration import ResourceConfiguration, compile_template, validate_resources
 from test_resource_configuration import fixture
 from app.services.architecture.workspace_state import effective_spec
+from app.services.architecture.design_view import require_legacy_writer
 
 
 def handlers():
@@ -40,7 +41,7 @@ def handlers():
                  "member": lambda: None, "get_db": lambda: None, "application": application,
                  "latest": latest, "audit": audit, "Architecture": record,
                  "ResourceConfiguration": ResourceConfiguration, "validate_resources": validate_resources,
-                 "effective_spec": effective_spec, "record_head": AsyncMock(),
+                 "effective_spec": effective_spec, "record_head": AsyncMock(), "require_legacy_writer": require_legacy_writer,
                  "compile_template": compile_template, "output": lambda arch: {"id": arch.id, "version": arch.version, **copy.deepcopy(arch.spec_json)}}
     exec(compile(ast.Module(body=definitions, type_ignores=[]), "architecture_workspace_handlers", "exec"), namespace)
     return namespace
@@ -48,7 +49,7 @@ def handlers():
 
 def storage():
     graph, configs = fixture()
-    arch = SimpleNamespace(id="saved", version="v7", spec_json={"revision": 7, "graph": graph,
+    arch = SimpleNamespace(id="saved", version="v7", spec_json={"format": "repository-draft-v1", "revision": 7, "graph": graph,
         "resource_configurations": configs, "requirements": {"region": "ap-south-1"}, "proposal": None,
         "design_approval": {"version": "v7"}, "messages": [], "evidence": {"commit": "saved-source"}})
     db = SimpleNamespace(arch=arch, app=SimpleNamespace(id="asset", organization_id="org", name="Business"),

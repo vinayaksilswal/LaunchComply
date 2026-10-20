@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { newBusiness } from "../workspace-fixture";
+import { newBusiness, nativeDesignFixture } from "../workspace-fixture";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
@@ -221,4 +221,73 @@ test("map regions, zoom and deployment links work for a multi-region design", as
   await page.getByText("Inspect designed connections").click();
   await expect(page.getByText("Frontend → Private API")).toBeVisible();
   await page.screenshot({ path: `test-results/architecture-map-${test.info().project.name}.png`, fullPage: true });
+});
+
+
+test("native saved designs remain visible, exportable and protected in the real workspace", async ({ page, request }) => {
+  const { headers } = await newBusiness(page, request);
+  const asset = await (await request.post("/api/backend/applications/", { headers, data: { name: "Native history business" } })).json();
+  const workspace = `/api/backend/architecture/workspace/${asset.id}`;
+  const initial = await (await request.post(`${workspace}/initialize`, { headers })).json();
+  const graph = { nodes: [{ id: "vpc", label: "Original network", service: "AWS::EC2::VPC", zone: "DATA", description: "Saved design", x: 120, y: 120 }], edges: [] };
+  const saved = await request.post(`${workspace}/save`, { headers, data: { expected_id: initial.id, graph } });
+  expect(saved.ok()).toBeTruthy();
+  const original = await saved.json();
+  await nativeDesignFixture(original.id);
+  const currentResponse = await request.get(workspace, { headers });
+  expect(currentResponse.ok()).toBeTruthy();
+  const current = (await currentResponse.json()).architecture;
+  expect(current.id).not.toBe(original.id);
+  expect(current.read_only).toBe(true);
+  await page.goto(`/dashboard/architecture?application=${asset.id}`);
+  await page.mouse.move((page.viewportSize()?.width || 1280) - 24, 200);
+  await expect(page.getByText(/This design uses the new saved format/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save draft", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Add component", exact: true })).toBeDisabled();
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export draft JSON", exact: true }).click();
+  const download = await downloading;
+  const content = JSON.parse(await readFile((await download.path())!, "utf8"));
+  expect(content.format).toBe("launchcomply-design");
+  expect(content.revision_id).toBe(current.id);
+  expect(content.view_state.node_positions.vpc.pinned).toBe(true);
+  expect(content.extensions["customer.notes"].version).toBe(7);
+  await page.getByRole("button", { name: "History", exact: true }).click();
+  const history = page.getByRole("dialog", { name: "Saved architecture history" });
+  await expect(history.getByRole("button", { name: "Restore this architecture", exact: true })).toBeDisabled();
+  await history.getByRole("button").filter({ has: page.locator("strong", { hasText: new RegExp(`^${original.version}$`) }) }).click();
+  await expect(history.getByRole("heading", { name: original.version, exact: true })).toBeVisible();
+  await history.getByRole("button", { name: "Inspect saved design data", exact: true }).click();
+  const inspector = page.getByRole("dialog", { name: "Saved design data", exact: true });
+  await expect(inspector.getByText(/Historical version/)).toBeVisible();
+  await inspector.getByRole("button", { name: "Close saved design data" }).click();
+  await history.getByRole("button", { name: "Close architecture history" }).click();
+  await page.goto("/dashboard");
+  await expect(page.getByText("New-format design · Read only. Open the architecture to inspect or export it.")).toBeVisible();
+  const unchanged = (await (await request.get(`/api/backend/architecture/designs/${asset.id}`, { headers })).json()).design;
+  expect(unchanged).toEqual(content);
+});
+
+
+test("unsupported future heads offer history without replacing the current design", async ({ page, request }) => {
+  const { headers } = await newBusiness(page, request);
+  const asset = await (await request.post("/api/backend/applications/", { headers, data: { name: "Future version business" } })).json();
+  const workspace = `/api/backend/architecture/workspace/${asset.id}`;
+  const initial = await (await request.post(`${workspace}/initialize`, { headers })).json();
+  const graph = { nodes: [{ id: "vpc", label: "Original safe network", service: "AWS::EC2::VPC", zone: "DATA", description: "Preserve history", x: 120, y: 120 }], edges: [] };
+  const saved = await request.post(`${workspace}/save`, { headers, data: { expected_id: initial.id, graph } });
+  expect(saved.ok()).toBeTruthy();
+  const original = await saved.json();
+  await nativeDesignFixture(original.id, true);
+  await page.goto(`/dashboard/architecture?application=${asset.id}`);
+  await expect(page.getByRole("alert").filter({ hasText: "This design needs a compatible reader" })).toBeVisible();
+  await page.getByRole("button", { name: "History", exact: true }).click();
+  const history = page.getByRole("dialog", { name: "Saved architecture history" });
+  await expect(history.getByText(/Preview unavailable/)).toBeVisible();
+  await history.getByRole("button").filter({ has: page.locator("strong", { hasText: new RegExp(`^${original.version}$`) }) }).click();
+  await expect(history.getByRole("heading", { name: original.version, exact: true })).toBeVisible();
+  await expect(history.getByRole("button", { name: "Restore this architecture", exact: true })).toBeDisabled();
+  expect((await request.get(workspace, { headers })).status()).toBe(409);
+  const unchanged = (await (await request.get(`${workspace}/versions/${original.id}`, { headers })).json()).graph;
+  expect(unchanged).toEqual(graph);
 });

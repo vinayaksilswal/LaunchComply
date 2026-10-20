@@ -11,6 +11,9 @@ const apiDirectory = resolve(__dirname, "../api");
 const testDirectory = resolve(apiDirectory, ".test_tmp");
 mkdirSync(testDirectory, { recursive: true });
 const testDatabase = resolve(testDirectory, `playwright-${randomUUID()}.db`).replaceAll("\\", "/");
+// Config is reloaded in each worker; retain the runner-owned server database.
+// The Python seeder independently validates this isolated path before any write.
+if (process.env.TEST_WORKER_INDEX === undefined) process.env.LC_BROWSER_TEST_DATABASE = testDatabase;
 const python = resolve(apiDirectory, process.platform === "win32" ? ".venv/Scripts/python.exe" : ".venv/bin/python");
 
 // Local browser origin alone is insufficient: Next rewrites may target production.
