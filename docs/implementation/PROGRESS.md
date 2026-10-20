@@ -58,7 +58,8 @@ refresh is reviewed before Apply, preserving customer configuration and layout.
   Commit `b53fe2a`; local checks and final API, PostgreSQL and browser CI passed.
   Native saves and the full editor cutover remain part of A03. [Reader evidence](2026-10-16-canonical-reader.md).
 
-- [ ] Mixed-version current design/history/map, complete native JSON download, and protection against lossy old-client writes. Local targeted backend, production build and two real browser workflows passed; final CI pending. Native editing remains gated. [Evidence](2026-10-20-mixed-design-history.md).
+- [x] ~~Mixed-version current design/history/map, complete native JSON download, and protection against lossy old-client writes.~~
+  Commit `c9766f9`; full API, PostgreSQL and browser CI passed. Native editing remains gated. [Evidence](2026-10-20-mixed-design-history.md).
 
 ## Your requested product direction
 

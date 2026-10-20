@@ -18,7 +18,7 @@ Implemented on 20 October 2026. This is a reader rollout, not native-write or AW
 - Production frontend build, lint and type checks passed.
 - Actual isolated browser/API journeys: **2 passed** (30.2s). They verify read-only controls, complete native JSON download, pinned fields/extensions, historical inspection, dashboard status and recovery from an unsupported current version. No intercepted API results or test-only HTTP endpoints.
 - The browser fixture seeder refuses databases outside the existing owned Playwright SQLite path and refuses non-test environments. Config is reloaded by workers, so the runner-owned database path is inherited without regeneration. An initial failing fixture run exposed this; it was corrected and the same real workflows passed.
-- PostgreSQL adds concurrent source-invalidation coverage around a native head, raw JSON/timestamp preservation and mixed history. Final API/PostgreSQL/browser CI pending at this checkpoint.
+- PostgreSQL adds concurrent source-invalidation coverage around a native head, raw JSON/timestamp preservation and mixed history. Final API/PostgreSQL/browser CI **all passed** for commit `c9766f9`, including full API regression after the harness fix, real PostgreSQL concurrent invalidation and the complete browser suite. [CI run 39460791870](https://github.com/vinayaksilswal/LaunchComply/actions/runs/39460791870).
 
 No data migration or bulk snapshot rewrite. No AWS action or paid model invocation. Local/browser acceptance is not hosted deployment acceptance.
 

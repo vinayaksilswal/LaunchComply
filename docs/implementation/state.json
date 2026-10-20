@@ -125,7 +125,7 @@
       ],
       "release": "R1",
       "status": "IN_PROGRESS",
-      "checkpoint": "Reader-first contract verified at b53fe2a. Mixed-format head/history/map readers and native read-only projections now implemented, with full native JSON download and recovery history for unsupported versions. Legacy mutation/export/approval/restore guards preserve native fields and prevent silent fallback. Final local targeted 19 passed, frontend production build/lint/type checks and 2 real browser journeys passed. Full local API initially found 9 AST harness dependency failures; corrected harness passed targeted tests. Final CI pending. Native migration/save/mutations/restore and consumer round-trips remain; A03 is not complete.",
+      "checkpoint": "Reader-first contract verified at b53fe2a. Mixed-format head/history/map readers and native read-only projections verified at c9766f9: full native JSON download, recovery history for unsupported versions, legacy mutation/export/approval/restore guards, canonical source invalidation pointer preservation. Final local targeted 19 passed, frontend production build/lint/type checks and 2 real browser journeys passed. Final API/PostgreSQL/browser CI all succeeded (39460791870), including full API regression and concurrent native-head source invalidation. Native migration/save/mutations/restore and consumer round-trips remain; A03 is not complete.",
       "evidence": [
         {
           "kind": "test",
@@ -137,9 +137,9 @@
         {
           "kind": "test",
           "path_or_url": "2026-10-20-mixed-design-history.md",
-          "commit": "working-tree",
+          "commit": "c9766f990a353f5ef407c48fdb2579f665351468",
           "observed_at": "2026-10-20",
-          "summary": "Mixed readers and safe native read-only boundary; 19 targeted API tests and 2 real browser workflows passed; final CI pending."
+          "summary": "Mixed current/history/map readers, full native export and recovery UI verified. Final local targeted 19 passed and 2 real browser workflows passed. All full API/PostgreSQL/browser CI succeeded: https://github.com/vinayaksilswal/LaunchComply/actions/runs/39460791870. Native editing/writes remain gated."
         }
       ]
     },
@@ -616,14 +616,14 @@
   "handoff": {
     "current_task": "A03",
     "next_task": "A03",
-    "next_action": "Finish A03 native writer transition: add a gated explicit migrate/save contract with expected head/source epoch, locked tenant asset, server revision/parent/tenant identity and immutable append. Mutate canonical owners, preserve typed connections/targets/view/extensions and stable IDs; never save the legacy read-only projection. Implement native restore-as-new, then source/proposal/resource/compiler round-trips before enabling writers. Mixed-history/current/map readers and recovery UI are implemented; verify final CI evidence, do not redo them.",
+    "next_action": "Finish A03 native writer transition: add a gated explicit migrate/save contract with expected head/source epoch, locked tenant asset, server revision/parent/tenant identity and immutable append. Mutate canonical owners, preserve typed connections/targets/view/extensions and stable IDs; never save the legacy read-only projection. Implement native restore-as-new, then source/proposal/resource/compiler round-trips before enabling writers. Mixed-history/current/map readers and recovery UI are implemented; final API/PostgreSQL/browser CI passed at c9766f9 (39460791870); do not redo them.",
     "notes": [
       "A01 complete: all three Linux CI jobs passed at 97918cc.",
       "35-package programme and all release gates are not complete.",
       "Preserve unrelated .artifacts/.",
       "Customer brings existing software; agency custom-development journey is superseded."
     ],
-    "uncommitted_scope": "A03 mixed-history readers, native read-only UI/export and legacy writer guards, test fixtures and evidence; preserve unrelated .artifacts/."
+    "uncommitted_scope": "None after checkpoint commit; preserve unrelated .artifacts/."
   },
   "additional_requests": [
     {
