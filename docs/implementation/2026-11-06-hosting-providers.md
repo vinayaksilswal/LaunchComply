@@ -84,3 +84,21 @@ proposal and the current hosting as two options in one architecture tab.
   fixtures. The first live refresh may reveal field differences.
 - Probes are on-demand or while-open checks, not continuous uptime monitoring.
   Scheduled checks and notifications are follow-up work.
+
+## Follow-up the same day (commits 4dc7925, 4c74970)
+
+- Provider failures return HTTP 424 with the provider's reason. The web client
+  hid 5xx details, which made a Neon refusal look like an outage.
+- Neon keys inside an organization: the single visible organization is discovered
+  and stored with the encrypted credential.
+- Resources carry their GitHub repository, root folder and branch, and are grouped
+  into projects by repository. Databases and media join the projects whose services
+  link to them. LaunchComply applications are matched by repository, and by root
+  path for monorepos.
+- Status follows the deployment that is actually serving. A newer build or failed
+  deploy shows as detail or DEGRADED rather than hiding a live site.
+- Live updates (every minute while the view is open) are on by default. A refresh
+  runs right after a provider is connected.
+- Live acceptance so far: the customer connected Vercel (6 projects, health probes
+  responding), Render and Neon in production. Render and Neon inventories await the
+  first refresh after deploy.
