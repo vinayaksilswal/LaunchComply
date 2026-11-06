@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "plan_version": "1.0",
-  "updated_at": "2026-10-20",
+  "updated_at": "2026-11-06",
   "audited_baseline_commit": "83a5d87",
   "planning_complete": true,
   "implementation_started_under_this_plan": true,
@@ -631,6 +631,12 @@
       "status": "IMPLEMENTED_LOCAL_VERIFIED",
       "description": "World map dashboard with saved AWS architecture locations, availability, connection details and Deploy application links. Runtime health remains unverified.",
       "evidence": "2026-10-14-dashboard-baseline.md"
+    },
+    {
+      "id": "hosting_providers",
+      "status": "IMPLEMENTED_LOCAL_VERIFIED",
+      "description": "Manage and monitor Vercel/Render/Neon/Cloudinary hosting (Tech Invenso) from the architecture tab: encrypted connections, linked topology, HTTPS probes, alerts, confirmed audited actions. Live provider acceptance pending deploy of migration c14d2e3f4a5b and real tokens.",
+      "evidence": "2026-11-06-hosting-providers.md"
     }
   ],
   "customer_direction": {

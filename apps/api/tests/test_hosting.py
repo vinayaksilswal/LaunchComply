@@ -1,0 +1,273 @@
+"""Hosting provider management with fixture HTTP transports; no real provider is contacted."""
+import json
+import uuid
+
+import httpx
+import pytest
+import pytest_asyncio
+from sqlalchemy import select
+
+from app.core.database import AsyncSessionLocal
+from app.main import app
+from app.models.audit import AuditEvent
+from app.models.hosting import HostingProviderConnection
+from app.services.hosting import monitoring, providers
+
+VERCEL_TOKEN = "vercel_fixture_token_SENSITIVE"
+RENDER_KEY = "rnd_fixture_key_SENSITIVE"
+NEON_KEY = "neon_fixture_key_SENSITIVE"
+CLOUD_SECRET = "cloud_fixture_secret_SENSITIVE"
+DB_PASSWORD = "dbpass_SENSITIVE"
+ENV_VALUE = "new_value_SENSITIVE"
+
+
+def provider_api(calls):
+    def respond(request: httpx.Request):
+        calls.append(request)
+        host, path, method = request.url.host, request.url.path, request.method
+        if host == "api.vercel.com":
+            if request.headers.get("authorization") != f"Bearer {VERCEL_TOKEN}":
+                return httpx.Response(403, json={"error": {"message": "forbidden"}})
+            if path == "/v2/user":
+                return httpx.Response(200, json={"user": {"id": "user_1", "username": "techinvenso"}})
+            if path == "/v9/projects":
+                return httpx.Response(200, json={"projects": [{"id": "prj_hrms", "name": "hrms", "framework": "vite",
+                                                               "link": {"org": "techinvenso", "repo": "HRMS", "productionBranch": "main"}}]})
+            if path == "/v6/deployments":
+                return httpx.Response(200, json={"deployments": [
+                    {"uid": "dpl_new", "readyState": "READY", "target": "production", "created": 1790000000000, "url": "hrms-new.vercel.app",
+                     "meta": {"githubCommitSha": "abc123def4567890", "githubCommitMessage": "Ship payroll"}},
+                    {"uid": "dpl_old", "readyState": "READY", "target": "production", "created": 1780000000000, "url": "hrms-old.vercel.app"},
+                    {"uid": "dpl_preview", "readyState": "READY", "target": None, "created": 1785000000000, "url": "hrms-pr.vercel.app"}]})
+            if path == "/v9/projects/prj_hrms/domains":
+                return httpx.Response(200, json={"domains": [{"name": "hrms.techinvenso.com"}]})
+            if path == "/v9/projects/prj_hrms/env" and method == "GET":
+                return httpx.Response(200, json={"envs": [
+                    {"id": "env_1", "key": "VITE_API_URL", "type": "plain", "value": "https://api.techinvenso.com/api/v1", "target": ["production"]},
+                    {"id": "env_2", "key": "SESSION_SECRET", "type": "encrypted", "value": "ZW5jcnlwdGVk", "target": ["production"]}]})
+            if path == "/v13/deployments" and method == "POST":
+                return httpx.Response(200, json={"id": "dpl_redeploy", "readyState": "QUEUED"})
+            if path == "/v10/projects/prj_hrms/env" and method == "POST":
+                return httpx.Response(201, json={"created": {"key": json.loads(request.content)["key"]}})
+            if path.startswith("/v9/projects/prj_hrms/rollback/") and method == "POST":
+                return httpx.Response(201)
+        if host == "api.render.com":
+            if request.headers.get("authorization") != f"Bearer {RENDER_KEY}":
+                return httpx.Response(401, json={"message": "unauthorized"})
+            if path == "/v1/owners":
+                return httpx.Response(200, json=[{"owner": {"id": "tea_1", "name": "Tech Invenso"}}])
+            if path == "/v1/services":
+                assert request.url.params["ownerId"] == "tea_1"
+                return httpx.Response(200, json=[{"service": {"id": "srv_api", "name": "techinvenso-api", "type": "web_service",
+                    "suspended": "not_suspended", "repo": "https://github.com/techinvenso/HRMS", "branch": "main",
+                    "serviceDetails": {"url": "https://techinvenso-api.onrender.com", "region": "singapore", "plan": "starter",
+                                       "numInstances": 1, "healthCheckPath": "/health", "runtime": "docker"}}}])
+            if path == "/v1/services/srv_api/deploys" and method == "GET":
+                return httpx.Response(200, json=[{"deploy": {"id": "dep_live", "status": "live", "commit": {"id": "fff000", "message": "fix"}}},
+                                                 {"deploy": {"id": "dep_failed", "status": "build_failed"}}])
+            if path == "/v1/services/srv_api/env-vars":
+                return httpx.Response(200, json=[
+                    {"envVar": {"key": "DATABASE_URL", "value": f"postgresql://owner:{DB_PASSWORD}@ep-calm-sea-123-pooler.ap-southeast-1.aws.neon.tech/neondb"}},
+                    {"envVar": {"key": "CLOUDINARY_URL", "value": f"cloudinary://111:{CLOUD_SECRET}@techinvenso"}}])
+            if path == "/v1/services/srv_api/custom-domains":
+                return httpx.Response(200, json=[{"customDomain": {"name": "api.techinvenso.com"}}])
+            if path == "/v1/services/srv_api/scale" and method == "POST":
+                return httpx.Response(202)
+        if host == "console.neon.tech":
+            if path == "/api/v2/projects":
+                return httpx.Response(200, json={"projects": [{"id": "proj_1", "name": "techinvenso-db", "region_id": "aws-ap-southeast-1",
+                                                               "pg_version": 16, "synthetic_storage_size": 1024}]})
+            if path == "/api/v2/users/me":
+                return httpx.Response(200, json={"email": "owner@techinvenso.test"})
+            if path == "/api/v2/projects/proj_1/branches" and method == "GET":
+                return httpx.Response(200, json={"branches": [{"id": "br_main", "name": "main", "default": True},
+                                                              {"id": "br_dev", "name": "dev", "default": False}]})
+            if path == "/api/v2/projects/proj_1/endpoints":
+                return httpx.Response(200, json={"endpoints": [{"id": "ep-calm-sea-123", "branch_id": "br_main", "type": "read_write",
+                    "current_state": "idle", "host": "ep-calm-sea-123.ap-southeast-1.aws.neon.tech",
+                    "autoscaling_limit_min_cu": 0.25, "autoscaling_limit_max_cu": 1}]})
+        if host == "api.cloudinary.com":
+            if path == "/v1_1/techinvenso/usage":
+                return httpx.Response(200, json={"plan": "Free", "credits": {"usage": 21, "limit": 25, "used_percent": 84.0}})
+            if path == "/v1_1/techinvenso/upload_presets":
+                return httpx.Response(200, json={"presets": [{"name": "avatars", "unsigned": True, "settings": {"folder": "avatars"}}]})
+            if path == "/v1_1/techinvenso/folders":
+                return httpx.Response(200, json={"folders": [{"name": "avatars", "path": "avatars"}]})
+        raise AssertionError(f"Unexpected provider call {method} {host}{path}")
+    return respond
+
+
+async def register(client, name):
+    account = (await client.post("/api/v1/auth/register", json={"email": f"{name}-{uuid.uuid4().hex}@example.com",
+        "password": "TestPassword123!", "full_name": name, "organization_name": f"{name} business"})).json()
+    return {"Authorization": f"Bearer {account['access_token']}", "X-Organization-ID": account["organization_id"]}
+
+
+@pytest_asyncio.fixture
+async def hosting(monkeypatch):
+    calls, probes = [], []
+    monkeypatch.setattr(providers, "client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(provider_api(calls))))
+
+    def probe_site(request):
+        probes.append(str(request.url))
+        if request.url.host == "hrms.techinvenso.com":
+            return httpx.Response(502)
+        return httpx.Response(200, json={"status": "HEALTHY"})
+
+    monkeypatch.setattr(monitoring, "client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(probe_site)))
+
+    async def always_public(url):
+        return url.startswith("https://")
+
+    monkeypatch.setattr(monitoring, "public_https", always_public)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        yield client, await register(client, "owner"), calls, probes
+
+
+async def connect_all(client, headers):
+    bodies = [
+        {"provider": "VERCEL", "label": "Vercel", "credentials": {"token": VERCEL_TOKEN}},
+        {"provider": "RENDER", "label": "Render", "credentials": {"api_key": RENDER_KEY}},
+        {"provider": "NEON", "label": "Neon", "credentials": {"api_key": NEON_KEY}},
+        {"provider": "CLOUDINARY", "label": "Cloudinary", "credentials": {"cloud_name": "techinvenso", "api_key": "111", "api_secret": CLOUD_SECRET}},
+    ]
+    out = {}
+    for body in bodies:
+        response = await client.post("/api/v1/hosting/connections", headers=headers, json=body)
+        assert response.status_code == 200, response.text
+        out[body["provider"]] = response.json()
+    return out
+
+
+def leaks(text):
+    return [s for s in (VERCEL_TOKEN, RENDER_KEY, NEON_KEY, CLOUD_SECRET, DB_PASSWORD, ENV_VALUE) if s in text]
+
+
+@pytest.mark.asyncio
+async def test_connect_stores_only_ciphertext_and_rejects_bad_credentials(hosting):
+    client, headers, calls, _ = hosting
+    rejected = await client.post("/api/v1/hosting/connections", headers=headers,
+                                 json={"provider": "VERCEL", "label": "Bad", "credentials": {"token": "wrong_token_value"}})
+    assert rejected.status_code == 400
+    connections = await connect_all(client, headers)
+    assert connections["VERCEL"]["credential_hint"] == "…TIVE"
+    assert connections["RENDER"]["account_ref"] == "tea_1"
+    duplicate = await client.post("/api/v1/hosting/connections", headers=headers,
+                                  json={"provider": "VERCEL", "label": "Again", "credentials": {"token": VERCEL_TOKEN}})
+    assert duplicate.status_code == 409
+    unknown = await client.post("/api/v1/hosting/connections", headers=headers,
+                                json={"provider": "RENDER", "label": "x", "credentials": {"api_key": RENDER_KEY, "password": "p"}})
+    assert unknown.status_code == 422
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(select(HostingProviderConnection).where(
+            HostingProviderConnection.organization_id == headers["X-Organization-ID"]))).scalars().all()
+        assert len(rows) == 4
+        assert not leaks(json.dumps([[r.credential_encrypted, r.credential_hint, r.account_name] for r in rows]))
+    overview = await client.get("/api/v1/hosting/overview", headers=headers)
+    assert not leaks(overview.text)
+
+
+@pytest.mark.asyncio
+async def test_refresh_links_providers_probes_and_never_stores_env_values(hosting):
+    client, headers, calls, probes = hosting
+    await connect_all(client, headers)
+    refreshed = await client.post("/api/v1/hosting/refresh", headers=headers)
+    assert refreshed.status_code == 200 and refreshed.json()["errors"] == []
+    cached = await client.post("/api/v1/hosting/refresh", headers=headers)
+    assert cached.json()["refreshed"] is False
+    data = (await client.get("/api/v1/hosting/overview", headers=headers)).json()
+    by_id = {r["id"]: r for r in data["resources"]}
+    assert set(by_id) == {"prj_hrms", "srv_api", "proj_1", "techinvenso"}
+    frontend, api = by_id["prj_hrms"], by_id["srv_api"]
+    assert frontend["status"] == "HEALTHY" and frontend["env_keys"] == ["SESSION_SECRET", "VITE_API_URL"]
+    assert frontend["links"] == [{"provider": "RENDER", "resource_id": "srv_api", "via": "VITE_API_URL", "evidence": "ENV_HOST_MATCH"}]
+    assert {(l["resource_id"], l["evidence"]) for l in api["links"]} == {("proj_1", "ENV_HOST_MATCH"), ("techinvenso", "ENV_HOST_MATCH")}
+    assert by_id["techinvenso"]["status"] == "DEGRADED"
+    assert "https://techinvenso-api.onrender.com/health" in probes
+    severities = {(a["resource"], a["severity"]) for a in data["alerts"]}
+    assert ("hrms", "critical") in severities and ("techinvenso", "warning") in severities
+    assert data["history"] and data["summary"]["HEALTHY"] >= 2
+    assert not leaks(json.dumps(data))
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(select(HostingProviderConnection).where(
+            HostingProviderConnection.organization_id == headers["X-Organization-ID"]))).scalars().all()
+        stored = json.dumps([[r.inventory_json, r.health_json] for r in rows])
+        assert not leaks(stored) and "_env_hosts" not in stored and "api.techinvenso.com/api/v1" not in stored
+
+
+@pytest.mark.asyncio
+async def test_actions_require_confirmation_validate_scope_and_audit_without_values(hosting):
+    client, headers, calls, _ = hosting
+    connections = await connect_all(client, headers)
+    await client.post("/api/v1/hosting/refresh", headers=headers)
+    vercel, render, neon = connections["VERCEL"]["id"], connections["RENDER"]["id"], connections["NEON"]["id"]
+    run = lambda cid, body: client.post(f"/api/v1/hosting/connections/{cid}/actions", headers=headers, json=body)
+
+    before = len(calls)
+    assert (await run(vercel, {"resource_id": "prj_hrms", "action": "redeploy"})).status_code == 428
+    assert (await run(vercel, {"resource_id": "prj_hrms", "action": "rollback", "confirm": True,
+                               "params": {"deployment_id": "dpl_old"}})).status_code == 428
+    assert (await run(vercel, {"resource_id": "prj_hrms", "action": "rollback", "confirm": True, "confirm_name": "hrms",
+                               "params": {"deployment_id": "dpl_preview"}})).status_code == 409
+    assert (await run(render, {"resource_id": "srv_api", "action": "scale", "confirm": True,
+                               "params": {"num_instances": 50}})).status_code == 422
+    assert (await run(render, {"resource_id": "srv_api", "action": "redeploy", "confirm": True})).status_code == 422
+    assert (await run(neon, {"resource_id": "proj_1", "action": "delete_branch", "confirm": True, "confirm_name": "techinvenso-db",
+                             "params": {"branch_id": "br_main"}})).status_code == 409
+    assert len(calls) == before, "rejected actions must not reach the provider"
+
+    redeploy = await run(vercel, {"resource_id": "prj_hrms", "action": "redeploy", "confirm": True})
+    assert redeploy.status_code == 200 and redeploy.json()["deployment_id"] == "dpl_redeploy"
+    assert json.loads(calls[-1].content)["deploymentId"] == "dpl_new"
+    rollback = await run(vercel, {"resource_id": "prj_hrms", "action": "rollback", "confirm": True, "confirm_name": "hrms",
+                                  "params": {"deployment_id": "dpl_old"}})
+    assert rollback.status_code == 200 and calls[-1].url.path.endswith("/rollback/dpl_old")
+    env = await run(vercel, {"resource_id": "prj_hrms", "action": "set_env", "confirm": True,
+                             "params": {"key": "VITE_FEATURE", "value": ENV_VALUE, "targets": ["production"]}})
+    assert env.status_code == 200 and not leaks(env.text)
+    assert json.loads(calls[-1].content)["type"] == "encrypted"
+    scale = await run(render, {"resource_id": "srv_api", "action": "scale", "confirm": True, "params": {"num_instances": 2}})
+    assert scale.status_code == 200 and json.loads(calls[-1].content) == {"numInstances": 2}
+
+    async with AsyncSessionLocal() as db:
+        events = (await db.execute(select(AuditEvent).where(AuditEvent.organization_id == headers["X-Organization-ID"],
+                                                            AuditEvent.action == "HOSTING_ACTION"))).scalars().all()
+        assert {e.details["action"] for e in events} == {"redeploy", "rollback", "set_env", "scale"}
+        assert not leaks(json.dumps([e.details for e in events]))
+
+
+@pytest.mark.asyncio
+async def test_other_business_and_members_cannot_use_connections(hosting):
+    client, headers, calls, _ = hosting
+    connections = await connect_all(client, headers)
+    await client.post("/api/v1/hosting/refresh", headers=headers)
+    outsider = await register(client, "outsider")
+    assert (await client.get("/api/v1/hosting/overview", headers=outsider)).json()["resources"] == []
+    action = await client.post(f"/api/v1/hosting/connections/{connections['RENDER']['id']}/actions", headers=outsider,
+                               json={"resource_id": "srv_api", "action": "restart", "confirm": True})
+    assert action.status_code == 404
+    assert (await client.delete(f"/api/v1/hosting/connections/{connections['RENDER']['id']}", headers=outsider)).status_code == 404
+    spoofed = {**outsider, "X-Organization-ID": headers["X-Organization-ID"]}
+    assert (await client.get("/api/v1/hosting/overview", headers=spoofed)).status_code == 403
+
+
+def test_link_resources_name_only_fallback_requires_single_candidate():
+    resources = [
+        {"id": "f", "provider": "VERCEL", "kind": "frontend", "name": "f", "hosts": [], "env_keys": ["NEXT_PUBLIC_API_URL"], "_env_hosts": {}},
+        {"id": "a", "provider": "RENDER", "kind": "web_service", "name": "a", "hosts": ["a.onrender.com"], "env_keys": [], "_env_hosts": {}},
+    ]
+    monitoring.link_resources(resources)
+    assert resources[0]["links"] == [{"provider": "RENDER", "resource_id": "a", "via": "NEXT_PUBLIC_API_URL", "evidence": "ENV_NAME_ONLY"}]
+    resources.append({"id": "b", "provider": "RENDER", "kind": "web_service", "name": "b", "hosts": [], "env_keys": [], "_env_hosts": {}})
+    for r in resources:
+        r["_env_hosts"] = {}
+    monitoring.link_resources(resources)
+    assert resources[0]["links"] == []
+
+
+@pytest.mark.asyncio
+async def test_probe_refuses_private_and_non_https_targets():
+    assert not await monitoring.public_https("http://example.com")
+    assert not await monitoring.public_https("https://127.0.0.1/")
+    assert not await monitoring.public_https("https://localhost/")
+    assert not await monitoring.public_https("https://10.0.0.5:443/")

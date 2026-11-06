@@ -144,6 +144,13 @@ workflow is verified; this list does not mean every item must be rebuilt.
   the dashboard map, with freshness and source coverage.
 - [ ] Security findings, drift detection, backup/recovery and operational actions.
 - [ ] Cost visibility, budgets and usage controls for an affordable service.
+- [ ] Manage and monitor Tech Invenso's real Vercel, Render, Neon and Cloudinary
+  hosting from LaunchComply, with the AWS proposal and current hosting as two options
+  in one architecture tab (requested 6 November 2026). **Implemented and verified
+  locally with fixture providers.** Covers encrypted connections, linked topology,
+  HTTPS health checks, alerts, and confirmed and audited actions. Live acceptance
+  waits on deploying migration `c14d2e3f4a5b` and entering real tokens.
+  [Evidence](2026-11-06-hosting-providers.md).
 
 ## Dashboard and customer-management requests
 
