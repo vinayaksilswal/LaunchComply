@@ -343,11 +343,11 @@ def test_projects_group_by_repository_and_match_monorepo_applications():
     assert set(projects) == {"techinvenso/hrms", "vinayak/vighnaharan", "unassigned"}
     hrms = projects["techinvenso/hrms"]
     assert set(hrms["resource_ids"]) == {"v_hrms", "v_erp", "api", "db"}, "database joins the project of the service using it"
-    assert hrms["name"] == "Techinvenso HRMS" and hrms["repo_url"] == "https://github.com/techinvenso/HRMS"
+    assert hrms["name"] == "HRMS" and hrms["applications"] == [{"id": "app_hrms", "name": "Techinvenso HRMS"}] and hrms["repo_url"] == "https://github.com/techinvenso/HRMS"
     by_id = {r["id"]: r for r in resources}
     assert by_id["v_hrms"]["application_ids"] == ["app_hrms"]
     assert by_id["v_erp"]["application_ids"] == [] and by_id["api"]["application_ids"] == [], "root path limits monorepo matching"
-    assert by_id["v_vig"]["application_ids"] == ["app_vig"] and projects["vinayak/vighnaharan"]["name"] == "Vighnaharan"
+    assert by_id["v_vig"]["application_ids"] == ["app_vig"] and projects["vinayak/vighnaharan"]["name"] == "vighnaharan"
     assert projects["unassigned"]["resource_ids"] == ["media"]
 
 
@@ -356,3 +356,9 @@ def test_status_follows_live_deployment_while_new_build_runs():
     assert repo_identity("https://github.com/techinvenso/HRMS.git") == ("techinvenso/HRMS", "https://github.com/techinvenso/HRMS")
     assert repo_identity("techinvenso/HRMS") == ("techinvenso/HRMS", "https://github.com/techinvenso/HRMS")
     assert repo_identity(None) == (None, None)
+
+
+def test_unknown_status_becomes_healthy_only_when_site_answers():
+    resources = [{"id": "a", "status": "UNKNOWN"}, {"id": "b", "status": "UNKNOWN"}, {"id": "c", "status": "FAILED"}]
+    monitoring.apply_probe_status(resources, [{"resource_id": "a", "ok": True}, {"resource_id": "b", "ok": False}, {"resource_id": "c", "ok": True}])
+    assert [r["status"] for r in resources] == ["HEALTHY", "UNKNOWN", "FAILED"]

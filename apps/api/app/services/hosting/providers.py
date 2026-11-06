@@ -327,7 +327,8 @@ class Vercel:
                 "framework": project.get("framework"), "status": status, "status_detail": detail,
                 "urls": urls, "domains": names, "hosts": sorted({h for h in (host_of(u) for u in urls) if h}),
                 "repo": repo_name, "repo_url": repo_url, "root_dir": project.get("rootDirectory") or None,
-                "branch": link.get("productionBranch"), "region": None,
+                # Static assets are served from Vercel's global edge; server code runs in this region.
+                "branch": link.get("productionBranch"), "region": project.get("serverlessFunctionRegion") or None,
                 "deployments": items, "env_keys": sorted({e["key"] for e in env_list if e.get("key")}),
                 "_env_hosts": env_hosts((e.get("key", ""), e.get("value")) for e in env_list if e.get("type") == "plain"),
                 "dashboard_url": None}

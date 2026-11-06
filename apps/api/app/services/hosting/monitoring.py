@@ -141,6 +141,15 @@ def alerts(resources: list[dict], probes: list[dict]) -> list[dict]:
     return sorted(found, key=lambda a: order[a["severity"]])
 
 
+def apply_probe_status(resources: list[dict], probes: list[dict]) -> None:
+    """A site the provider cannot describe but which answers HTTPS is up, not unknown."""
+    answering = {p["resource_id"] for p in probes if p["ok"]}
+    for resource in resources:
+        if resource["status"] == "UNKNOWN" and resource["id"] in answering:
+            resource["status"] = "HEALTHY"
+            resource["status_detail"] = "Responding over HTTPS; provider deployment state unavailable"
+
+
 def health_record(previous: dict | None, resources: list[dict], probes: list[dict]) -> dict:
     found = alerts(resources, probes)
     checked = now()
@@ -199,7 +208,6 @@ def group_projects(resources: list[dict], applications: list[dict]) -> list[dict
                 if (not own or not root or folder == root or folder.startswith(root + "/")) and app["id"] not in resource["application_ids"]:
                     resource["application_ids"].append(app["id"])
     for project in projects.values():
-        names = [a["name"] for a in project["applications"]]
-        project["name"] = names[0] if len(names) == 1 else (project["repo"] or project["key"]).split("/")[-1] \
-            if project["key"] != "unassigned" else "Not linked to a repository"
+        # Name projects by repository so one LaunchComply app spanning several repos stays distinguishable.
+        project["name"] = (project["repo"] or project["key"]).split("/")[-1] if project["key"] != "unassigned" else "Not linked to a repository"
     return sorted(projects.values(), key=lambda p: (p["key"] == "unassigned", p["name"].lower()))

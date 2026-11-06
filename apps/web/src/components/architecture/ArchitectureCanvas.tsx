@@ -59,6 +59,7 @@ import { CanonicalDesignPanel } from "./CanonicalDesignPanel";
 import { RequestFlows } from "./RequestFlows";
 import { arrangeResourceTopology, resourceBoundaries, visibleTopology, routingLabels, type ResourceTopology } from "./resourceTopology";
 import { ResourceTopologyMap } from "./ResourceTopologyMap";
+import { matchLiveStatus, useLiveHosting } from "./liveHosting";
 const noConnections: EnvironmentConnection[] = [];
 
 type Zone = "EDGE" | "APPLICATION" | "DATA" | "SUPPORT";
@@ -156,6 +157,7 @@ export function ArchitectureCanvas() {
   const [showResourceLinks, setShowResourceLinks] = useState(false);
   const [cloudFocus, setCloudFocus] = useState<string | null>(null);
   const [view, setView] = useState<"cloud" | "code" | "inventory">(["approval", "review"].includes(query.get("step") || "") ? "inventory" : "cloud");
+  const liveOverview = useLiveHosting(view === "cloud");
   const [codeMode, setCodeMode] = useState<"overview" | "files">("overview");
   const [codeFocus, setCodeFocus] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -902,6 +904,7 @@ export function ArchitectureCanvas() {
                   boundaries={boundaries.length ? boundaries : undefined}
                   resourceTopology={view === "cloud" ? topology : undefined}
                   showResourceLinks={showResourceLinks}
+                  liveStatus={view === "cloud" ? matchLiveStatus(shown.nodes, liveOverview) : undefined}
                   workloadPolicies={draft.requirements?.workload_policies}
                   onSelect={(id) => {
                     setSelected(id);
@@ -989,7 +992,7 @@ export function ArchitectureCanvas() {
             )}
           </div>
           <p className="px-4 py-1.5 shrink-0 border-t border-slate-100 text-[11px] leading-5 text-slate-500">
-            {view === "code" ? "Static imports from the inspected source sample. Dynamic runtime connections are not verified." : "Proposed placement · not deployed. Traffic targets inform planning; exact capacity, networking and recovery require validation."}
+            {view === "code" ? "Static imports from the inspected source sample. Dynamic runtime connections are not verified." : `Proposed placement · not deployed. Traffic targets inform planning; exact capacity, networking and recovery require validation.${(() => { const n = Object.keys(matchLiveStatus(shown.nodes, liveOverview)).length; return n ? ` LIVE badges: ${n} component${n === 1 ? "" : "s"} matched to today's hosting (Current hosting).` : ""; })()}`}
           </p>
           <div className="px-4 py-2 shrink-0 border-t flex flex-wrap justify-between items-center gap-3 text-xs text-slate-500">
             <span className="inline-flex gap-2 items-center">

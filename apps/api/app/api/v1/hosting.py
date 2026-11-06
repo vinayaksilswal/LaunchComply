@@ -247,6 +247,7 @@ async def refresh(membership=Depends(member), db: AsyncSession = Depends(get_db)
             everything += [dict(r) for r in inventory or []]
     monitoring.link_resources(everything)
     probes = await bounded(monitoring.check([r for inventory in fresh.values() for r in inventory]), 60)
+    monitoring.apply_probe_status([r for inventory in fresh.values() for r in inventory], probes)
 
     errors = {row_id: error for row_id, inventory, error in results if error}
     for row in (await db.execute(select(HostingProviderConnection).where(

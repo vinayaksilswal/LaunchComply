@@ -4,6 +4,16 @@ import { routeFlow, flowEvidence, flowPorts } from "./flowRouting";
 import { networkPlacement } from "./networkPlacement";
 import type { WorkloadPolicy } from "./ProductionDiagram";
 import { routingLabels, type ResourceTopology } from "./resourceTopology";
+import type { LiveNodeStatus } from "./liveHosting";
+
+const LIVE_TONE: Record<LiveNodeStatus["status"], { bg: string; border: string; dot: string; text: string }> = {
+  HEALTHY: { bg: "#ecfdf5", border: "#a7f3d0", dot: "#10b981", text: "#047857" },
+  DEPLOYING: { bg: "#f0f9ff", border: "#bae6fd", dot: "#0ea5e9", text: "#0369a1" },
+  DEGRADED: { bg: "#fffbeb", border: "#fde68a", dot: "#f59e0b", text: "#92400e" },
+  FAILED: { bg: "#fff1f2", border: "#fecdd3", dot: "#f43f5e", text: "#be123c" },
+  SUSPENDED: { bg: "#f1f5f9", border: "#cbd5e1", dot: "#94a3b8", text: "#475569" },
+  UNKNOWN: { bg: "#f8fafc", border: "#e2e8f0", dot: "#cbd5e1", text: "#64748b" },
+};
 import {
   Globe,
   Server,
@@ -136,6 +146,8 @@ export const CloudDiagram = forwardRef<
     workloadPolicies?: WorkloadPolicy[];
     resourceTopology?: ResourceTopology;
     showResourceLinks?: boolean;
+    /** Live status of the resource each component runs as today (Current hosting). */
+    liveStatus?: Record<string, LiveNodeStatus>;
     onSelect: (id: string) => void;
     onNodePointerDown?: (
       event: React.PointerEvent<SVGGElement>,
@@ -155,6 +167,7 @@ export const CloudDiagram = forwardRef<
     workloadPolicies,
     resourceTopology,
     showResourceLinks,
+    liveStatus,
     onSelect,
     onNodePointerDown,
     onPointerMove,
@@ -434,6 +447,22 @@ export const CloudDiagram = forwardRef<
               strokeWidth={selected === node.id ? 2 : 1}
               filter={`url(#${id}-shadow)`}
             />
+            {!code && liveStatus?.[node.id] && (() => {
+              const live = liveStatus[node.id];
+              const tone = LIVE_TONE[live.status];
+              const text = `LIVE · ${live.label}`;
+              const maxChars = Math.floor((cardWidth - 40) / 6.4);
+              const shown = text.length > maxChars ? text.slice(0, maxChars - 1) + "…" : text;
+              const badgeWidth = Math.min(cardWidth - 24, shown.length * 6.4 + 26);
+              return (
+                <g aria-label={`Live status ${live.status.toLowerCase()}: ${live.label}`}>
+                  <title>{live.detail}</title>
+                  <rect x={node.x + cardWidth - 12 - badgeWidth} y={node.y - 11} width={badgeWidth} height={22} rx={11} fill={tone.bg} stroke={tone.border} />
+                  <circle cx={node.x + cardWidth - badgeWidth + 1} cy={node.y} r={4} fill={tone.dot} />
+                  <text x={node.x + cardWidth - badgeWidth + 10} y={node.y + 4} fontSize="11" fontWeight="600" fill={tone.text}>{shown}</text>
+                </g>
+              );
+            })()}
             <rect
               x={node.x + 1}
               y={node.y + 15}
