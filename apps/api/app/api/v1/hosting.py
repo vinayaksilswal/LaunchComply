@@ -18,6 +18,8 @@ from app.core.database import get_db
 from app.models.audit import AuditEvent
 from app.models.auth import Organization, User
 from app.models.hosting import HostingProviderConnection
+from app.models.application import Application
+from app.models.source_control import ApplicationRepository, Repository
 from app.services.hosting import monitoring, providers, vault
 from app.services.hosting.providers import ProviderError
 
@@ -100,6 +102,25 @@ async def catalog(membership=Depends(member)):
             "scope": SCOPE}
 
 
+async def linked_applications(db, organization_id):
+    """LaunchComply applications with the GitHub repositories (and folders) they track."""
+    rows = (await db.execute(select(Application.id, Application.name, Application.repo_url, Repository.full_name,
+                                    ApplicationRepository.root_path)
+        .outerjoin(ApplicationRepository, (ApplicationRepository.application_id == Application.id)
+                   & (ApplicationRepository.organization_id == organization_id))
+        .outerjoin(Repository, (Repository.id == ApplicationRepository.repository_id) & (Repository.organization_id == organization_id))
+        .where(Application.organization_id == organization_id))).all()
+    apps = {}
+    for app_id, name, repo_url, full_name, root_path in rows:
+        app = apps.setdefault(app_id, {"id": app_id, "name": name, "repos": []})
+        if full_name:
+            app["repos"].append({"full_name": full_name, "root_path": root_path})
+        fallback, _ = providers.repo_identity(repo_url)
+        if fallback and fallback.count("/") == 1 and all(r["full_name"].lower() != fallback.lower() for r in app["repos"]):
+            app["repos"].append({"full_name": fallback, "root_path": None})
+    return list(apps.values())
+
+
 @router.get("/overview")
 async def overview(membership=Depends(member), db: AsyncSession = Depends(get_db)):
     rows = (await db.execute(select(HostingProviderConnection).where(
@@ -116,7 +137,9 @@ async def overview(membership=Depends(member), db: AsyncSession = Depends(get_db
             alerts.append({"severity": "warning", "provider": row.provider, "resource_id": None, "resource": row.label,
                            "message": row.last_error or "Last refresh failed"})
     synced = [aware(r.last_synced_at) for r in rows if r.last_synced_at]
-    return {"connections": [connection_output(r) for r in rows], "resources": resources, "alerts": alerts, "probes": probes,
+    projects = monitoring.group_projects(resources, await linked_applications(db, membership.organization_id))
+    return {"connections": [connection_output(r) for r in rows], "resources": resources, "projects": projects,
+            "alerts": alerts, "probes": probes,
             "history": history, "last_synced_at": min(synced) if synced else None,
             "summary": {status: sum(1 for r in resources if r["status"] == status)
                         for status in ("HEALTHY", "DEPLOYING", "DEGRADED", "FAILED", "SUSPENDED", "UNKNOWN")},

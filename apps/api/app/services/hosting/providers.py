@@ -116,6 +116,18 @@ def env_hosts(pairs) -> dict[str, str]:
     return found
 
 
+def repo_identity(raw: str | None) -> tuple[str | None, str | None]:
+    """Return ("owner/name", web URL) from a repo URL or an "owner/name" string."""
+    if not raw:
+        return None, None
+    value = raw.strip().removesuffix(".git").rstrip("/")
+    if "://" in value:
+        parsed = urlparse(value)
+        path = parsed.path.strip("/")
+        return (path or None), (f"https://{parsed.hostname}/{path}" if path and parsed.hostname else None)
+    return value, (f"https://github.com/{value}" if value.count("/") == 1 else None)
+
+
 def iso(value: Any) -> str | None:
     if value is None:
         return None
@@ -290,16 +302,32 @@ class Vercel:
                 items.append(production)
             names = [d["name"] for d in domains.get("domains") or [] if d.get("name")]
             env_list = envs.get("envs") or []
-            state = (production or {}).get("state", "UNKNOWN")
-            status = {"READY": "HEALTHY", "ERROR": "FAILED", "CANCELED": "DEGRADED", "BUILDING": "DEPLOYING",
-                      "QUEUED": "DEPLOYING", "INITIALIZING": "DEPLOYING"}.get(state, "UNKNOWN")
+            # Status follows the deployment currently serving production; a newer
+            # build or failure is reported in the detail without hiding the live site.
+            serving = current.get("readyState") if current.get("id") else None
+            newest = (production or {}).get("state", "UNKNOWN")
+            building = newest in ("BUILDING", "QUEUED", "INITIALIZING")
+            live = serving == "READY" or (serving is None and any(d["target"] == "production" and d["state"] == "READY" for d in items))
+            if live:
+                status = "DEGRADED" if newest == "ERROR" else "HEALTHY"
+                detail = "Production live" + (" · new deployment building" if building else "") + \
+                    (" · latest deployment failed" if newest == "ERROR" else "")
+            else:
+                state = serving or newest
+                status = {"ERROR": "FAILED", "CANCELED": "DEGRADED", "BUILDING": "DEPLOYING", "QUEUED": "DEPLOYING",
+                          "INITIALIZING": "DEPLOYING"}.get(state, "UNKNOWN")
+                detail = f"Production deployment {state.lower()}" if state != "UNKNOWN" else "No production deployment found"
             link = project.get("link") or {}
             repo = "/".join(x for x in (link.get("org"), link.get("repo")) if x) or link.get("repo")
+            repo_name, repo_url = repo_identity(repo)
+            if link.get("type") and link["type"] != "github":
+                repo_url = None
             urls = [f"https://{n}" for n in names] or ([production["url"]] if production and production.get("url") else [])
             return {"id": pid, "provider": self.key, "kind": "frontend", "name": project.get("name"),
-                "framework": project.get("framework"), "status": status, "status_detail": f"Production deployment {state.lower()}",
+                "framework": project.get("framework"), "status": status, "status_detail": detail,
                 "urls": urls, "domains": names, "hosts": sorted({h for h in (host_of(u) for u in urls) if h}),
-                "repo": repo, "branch": link.get("productionBranch"), "region": None,
+                "repo": repo_name, "repo_url": repo_url, "root_dir": project.get("rootDirectory") or None,
+                "branch": link.get("productionBranch"), "region": None,
                 "deployments": items, "env_keys": sorted({e["key"] for e in env_list if e.get("key")}),
                 "_env_hosts": env_hosts((e.get("key", ""), e.get("value")) for e in env_list if e.get("type") == "plain"),
                 "dashboard_url": None}
@@ -411,16 +439,22 @@ class Render:
             urls = [details["url"]] if details.get("url") else []
             urls += [f"https://{d}" for d in domains]
             latest = deploys[0]["state"] if deploys else "none"
+            live = any(d["state"] == "live" for d in deploys)
+            in_progress = latest.endswith("in_progress") or latest in ("created", "queued")
             if service.get("suspended") == "suspended":
                 status, detail = "SUSPENDED", "Suspended"
+            elif live:
+                status = "DEGRADED" if latest.endswith("failed") else "HEALTHY"
+                detail = "Live" + (" · new deploy in progress" if in_progress else "") + \
+                    (f" · latest deploy {latest.replace('_', ' ')}" if latest.endswith("failed") else "")
             else:
-                status = "HEALTHY" if latest == "live" else "FAILED" if latest.endswith("failed") else \
-                    "DEPLOYING" if latest.endswith("in_progress") or latest == "created" else "UNKNOWN"
-                detail = f"Latest deploy {latest.replace('_', ' ')}"
+                status = "FAILED" if latest.endswith("failed") else "DEPLOYING" if in_progress else "UNKNOWN"
+                detail = f"Latest deploy {latest.replace('_', ' ')}" if deploys else "No deploys found"
+            repo_name, repo_url = repo_identity(service.get("repo"))
             return {"id": sid, "provider": self.key, "kind": kind, "name": service.get("name"),
                 "framework": details.get("runtime") or details.get("env"), "status": status, "status_detail": detail,
                 "urls": urls, "domains": domains, "hosts": sorted({h for h in (host_of(u) for u in urls) if h}),
-                "repo": (service.get("repo") or "").replace("https://github.com/", "") or None, "branch": service.get("branch"),
+                "repo": repo_name, "repo_url": repo_url, "root_dir": service.get("rootDir") or None, "branch": service.get("branch"),
                 "region": details.get("region"), "plan": details.get("plan"), "instances": details.get("numInstances"),
                 "health_check_path": details.get("healthCheckPath") or None,
                 "deployments": deploys, "env_keys": sorted({k for k in envs if k}), "_env_hosts": env_hosts(pairs),

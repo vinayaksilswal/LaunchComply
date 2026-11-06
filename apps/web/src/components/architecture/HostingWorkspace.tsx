@@ -13,6 +13,7 @@ interface Link { provider: Provider; resource_id: string; via: string; evidence:
 interface Resource {
   id: string; connection_id: string; provider: Provider; kind: string; name: string; framework?: string | null;
   status: Status; status_detail?: string; urls: string[]; domains?: string[]; repo?: string | null; branch?: string | null;
+  repo_url?: string | null; root_dir?: string | null; project_keys?: string[]; application_ids?: string[];
   region?: string | null; plan?: string | null; instances?: number | null; deployments: Deployment[]; env_keys: string[];
   links?: Link[]; dashboard_url?: string | null; metrics?: Record<string, any>;
   branches?: { id: string; name: string; default: boolean; state?: string; logical_size?: number }[];
@@ -23,7 +24,8 @@ interface Resource {
 interface Connection { id: string; provider: Provider; label: string; account_name?: string | null; account_ref: string; credential_hint: string; status: string; last_error?: string | null; last_synced_at?: string | null; resource_count: number }
 interface Alert { severity: "critical" | "warning" | "info"; provider: Provider; resource_id: string | null; resource: string; message: string }
 interface Probe { url: string; ok: boolean; status_code: number | null; latency_ms: number | null; error: string | null; resource_id: string; checked_at: string }
-interface Overview { connections: Connection[]; resources: Resource[]; alerts: Alert[]; probes: Probe[]; last_synced_at: string | null; summary: Record<Status, number>; scope: string }
+interface Project { key: string; name: string; repo: string | null; repo_url: string | null; resource_ids: string[]; applications: { id: string; name: string }[] }
+interface Overview { connections: Connection[]; resources: Resource[]; projects?: Project[]; alerts: Alert[]; probes: Probe[]; last_synced_at: string | null; summary: Record<Status, number>; scope: string }
 interface ActionSpec { name: string; label: string; risk: "LOW" | "MEDIUM" | "HIGH"; kinds: string[]; description: string; params: Record<string, string>; may_change_bill: boolean }
 interface Catalog { providers: { provider: Provider; label: string; credential_fields: Record<string, string>; actions: ActionSpec[] }[]; scope: string }
 
@@ -44,6 +46,10 @@ const CU = [0.25, 0.5, 1, 2, 3, 4, 6, 8];
 
 function message(error: unknown) { return error instanceof ApiError || error instanceof Error ? error.message : "Request failed."; }
 function when(value?: string | null) { if (!value) return "never"; const d = new Date(value); return isNaN(+d) ? value : d.toLocaleString(); }
+function ago(value?: string | null, now = Date.now()) { if (!value) return "never"; const s = Math.max(0, Math.round((now - +new Date(value)) / 1000)); return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : when(value); }
+function repoLabel(r: { repo?: string | null; root_dir?: string | null; branch?: string | null }) { return r.repo ? `${r.repo}${r.root_dir ? "/" + r.root_dir.replace(/^\/+/, "") : ""}${r.branch ? " @ " + r.branch : ""}` : null; }
+function commitUrl(r: Resource, sha?: string) { return r.repo_url && sha && r.repo_url.startsWith("https://github.com/") ? `${r.repo_url}/commit/${sha}` : null; }
+function GitHubMark() { return <svg aria-hidden viewBox="0 0 16 16" className="h-3 w-3 shrink-0 fill-current"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>; }
 function bytes(value?: number | null) { if (value == null) return "—"; const units = ["B", "KB", "MB", "GB", "TB"]; let n = value, i = 0; while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; } return `${n.toFixed(n < 10 && i ? 1 : 0)} ${units[i]}`; }
 
 export function HostingWorkspace({ active }: { active: boolean }) {
@@ -55,7 +61,12 @@ export function HostingWorkspace({ active }: { active: boolean }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [autoRefresh, setAutoRefreshState] = useState(true);
+  const [projectKey, setProjectKey] = useState<string>("all");
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { try { if (localStorage.getItem("hosting-auto-refresh") === "off") setAutoRefreshState(false); } catch {} }, []);
+  const setAutoRefresh = (on: boolean) => { setAutoRefreshState(on); try { localStorage.setItem("hosting-auto-refresh", on ? "on" : "off"); } catch {} };
+  useEffect(() => { if (!active) return; const t = window.setInterval(() => setNow(Date.now()), 5000); return () => window.clearInterval(t); }, [active]);
 
   const load = useCallback(async () => {
     try {
@@ -75,13 +86,20 @@ export function HostingWorkspace({ active }: { active: boolean }) {
   }, [load]);
 
   useEffect(() => { if (active && !overview) void load(); }, [active, overview, load]);
+  const stale = !!overview?.connections.some(c => c.status === "CONNECTED" && !c.last_synced_at);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (active && stale && !busy) void refresh(); }, [active, stale]);
   useEffect(() => {
     if (!active || !autoRefresh || !overview?.connections.length) return;
     const timer = window.setInterval(() => void refresh(true), 60000);
     return () => window.clearInterval(timer);
   }, [active, autoRefresh, overview?.connections.length, refresh]);
 
-  const resources = overview?.resources ?? [];
+  const allResources = overview?.resources ?? [];
+  const projects = overview?.projects ?? [];
+  const chosen = projects.find(p => p.key === projectKey);
+  const resources = chosen ? allResources.filter(r => chosen.resource_ids.includes(r.id)) : allResources;
+  const appNames = new Map(projects.flatMap(p => p.applications.map(a => [a.id, a.name] as [string, string])));
   const selected = resources.find(r => r.id === selectedId) ?? null;
   const probesFor = (id: string) => (overview?.probes ?? []).filter(p => p.resource_id === id);
 
@@ -95,9 +113,9 @@ export function HostingWorkspace({ active }: { active: boolean }) {
         {(["HEALTHY", "DEPLOYING", "DEGRADED", "FAILED", "SUSPENDED"] as Status[]).filter(s => overview.summary[s]).map(s => (
           <span key={s} className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 font-semibold ${STATUS_STYLE[s]}`}><span className={`h-1.5 w-1.5 rounded-full ${DOT[s]}`} />{overview.summary[s]} {s.toLowerCase()}</span>
         ))}
-        <span className="text-slate-500">Last refresh: {when(overview.last_synced_at)}</span>
+        <span className="text-slate-500" title={when(overview.last_synced_at)}>Updated {ago(overview.last_synced_at, now)}{autoRefresh && overview.connections.length ? " · checking every minute" : ""}</span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <label className="inline-flex items-center gap-1.5 text-slate-600"><input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} disabled={!overview.connections.length} />Auto-refresh every minute</label>
+          <label className="inline-flex items-center gap-1.5 text-slate-600"><input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} disabled={!overview.connections.length} />Live updates</label>
           <button onClick={() => void refresh()} disabled={!!busy || !overview.connections.length} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 font-semibold text-slate-700 disabled:opacity-40">
             <RefreshCw className={`h-3.5 w-3.5 ${busy === "refresh" ? "animate-spin" : ""}`} />{busy === "refresh" ? "Checking providers…" : "Refresh & health-check"}
           </button>
@@ -117,17 +135,29 @@ export function HostingWorkspace({ active }: { active: boolean }) {
       )}
       <div className="flex-1 min-h-0 flex">
         <div className="flex-1 min-w-0 overflow-auto">
-          {resources.length ? <Topology resources={resources} selectedId={selectedId} onSelect={setSelectedId} probesFor={probesFor} />
+          {projects.length > 1 && (
+            <div role="group" aria-label="Filter by project" className="flex flex-wrap items-center gap-1.5 px-6 pt-4 text-xs">
+              {[{ key: "all", name: "All projects", repo: null, repo_url: null, resource_ids: allResources.map(r => r.id), applications: [] } as Project, ...projects].map(p => (
+                <button key={p.key} aria-pressed={projectKey === p.key} onClick={() => { setProjectKey(p.key); setSelectedId(null); }} title={p.repo ?? undefined}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-semibold ${projectKey === p.key ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 text-slate-600 hover:border-slate-400"}`}>
+                  {p.repo && <GitHubMark />}{p.name}<span className="font-normal opacity-70">{p.resource_ids.length}</span>
+                </button>
+              ))}
+              {chosen?.repo_url && <a href={chosen.repo_url} target="_blank" rel="noreferrer" className="ml-1 inline-flex items-center gap-1 text-cyan-700 underline"><GitHubMark />{chosen.repo}</a>}
+              {chosen && chosen.key !== "unassigned" && !chosen.applications.length && <span className="text-slate-500">Not linked to a LaunchComply project yet. Add this repository to a project to match it.</span>}
+            </div>
+          )}
+          {resources.length ? <Topology resources={resources} selectedId={selectedId} onSelect={setSelectedId} probesFor={probesFor} appNames={appNames} />
             : <EmptyState hasConnections={!!overview.connections.length} canManage={canManage} onConnect={() => setConnectOpen(true)} onRefresh={() => void refresh()} />}
           <p className="px-4 pb-4 text-[11px] text-slate-500">{overview.scope} Solid lines: env var value points at that service. Dashed: inferred from the variable name only.</p>
         </div>
         {selected && catalog && (
-          <ResourcePanel key={selected.id} resource={selected} resources={resources} probes={probesFor(selected.id)} canManage={canManage}
+          <ResourcePanel key={selected.id} resource={selected} resources={allResources} appNames={appNames} probes={probesFor(selected.id)} canManage={canManage}
             actions={catalog.providers.find(p => p.provider === selected.provider)?.actions.filter(a => a.kinds.includes(selected.kind)) ?? []}
             onClose={() => setSelectedId(null)} onDone={() => void refresh(true)} />
         )}
       </div>
-      {connectOpen && catalog && <ProvidersDialog catalog={catalog} connections={overview.connections} canManage={canManage} onClose={() => setConnectOpen(false)} onChanged={() => void load()} />}
+      {connectOpen && catalog && <ProvidersDialog catalog={catalog} connections={overview.connections} canManage={canManage} onClose={() => setConnectOpen(false)} onChanged={() => void load()} onConnected={() => void refresh(true)} />}
     </div>
   );
 }
@@ -143,7 +173,7 @@ function EmptyState({ hasConnections, canManage, onConnect, onRefresh }: { hasCo
   );
 }
 
-function Topology({ resources, selectedId, onSelect, probesFor }: { resources: Resource[]; selectedId: string | null; onSelect: (id: string) => void; probesFor: (id: string) => Probe[] }) {
+function Topology({ resources, selectedId, onSelect, probesFor, appNames }: { resources: Resource[]; selectedId: string | null; onSelect: (id: string) => void; probesFor: (id: string) => Probe[]; appNames: Map<string, string> }) {
   const box = useRef<HTMLDivElement>(null);
   const cards = useRef(new Map<string, HTMLButtonElement>());
   const [paths, setPaths] = useState<{ d: string; dashed: boolean; key: string; active: boolean }[]>([]);
@@ -192,6 +222,9 @@ function Topology({ resources, selectedId, onSelect, probesFor }: { resources: R
                   <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${STATUS_STYLE[r.status]}`}>{r.status.toLowerCase()}</span>
                 </div>
                 <p className="mt-1.5 truncate text-[11px] text-slate-600">{r.urls[0]?.replace("https://", "") ?? r.region ?? r.status_detail}</p>
+                {repoLabel(r) && <p className="mt-0.5 flex items-center gap-1 truncate text-[11px] text-slate-500"><GitHubMark /><span className="truncate">{repoLabel(r)}</span></p>}
+                {r.status_detail && !["Production live", "Live"].includes(r.status_detail) && r.urls.length > 0 && <p className="mt-0.5 truncate text-[11px] text-slate-500">{r.status_detail}</p>}
+                {(r.application_ids ?? []).length > 0 && <p className="mt-1 flex flex-wrap gap-1">{r.application_ids!.map(id => <span key={id} className="rounded bg-cyan-50 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-800">{appNames.get(id) ?? "Project"}</span>)}</p>}
                 {probes.length > 0 && <p className={`mt-1 text-[11px] font-medium ${failing ? "text-rose-700" : "text-emerald-700"}`}>{failing ? "Health check failing" : `Responding${latency != null ? ` · ${latency} ms` : ""}`}</p>}
               </button>
             );
@@ -202,7 +235,7 @@ function Topology({ resources, selectedId, onSelect, probesFor }: { resources: R
   );
 }
 
-function ResourcePanel({ resource, resources, probes, actions, canManage, onClose, onDone }: { resource: Resource; resources: Resource[]; probes: Probe[]; actions: ActionSpec[]; canManage: boolean; onClose: () => void; onDone: () => void }) {
+function ResourcePanel({ resource, resources, appNames, probes, actions, canManage, onClose, onDone }: { resource: Resource; resources: Resource[]; appNames: Map<string, string>; probes: Probe[]; actions: ActionSpec[]; canManage: boolean; onClose: () => void; onDone: () => void }) {
   const names = new Map(resources.map(r => [r.id, r.name]));
   const inbound = resources.flatMap(r => (r.links ?? []).filter(l => l.resource_id === resource.id).map(l => ({ from: r.name, via: l.via })));
   const meters = resource.metrics?.meters as Record<string, { usage: number; limit: number; used_percent: number }> | undefined;
@@ -214,7 +247,10 @@ function ResourcePanel({ resource, resources, probes, actions, canManage, onClos
       </div>
       <p className={`mt-2 inline-flex rounded-full border px-2 py-0.5 font-semibold ${STATUS_STYLE[resource.status]}`}>{resource.status_detail ?? resource.status}</p>
       <dl className="mt-3 grid grid-cols-[96px_1fr] gap-x-2 gap-y-1">
-        {resource.repo && <><dt className="text-slate-500">Repository</dt><dd className="truncate">{resource.repo}{resource.branch ? ` @ ${resource.branch}` : ""}</dd></>}
+        {resource.repo && <><dt className="text-slate-500">Repository</dt><dd className="truncate">{resource.repo_url ? <a className="inline-flex items-center gap-1 text-cyan-700 underline" href={resource.repo_url} target="_blank" rel="noreferrer"><GitHubMark />{resource.repo}</a> : resource.repo}</dd></>}
+        {resource.root_dir && <><dt className="text-slate-500">Folder</dt><dd className="truncate font-mono">{resource.root_dir}</dd></>}
+        {resource.branch && <><dt className="text-slate-500">Branch</dt><dd className="truncate">{resource.branch}</dd></>}
+        {(resource.application_ids ?? []).length > 0 && <><dt className="text-slate-500">Project</dt><dd>{resource.application_ids!.map(id => appNames.get(id) ?? id).join(", ")}</dd></>}
         {resource.plan && <><dt className="text-slate-500">Plan</dt><dd>{resource.plan}{resource.instances ? ` · ${resource.instances} instance(s)` : ""}</dd></>}
         {resource.urls.map(u => <Fragment key={u}><dt className="text-slate-500">URL</dt><dd className="truncate"><a className="text-cyan-700 underline" href={u} target="_blank" rel="noreferrer">{u.replace("https://", "")}</a></dd></Fragment>)}
         {resource.metrics?.storage_bytes != null && <><dt className="text-slate-500">Storage</dt><dd>{bytes(resource.metrics.storage_bytes)}</dd></>}
@@ -238,7 +274,7 @@ function ResourcePanel({ resource, resources, probes, actions, canManage, onClos
       {resource.presets?.length ? <section className="mt-3"><h3 className="font-semibold text-slate-700">Upload presets</h3>
         <ul className="mt-1 space-y-0.5">{resource.presets.map(p => <li key={p.id}>{p.name} · {p.unsigned ? "unsigned" : "signed"}{p.folder ? ` · ${p.folder}` : ""}</li>)}</ul></section> : null}
       {resource.deployments.length > 0 && <section className="mt-3"><h3 className="font-semibold text-slate-700">Recent deployments</h3>
-        <ul className="mt-1 space-y-1">{resource.deployments.slice(0, 6).map(d => <li key={d.id} className="rounded border border-slate-100 px-2 py-1"><div className="flex justify-between gap-2"><span className="font-medium">{d.state.toLowerCase().replace(/_/g, " ")}</span><span className="text-slate-500">{d.target} · {when(d.created_at)}</span></div>{(d.commit || d.message) && <p className="truncate text-slate-500">{d.commit} {d.message}</p>}</li>)}</ul></section>}
+        <ul className="mt-1 space-y-1">{resource.deployments.slice(0, 6).map(d => <li key={d.id} className="rounded border border-slate-100 px-2 py-1"><div className="flex justify-between gap-2"><span className="font-medium">{d.state.toLowerCase().replace(/_/g, " ")}</span><span className="text-slate-500">{d.target} · {when(d.created_at)}</span></div>{(d.commit || d.message) && <p className="truncate text-slate-500">{commitUrl(resource, d.commit) ? <a className="font-mono text-cyan-700 underline" href={commitUrl(resource, d.commit)!} target="_blank" rel="noreferrer">{d.commit!.slice(0, 7)}</a> : <span className="font-mono">{d.commit?.slice(0, 7)}</span>} {d.message}</p>}</li>)}</ul></section>}
       {resource.env_keys.length > 0 && <section className="mt-3"><h3 className="font-semibold text-slate-700">Environment variables <span className="font-normal text-slate-400">(names only)</span></h3>
         <p className="mt-1 break-words font-mono text-[11px] text-slate-600">{resource.env_keys.join(" · ")}</p></section>}
       {actions.length > 0 && <ActionForm resource={resource} actions={actions} canManage={canManage} onDone={onDone} />}
@@ -307,7 +343,7 @@ function ActionForm({ resource, actions, canManage, onDone }: { resource: Resour
   );
 }
 
-function ProvidersDialog({ catalog, connections, canManage, onClose, onChanged }: { catalog: Catalog; connections: Connection[]; canManage: boolean; onClose: () => void; onChanged: () => void }) {
+function ProvidersDialog({ catalog, connections, canManage, onClose, onChanged, onConnected }: { catalog: Catalog; connections: Connection[]; canManage: boolean; onClose: () => void; onChanged: () => void; onConnected: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [provider, setProvider] = useState<Provider>("VERCEL");
   const [label, setLabel] = useState("");
@@ -324,8 +360,8 @@ function ProvidersDialog({ catalog, connections, canManage, onClose, onChanged }
       const credentials = Object.fromEntries(Object.entries(values).filter(([, v]) => v.trim()));
       if (rotating) await apiClient(`/hosting/connections/${rotating.id}/credentials`, { method: "PUT", body: JSON.stringify({ credentials }), timeout: 45000 });
       else await apiClient("/hosting/connections", { method: "POST", body: JSON.stringify({ provider, label: label || LABEL[provider], credentials }), timeout: 45000 });
-      setNotice({ ok: true, text: rotating ? "Credential verified and replaced." : `${LABEL[provider]} verified and connected. Refresh to read resources.` });
-      setValues({}); setLabel(""); setRotating(null); onChanged();
+      setNotice({ ok: true, text: rotating ? "Credential verified and replaced." : `${LABEL[provider]} verified and connected. Reading its resources now…` });
+      setValues({}); setLabel(""); setRotating(null); onChanged(); onConnected();
     } catch (e) { setNotice({ ok: false, text: message(e) }); }
     finally { setBusy(false); }
   };

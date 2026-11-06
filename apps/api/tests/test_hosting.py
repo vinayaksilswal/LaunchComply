@@ -187,6 +187,10 @@ async def test_refresh_links_providers_probes_and_never_stores_env_values(hostin
     severities = {(a["resource"], a["severity"]) for a in data["alerts"]}
     assert ("hrms", "critical") in severities and ("techinvenso", "warning") in severities
     assert data["history"] and data["summary"]["HEALTHY"] >= 2
+    assert frontend["repo"] == "techinvenso/HRMS" and frontend["repo_url"] == "https://github.com/techinvenso/HRMS"
+    assert api["repo"] == "techinvenso/HRMS" and api["status_detail"] == "Live" and api["status"] == "HEALTHY"
+    project = next(p for p in data["projects"] if p["key"] == "techinvenso/hrms")
+    assert set(project["resource_ids"]) == {"prj_hrms", "srv_api", "proj_1", "techinvenso"}
     assert not leaks(json.dumps(data))
     async with AsyncSessionLocal() as db:
         rows = (await db.execute(select(HostingProviderConnection).where(
@@ -320,3 +324,35 @@ async def test_vercel_status_uses_project_production_target_when_not_in_recent_d
     [project] = await providers.inventory("VERCEL", token, "")
     assert project["status"] == "HEALTHY"
     assert project["urls"] == ["https://vighnaharan.vercel.app"]
+
+
+def test_projects_group_by_repository_and_match_monorepo_applications():
+    resources = [
+        {"id": "v_hrms", "provider": "VERCEL", "kind": "frontend", "name": "hrms", "repo": "techinvenso/HRMS", "repo_url": "https://github.com/techinvenso/HRMS",
+         "root_dir": "hrms", "links": [{"resource_id": "api", "provider": "RENDER", "via": "VITE_API_URL", "evidence": "ENV_HOST_MATCH"}]},
+        {"id": "v_erp", "provider": "VERCEL", "kind": "frontend", "name": "erp", "repo": "techinvenso/HRMS", "root_dir": "erp", "links": []},
+        {"id": "api", "provider": "RENDER", "kind": "web_service", "name": "api", "repo": "techinvenso/HRMS", "root_dir": "backend",
+         "links": [{"resource_id": "db", "provider": "NEON", "via": "DATABASE_URL", "evidence": "ENV_HOST_MATCH"}]},
+        {"id": "v_vig", "provider": "VERCEL", "kind": "frontend", "name": "vighnaharan", "repo": "vinayak/vighnaharan", "root_dir": None, "links": []},
+        {"id": "db", "provider": "NEON", "kind": "database", "name": "db", "repo": None, "links": []},
+        {"id": "media", "provider": "CLOUDINARY", "kind": "media", "name": "media", "repo": None, "links": []},
+    ]
+    apps = [{"id": "app_hrms", "name": "Techinvenso HRMS", "repos": [{"full_name": "TechInvenso/hrms", "root_path": "/hrms"}]},
+            {"id": "app_vig", "name": "Vighnaharan", "repos": [{"full_name": "vinayak/vighnaharan", "root_path": "/"}]}]
+    projects = {p["key"]: p for p in monitoring.group_projects(resources, apps)}
+    assert set(projects) == {"techinvenso/hrms", "vinayak/vighnaharan", "unassigned"}
+    hrms = projects["techinvenso/hrms"]
+    assert set(hrms["resource_ids"]) == {"v_hrms", "v_erp", "api", "db"}, "database joins the project of the service using it"
+    assert hrms["name"] == "Techinvenso HRMS" and hrms["repo_url"] == "https://github.com/techinvenso/HRMS"
+    by_id = {r["id"]: r for r in resources}
+    assert by_id["v_hrms"]["application_ids"] == ["app_hrms"]
+    assert by_id["v_erp"]["application_ids"] == [] and by_id["api"]["application_ids"] == [], "root path limits monorepo matching"
+    assert by_id["v_vig"]["application_ids"] == ["app_vig"] and projects["vinayak/vighnaharan"]["name"] == "Vighnaharan"
+    assert projects["unassigned"]["resource_ids"] == ["media"]
+
+
+def test_status_follows_live_deployment_while_new_build_runs():
+    from app.services.hosting.providers import repo_identity
+    assert repo_identity("https://github.com/techinvenso/HRMS.git") == ("techinvenso/HRMS", "https://github.com/techinvenso/HRMS")
+    assert repo_identity("techinvenso/HRMS") == ("techinvenso/HRMS", "https://github.com/techinvenso/HRMS")
+    assert repo_identity(None) == (None, None)

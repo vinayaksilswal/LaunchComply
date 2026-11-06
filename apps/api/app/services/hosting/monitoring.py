@@ -150,3 +150,56 @@ def health_record(previous: dict | None, resources: list[dict], probes: list[dic
              "latency_ms": {p["resource_id"]: p["latency_ms"] for p in probes if p["ok"]}}
     history = ((previous or {}).get("history") or [])[-(HISTORY_LIMIT - 1):] + [point]
     return {"checked_at": checked, "probes": probes, "alerts": found, "history": history}
+
+
+def _root(path: str | None) -> str:
+    return (path or "").strip().strip("/").lower()
+
+
+def group_projects(resources: list[dict], applications: list[dict]) -> list[dict]:
+    """Group resources by GitHub repository and match LaunchComply applications.
+
+    Databases and media have no repository; they join every project whose
+    resources link to them. ``applications`` items are
+    ``{"id", "name", "repos": [{"full_name", "root_path"}]}``. An application
+    with a root path only claims resources deployed from that folder, so one
+    monorepo can hold several applications.
+    """
+    by_id = {r["id"]: r for r in resources}
+    keys = {r["id"]: ({r["repo"].lower()} if r.get("repo") else set()) for r in resources}
+    for resource in resources:
+        for link in resource.get("links") or []:
+            target = by_id.get(link["resource_id"])
+            if target and not target.get("repo"):
+                keys[target["id"]] |= keys[resource["id"]]
+    projects: dict[str, dict] = {}
+    for resource in resources:
+        resource_keys = sorted(keys[resource["id"]]) or ["unassigned"]
+        resource["project_keys"] = resource_keys
+        resource["application_ids"] = []
+        for key in resource_keys:
+            project = projects.setdefault(key, {"key": key, "repo": None, "repo_url": None, "resource_ids": [], "applications": []})
+            project["resource_ids"].append(resource["id"])
+            if resource.get("repo") and resource["repo"].lower() == key:
+                project["repo"] = project["repo"] or resource["repo"]
+                project["repo_url"] = project["repo_url"] or resource.get("repo_url")
+    for app in applications:
+        for repo in app.get("repos") or []:
+            key = (repo.get("full_name") or "").lower()
+            project = projects.get(key)
+            if not project:
+                continue
+            if not any(a["id"] == app["id"] for a in project["applications"]):
+                project["applications"].append({"id": app["id"], "name": app["name"]})
+            root = _root(repo.get("root_path"))
+            for resource_id in project["resource_ids"]:
+                resource = by_id[resource_id]
+                own = resource.get("repo") and resource["repo"].lower() == key
+                folder = _root(resource.get("root_dir"))
+                if (not own or not root or folder == root or folder.startswith(root + "/")) and app["id"] not in resource["application_ids"]:
+                    resource["application_ids"].append(app["id"])
+    for project in projects.values():
+        names = [a["name"] for a in project["applications"]]
+        project["name"] = names[0] if len(names) == 1 else (project["repo"] or project["key"]).split("/")[-1] \
+            if project["key"] != "unassigned" else "Not linked to a repository"
+    return sorted(projects.values(), key=lambda p: (p["key"] == "unassigned", p["name"].lower()))
