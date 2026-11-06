@@ -40,7 +40,7 @@ def connection_output(row: HostingProviderConnection) -> dict:
 
 
 def failure(exc: ProviderError) -> HTTPException:
-    return HTTPException(exc.status if 400 <= exc.status < 600 else 502, exc.message)
+    return HTTPException(exc.status if 400 <= exc.status < 500 else providers.PROVIDER_FAILED, exc.message)
 
 
 async def bounded(coroutine, seconds=60):
@@ -48,7 +48,7 @@ async def bounded(coroutine, seconds=60):
         async with asyncio.timeout(seconds):
             return await coroutine
     except TimeoutError:
-        raise HTTPException(504, "The provider request timed out. LaunchComply did not record a result.") from None
+        raise HTTPException(providers.PROVIDER_FAILED, "The provider request timed out. LaunchComply did not record a result.") from None
 
 
 async def audit(db, membership, action, entity_id, details):

@@ -271,3 +271,52 @@ async def test_probe_refuses_private_and_non_https_targets():
     assert not await monitoring.public_https("https://127.0.0.1/")
     assert not await monitoring.public_https("https://localhost/")
     assert not await monitoring.public_https("https://10.0.0.5:443/")
+
+
+@pytest.mark.asyncio
+async def test_neon_org_is_discovered_and_provider_refusals_stay_visible(monkeypatch):
+    def neon(request):
+        if request.url.path == "/api/v2/projects":
+            if request.url.params.get("org_id") == "org-techinvenso":
+                return httpx.Response(200, json={"projects": []})
+            return httpx.Response(400, json={"code": "", "message": "org_id is required, you can find it on your organization settings page"})
+        if request.url.path == "/api/v2/users/me/organizations":
+            return httpx.Response(200, json={"organizations": [{"id": "org-techinvenso", "name": "Tech Invenso"}]})
+        raise AssertionError(request.url.path)
+    monkeypatch.setattr(providers, "client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(neon)))
+    credential = {"api_key": NEON_KEY}
+    account = await providers.verify("NEON", credential)
+    assert account == {"account_ref": "org-techinvenso", "account_name": "Tech Invenso"}
+    assert credential["org_id"] == "org-techinvenso", "discovered org must be sealed with the credential"
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        headers = await register(client, "neon")
+        connected = await client.post("/api/v1/hosting/connections", headers=headers,
+                                      json={"provider": "NEON", "label": "Database", "credentials": {"api_key": NEON_KEY}})
+        assert connected.status_code == 200 and connected.json()["account_ref"] == "org-techinvenso"
+        refused = await client.post("/api/v1/hosting/connections", headers=headers,
+                                    json={"provider": "NEON", "label": "x", "credentials": {"api_key": NEON_KEY, "org_id": "org-other"}})
+        # 4xx so the web client shows the provider's reason instead of a generic outage message.
+        assert refused.status_code == 424 and "org_id is required" in refused.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_vercel_status_uses_project_production_target_when_not_in_recent_deployments(monkeypatch):
+    token = {"token": VERCEL_TOKEN}
+
+    def vercel(request):
+        path = request.url.path
+        if path == "/v9/projects":
+            return httpx.Response(200, json={"projects": [{"id": "prj_v", "name": "vighnaharan",
+                "targets": {"production": {"id": "dpl_prod", "readyState": "READY", "url": "vighnaharan.vercel.app", "createdAt": 1770000000000}}}]})
+        if path == "/v6/deployments":
+            return httpx.Response(200, json={"deployments": [{"uid": "dpl_pr", "readyState": "READY", "target": None}]})
+        if path.endswith("/domains"):
+            return httpx.Response(200, json={"domains": []})
+        if path.endswith("/env"):
+            return httpx.Response(200, json={"envs": []})
+        raise AssertionError(path)
+    monkeypatch.setattr(providers, "client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(vercel)))
+    [project] = await providers.inventory("VERCEL", token, "")
+    assert project["status"] == "HEALTHY"
+    assert project["urls"] == ["https://vighnaharan.vercel.app"]

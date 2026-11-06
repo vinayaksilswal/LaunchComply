@@ -17,8 +17,13 @@ from urllib.parse import quote, urlparse
 import httpx
 
 
+# 424 (Failed Dependency): the provider, not LaunchComply, failed or refused. The
+# web client hides 5xx details, so provider problems must stay in the 4xx range.
+PROVIDER_FAILED = 424
+
+
 class ProviderError(Exception):
-    def __init__(self, message: str, status: int = 502):
+    def __init__(self, message: str, status: int = PROVIDER_FAILED):
         super().__init__(message)
         self.message, self.status = message, status
 
@@ -36,9 +41,9 @@ async def call(http: httpx.AsyncClient, provider: str, method: str, url: str, **
     try:
         response = await http.request(method, url, **kwargs)
     except httpx.TimeoutException:
-        raise ProviderError(f"{name} did not respond in time. Nothing was changed by LaunchComply.", 504) from None
+        raise ProviderError(f"{name} did not respond in time. Nothing was changed by LaunchComply.", PROVIDER_FAILED) from None
     except httpx.HTTPError:
-        raise ProviderError(f"Could not reach {name}.", 502) from None
+        raise ProviderError(f"Could not reach {name}.", PROVIDER_FAILED) from None
     if response.status_code in (401, 403):
         raise ProviderError(f"{name} rejected the credential or it lacks permission for this request.", 400)
     if response.status_code == 404:
@@ -53,13 +58,13 @@ async def call(http: httpx.AsyncClient, provider: str, method: str, url: str, **
             detail = (error.get("message") if isinstance(error, dict) else error) or body.get("message") or ""
         except (ValueError, AttributeError):
             pass
-        raise ProviderError(f"{name} refused the request ({response.status_code}). {str(detail)[:200]}".strip(), 502)
+        raise ProviderError(f"{name} refused the request ({response.status_code}). {str(detail)[:200]}".strip(), PROVIDER_FAILED)
     if not response.content:
         return {}
     try:
         return response.json()
     except ValueError:
-        raise ProviderError(f"{name} returned an unreadable response.", 502) from None
+        raise ProviderError(f"{name} returned an unreadable response.", PROVIDER_FAILED) from None
 
 
 HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9-]+(\.[a-z0-9-]+)+$")
@@ -276,6 +281,13 @@ class Vercel:
                     "url": f"https://{d['url']}" if d.get("url") else None, "commit": (meta.get("githubCommitSha") or "")[:12],
                     "message": (meta.get("githubCommitMessage") or "")[:140], "branch": meta.get("githubCommitRef")})
             production = next((d for d in items if d["target"] == "production"), None)
+            current = (project.get("targets") or {}).get("production") or {}
+            if not production and current.get("id"):
+                production = {"id": current["id"], "state": current.get("readyState") or "UNKNOWN", "target": "production",
+                    "created_at": iso(current.get("createdAt")), "url": f"https://{current['url']}" if current.get("url") else None,
+                    "commit": ((current.get("meta") or {}).get("githubCommitSha") or "")[:12],
+                    "message": ((current.get("meta") or {}).get("githubCommitMessage") or "")[:140], "branch": (current.get("meta") or {}).get("githubCommitRef")}
+                items.append(production)
             names = [d["name"] for d in domains.get("domains") or [] if d.get("name")]
             env_list = envs.get("envs") or []
             state = (production or {}).get("state", "UNKNOWN")
@@ -476,7 +488,19 @@ class Neon:
         return {"org_id": cred["org_id"]} if cred.get("org_id") else {}
 
     async def verify(self, http, cred):
-        await call(http, self.key, "GET", f"{self.base}/projects", headers=self.headers(cred), params={"limit": 1, **self.scope(cred)})
+        try:
+            await call(http, self.key, "GET", f"{self.base}/projects", headers=self.headers(cred), params={"limit": 1, **self.scope(cred)})
+        except ProviderError as exc:
+            if cred.get("org_id") or "org_id" not in exc.message:
+                raise
+            # Accounts inside a Neon organization must name it; use it when there is exactly one.
+            orgs = (await call(http, self.key, "GET", f"{self.base}/users/me/organizations", headers=self.headers(cred))).get("organizations") or []
+            if len(orgs) != 1:
+                names = ", ".join(f"{o.get('name')} ({o.get('id')})" for o in orgs[:10]) or "none found"
+                raise ProviderError(f"This Neon key can see several organizations. Enter the Organization ID: {names}.", 422) from None
+            cred["org_id"] = orgs[0]["id"]
+            await call(http, self.key, "GET", f"{self.base}/projects", headers=self.headers(cred), params={"limit": 1, **self.scope(cred)})
+            return {"account_ref": cred["org_id"], "account_name": orgs[0].get("name") or cred["org_id"]}
         name = cred.get("org_id")
         if not name:
             try:
