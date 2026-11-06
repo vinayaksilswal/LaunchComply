@@ -362,3 +362,82 @@ def test_unknown_status_becomes_healthy_only_when_site_answers():
     resources = [{"id": "a", "status": "UNKNOWN"}, {"id": "b", "status": "UNKNOWN"}, {"id": "c", "status": "FAILED"}]
     monitoring.apply_probe_status(resources, [{"resource_id": "a", "ok": True}, {"resource_id": "b", "ok": False}, {"resource_id": "c", "ok": True}])
     assert [r["status"] for r in resources] == ["HEALTHY", "UNKNOWN", "FAILED"]
+
+
+def test_alert_transitions_ignore_noise_and_report_open_and_clear():
+    from app.services.hosting.sync import alert_transitions
+    down = {"severity": "critical", "kind": "probe", "resource_id": "a", "provider": "VERCEL", "resource": "a", "message": "x"}
+    slow = {"severity": "warning", "kind": "slow", "resource_id": "a", "provider": "VERCEL", "resource": "a", "message": "slow"}
+    opened, resolved = alert_transitions([], [down, slow])
+    assert opened == [down] and resolved == []
+    assert alert_transitions([down], [dict(down, message="different wording")]) == ([], [])
+    assert alert_transitions([down], []) == ([], [down])
+
+
+def test_uptime_counts_only_checks_of_that_resource_in_window():
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    point = lambda hours, down: {"checked_at": (now - timedelta(hours=hours)).isoformat(), "checked": ["a", "b"], "down": down}
+    history = [point(30, ["a"]), point(3, ["a"]), point(2, []), point(1, ["b"]), point(0.5, [])]
+    result = monitoring.uptime(history, "a", now - timedelta(hours=24))
+    assert result == {"percent": 75.0, "checks": 4, "timeline": [False, True, True, True]}
+    assert monitoring.uptime(history, "zzz", now - timedelta(hours=24))["percent"] is None
+
+
+@pytest.mark.asyncio
+async def test_outage_and_recovery_become_notifications_and_uptime(hosting, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    client, headers, calls, _ = hosting
+    site_up = {"value": True}
+
+    def probe_site(request):
+        if request.url.host == "hrms.techinvenso.com":
+            return httpx.Response(200 if site_up["value"] else 503)
+        return httpx.Response(200)
+    monkeypatch.setattr(monitoring, "client", lambda: httpx.AsyncClient(transport=httpx.MockTransport(probe_site)))
+    await connect_all(client, headers)
+
+    async def refresh():
+        async with AsyncSessionLocal() as db:
+            for row in (await db.execute(select(HostingProviderConnection).where(
+                    HostingProviderConnection.organization_id == headers["X-Organization-ID"]))).scalars().all():
+                row.last_synced_at = datetime.now(timezone.utc) - timedelta(minutes=10)
+            await db.commit()
+        result = await client.post("/api/v1/hosting/refresh", headers=headers)
+        assert result.status_code == 200 and result.json()["refreshed"], result.text
+        return result.json()
+
+    assert (await refresh())["alerts_opened"] == 0, "first check is a baseline, not an alert"
+    site_up["value"] = False
+    assert (await refresh())["alerts_opened"] >= 1
+    site_up["value"] = True
+    assert (await refresh())["alerts_resolved"] >= 1
+
+    notes = await client.get("/api/v1/workspace-records/notifications", headers=headers)
+    body = notes.json()
+    statuses = [r["status"] for r in body["records"] if "hrms" in r["title"]]
+    assert statuses[:2] == ["Recovered", "Problem detected"], body
+    assert "Visitors cannot open hrms.techinvenso.com" in json.dumps(body)
+
+    hrms = next(r for r in (await client.get("/api/v1/hosting/overview", headers=headers)).json()["resources"] if r["id"] == "prj_hrms")
+    assert hrms["uptime_24h"]["checks"] == 3 and hrms["uptime_24h"]["percent"] == pytest.approx(66.67)
+
+
+@pytest.mark.asyncio
+async def test_background_cycle_refreshes_each_business_once(hosting, monkeypatch):
+    from app.services.hosting import scheduler, sync
+    client, headers, calls, _ = hosting
+    await connect_all(client, headers)
+    seen = []
+
+    async def fake_refresh(db, organization_id, min_age):
+        seen.append((organization_id, min_age))
+        return {"refreshed": True}
+    monkeypatch.setattr(sync, "refresh_organization", fake_refresh)
+    count = await scheduler.run_cycle(300)
+    assert (headers["X-Organization-ID"], 270) in seen
+    assert len(seen) == len(set(seen)) and count == len(seen)
+    monkeypatch.setenv("HOSTING_MONITOR_INTERVAL_SECONDS", "0")
+    assert scheduler.interval_seconds() == 0
+    monkeypatch.setenv("HOSTING_MONITOR_INTERVAL_SECONDS", "5")
+    assert scheduler.interval_seconds() == 60

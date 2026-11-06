@@ -440,11 +440,13 @@ export const CloudDiagram = forwardRef<
               stroke={
                 selected === node.id
                   ? layer.color
-                  : related.has(node.id)
-                    ? "#a5f3fc"
-                    : "#dbe3ec"
+                  : !code && liveStatus?.[node.id]
+                    ? LIVE_TONE[liveStatus[node.id].status].dot
+                    : related.has(node.id)
+                      ? "#a5f3fc"
+                      : "#dbe3ec"
               }
-              strokeWidth={selected === node.id ? 2 : 1}
+              strokeWidth={selected === node.id ? 2 : !code && liveStatus?.[node.id] ? 3 : 1}
               filter={`url(#${id}-shadow)`}
             />
             {!code && liveStatus?.[node.id] && (() => {

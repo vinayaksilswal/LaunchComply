@@ -34,8 +34,19 @@ async def lifespan(app: FastAPI):
             from app.core.schema_check import check_hosted_schema
             await conn.run_sync(check_hosted_schema)
 
+    monitor = None
+    if settings.ENVIRONMENT.lower() != "test":
+        from app.services.hosting.scheduler import run_forever
+        monitor = asyncio.create_task(run_forever(), name="hosting-monitor")
+
     yield
     # Shutdown
+    if monitor:
+        monitor.cancel()
+        try:
+            await monitor
+        except asyncio.CancelledError:
+            pass
     await engine.dispose()
 
 app = FastAPI(

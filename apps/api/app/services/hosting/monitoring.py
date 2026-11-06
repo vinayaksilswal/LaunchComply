@@ -18,7 +18,7 @@ import httpx
 
 from app.services.hosting.providers import bounded_gather
 
-HISTORY_LIMIT = 48
+HISTORY_LIMIT = 300  # About 24 hours at the 5-minute background interval.
 SLOW_MS = 3000
 API_KEY_NAMES = re.compile(r"(API|BACKEND|SERVER)_?(BASE_)?(URL|ORIGIN|HOST)", re.I)
 DB_KEY_NAMES = re.compile(r"(DATABASE|POSTGRES|PG|DB)_?(URL|URI|HOST)", re.I)
@@ -115,28 +115,35 @@ async def check(resources: list[dict]) -> list[dict]:
 def alerts(resources: list[dict], probes: list[dict]) -> list[dict]:
     found = []
 
-    def add(severity, resource, message):
-        found.append({"severity": severity, "provider": resource["provider"], "resource_id": resource["id"],
+    # Messages are written for app owners, not operators: what is wrong and what it means for visitors.
+    def add(severity, kind, resource, message):
+        found.append({"severity": severity, "kind": kind, "provider": resource["provider"], "resource_id": resource["id"],
                       "resource": resource["name"], "message": message})
 
     by_id = {r["id"]: r for r in resources}
     for resource in resources:
+        detail = resource.get("status_detail")
         if resource["status"] == "FAILED":
-            add("critical", resource, resource.get("status_detail") or "Failed")
+            add("critical", "status", resource, f"Deployment failed{f': {detail}' if detail else ''}. Check the latest deploy log at the provider.")
         elif resource["status"] == "SUSPENDED":
-            add("warning", resource, "Suspended: not serving traffic")
+            add("warning", "status", resource, "Paused: visitors cannot reach it until it is resumed.")
         elif resource["status"] == "DEGRADED":
-            add("warning", resource, resource.get("status_detail") or "Degraded")
+            if resource["kind"] == "media":
+                add("warning", "usage", resource, f"{detail or 'Close to its plan limit'}. Uploads or images may stop at 100%.")
+            else:
+                add("warning", "status", resource, detail or "Partly working")
         if resource["kind"] in ("frontend", "web_service", "static_site") and not resource.get("urls"):
-            add("info", resource, "No public URL to health-check")
+            add("info", "no_url", resource, "No public web address to check.")
     for result in probes:
         resource = by_id.get(result["resource_id"])
         if not resource or (result["error"] or "").startswith("Skipped"):
             continue
+        host = result["url"].replace("https://", "")
         if not result["ok"]:
-            add("critical", resource, f"{result['url']} " + (f"returned {result['status_code']}" if result["status_code"] else f"unreachable ({result['error']})"))
+            reason = f"answered with error {result['status_code']}" if result["status_code"] else "did not answer" + (" in 10 seconds" if "Timed out" in (result["error"] or "") else "")
+            add("critical", "probe", resource, f"Visitors cannot open {host}: it {reason}.")
         elif result["latency_ms"] and result["latency_ms"] > SLOW_MS:
-            add("warning", resource, f"{result['url']} slow: {result['latency_ms']} ms")
+            add("warning", "slow", resource, f"{host} is slow to respond ({result['latency_ms']} ms).")
     order = {"critical": 0, "warning": 1, "info": 2}
     return sorted(found, key=lambda a: order[a["severity"]])
 
@@ -156,9 +163,29 @@ def health_record(previous: dict | None, resources: list[dict], probes: list[dic
     point = {"checked_at": checked, "probes_ok": sum(1 for p in probes if p["ok"]),
              "probes_failed": sum(1 for p in probes if not p["ok"] and not (p["error"] or "").startswith("Skipped")),
              "critical": sum(1 for a in found if a["severity"] == "critical"),
-             "latency_ms": {p["resource_id"]: p["latency_ms"] for p in probes if p["ok"]}}
+             "latency_ms": {p["resource_id"]: p["latency_ms"] for p in probes if p["ok"]},
+             "checked": sorted({r["id"] for r in resources}),
+             "down": sorted({p["resource_id"] for p in probes if not p["ok"] and not (p["error"] or "").startswith("Skipped")}
+                            | {r["id"] for r in resources if r["status"] in ("FAILED", "SUSPENDED")})}
     history = ((previous or {}).get("history") or [])[-(HISTORY_LIMIT - 1):] + [point]
     return {"checked_at": checked, "probes": probes, "alerts": found, "history": history}
+
+
+def uptime(history: list[dict], resource_id: str, since: datetime) -> dict:
+    """Share of checks since ``since`` in which the resource was up, plus a compact timeline."""
+    points = []
+    for point in history:
+        if resource_id not in (point.get("checked") or []):
+            continue
+        try:
+            at = datetime.fromisoformat(point["checked_at"])
+        except (KeyError, ValueError):
+            continue
+        if at >= since:
+            points.append(resource_id not in (point.get("down") or []))
+    if not points:
+        return {"percent": None, "checks": 0, "timeline": []}
+    return {"percent": round(100 * sum(points) / len(points), 2), "checks": len(points), "timeline": points[-48:]}
 
 
 def _root(path: str | None) -> str:

@@ -102,3 +102,28 @@ proposal and the current hosting as two options in one architecture tab.
 - Live acceptance so far: the customer connected Vercel (6 projects, health probes
   responding), Render and Neon in production. Render and Neon inventories await the
   first refresh after deploy.
+
+## Background monitoring and notifications (later on 6 November)
+
+- `app/services/hosting/sync.py` performs refreshes for both the API and the
+  background monitor:
+  - a per-business in-process lock;
+  - no database transaction held during provider calls;
+  - an alert baseline on the first check;
+  - `HOSTING_ALERT_OPENED` and `HOSTING_ALERT_RESOLVED` audit events written only
+    for critical alerts and status/usage warnings. Slow responses and missing URLs
+    do not notify.
+- `app/services/hosting/scheduler.py` runs in the API process every
+  `HOSTING_MONITOR_INTERVAL_SECONDS` (default 300, minimum 60, 0 disables). On
+  PostgreSQL a transaction-scoped advisory lock (`pg_try_advisory_xact_lock`) lets
+  one instance run each cycle, which stays valid behind Neon's transaction pooler.
+  A free Render instance that is asleep does not run the monitor.
+- The Notifications page now merges hosting alerts ("Problem detected" /
+  "Recovered") with service-request updates. Messages are in plain language.
+- History holds about 24 hours (300 points), and the overview returns
+  `uptime_24h` (percent, checks, timeline) per resource. Polling payloads send
+  only the last 48 history points.
+- UI: uptime bars on hosting cards and in the details panel; diagram cards
+  outlined in their live health colour.
+- Tests: transitions, uptime window, outage→recovery notifications, and a
+  background cycle covering every business. 15 hosting tests pass.

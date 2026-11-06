@@ -5,7 +5,7 @@ actions. Every action is explicitly confirmed (HIGH risk requires typing the
 resource name) and audit-logged without secret values. Credentials are write-only.
 """
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,7 +20,7 @@ from app.models.auth import Organization, User
 from app.models.hosting import HostingProviderConnection
 from app.models.application import Application
 from app.models.source_control import ApplicationRepository, Repository
-from app.services.hosting import monitoring, providers, vault
+from app.services.hosting import monitoring, providers, sync, vault
 from app.services.hosting.providers import ProviderError
 
 router = APIRouter(prefix="/hosting", tags=["Hosting providers"])
@@ -126,13 +126,17 @@ async def overview(membership=Depends(member), db: AsyncSession = Depends(get_db
     rows = (await db.execute(select(HostingProviderConnection).where(
         HostingProviderConnection.organization_id == membership.organization_id).order_by(HostingProviderConnection.created_at))).scalars().all()
     resources, alerts, probes, history = [], [], [], []
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
     for row in rows:
-        for resource in row.inventory_json or []:
-            resources.append({**resource, "connection_id": row.id})
         health = row.health_json or {}
+        for resource in row.inventory_json or []:
+            resources.append({**resource, "connection_id": row.id,
+                              "uptime_24h": monitoring.uptime(health.get("history") or [], resource["id"], since)})
         alerts += health.get("alerts") or []
         probes += health.get("probes") or []
-        history += [{"connection_id": row.id, **point} for point in health.get("history") or []]
+        # Uptime is summarized per resource above; only recent points are sent to keep polling light.
+        history += [{"connection_id": row.id, **{k: v for k, v in point.items() if k not in ("checked", "down")}}
+                    for point in (health.get("history") or [])[-48:]]
         if row.status == "ERROR":
             alerts.append({"severity": "warning", "provider": row.provider, "resource_id": None, "resource": row.label,
                            "message": row.last_error or "Last refresh failed"})
@@ -211,57 +215,12 @@ async def disconnect(connection_id: str, membership=Depends(editor), db: AsyncSe
     return {"disconnected": True, "note": "LaunchComply deleted its stored credential and snapshot. Nothing was changed at the provider; revoke the token there too."}
 
 
-async def collect(row_id, provider, credential, account_ref):
-    try:
-        return row_id, await bounded(providers.inventory(provider, credential, account_ref), 90), None
-    except ProviderError as exc:
-        return row_id, None, exc.message
-    except HTTPException as exc:
-        return row_id, None, exc.detail
-
-
 @router.post("/refresh")
 async def refresh(membership=Depends(member), db: AsyncSession = Depends(get_db)):
-    rows = (await db.execute(select(HostingProviderConnection).where(
-        HostingProviderConnection.organization_id == membership.organization_id))).scalars().all()
-    if not rows:
+    if not (await db.execute(select(HostingProviderConnection.id).where(
+            HostingProviderConnection.organization_id == membership.organization_id).limit(1))).first():
         raise HTTPException(409, "Connect a hosting provider first.")
-    current = datetime.now(timezone.utc)
-    if all(r.last_synced_at and (current - aware(r.last_synced_at)).total_seconds() < REFRESH_SECONDS for r in rows):
-        return {"refreshed": False, "reason": f"Refreshed less than {REFRESH_SECONDS}s ago."}
-    jobs = []
-    for row in rows:
-        try:
-            jobs.append((row.id, row.provider, vault.open_sealed(row.credential_encrypted), row.account_ref))
-        except ValueError as exc:
-            row.status, row.last_error = "ERROR", str(exc)
-    previous = {r.id: (r.inventory_json, r.health_json) for r in rows}
-    await db.commit()  # Do not hold a transaction open across provider calls.
-
-    results = await asyncio.gather(*(collect(*job) for job in jobs))
-    fresh = {row_id: inventory for row_id, inventory, error in results if inventory is not None}
-    everything = [res for inventory in fresh.values() for res in inventory]
-    # Unrefreshed connections keep their last snapshot as link targets.
-    for row_id, (inventory, _) in previous.items():
-        if row_id not in fresh:
-            everything += [dict(r) for r in inventory or []]
-    monitoring.link_resources(everything)
-    probes = await bounded(monitoring.check([r for inventory in fresh.values() for r in inventory]), 60)
-    monitoring.apply_probe_status([r for inventory in fresh.values() for r in inventory], probes)
-
-    errors = {row_id: error for row_id, inventory, error in results if error}
-    for row in (await db.execute(select(HostingProviderConnection).where(
-            HostingProviderConnection.organization_id == membership.organization_id).with_for_update())).scalars().all():
-        if row.id in fresh:
-            ids = {r["id"] for r in fresh[row.id]}
-            row.inventory_json = fresh[row.id]
-            row.health_json = monitoring.health_record(previous.get(row.id, (None, None))[1], fresh[row.id],
-                                                       [p for p in probes if p["resource_id"] in ids])
-            row.status, row.last_error, row.last_synced_at = "CONNECTED", None, datetime.now(timezone.utc)
-        elif row.id in errors:
-            row.status, row.last_error = "ERROR", errors[row.id]
-    await db.commit()
-    return {"refreshed": True, "errors": [{"connection_id": k, "message": v} for k, v in errors.items()]}
+    return await sync.refresh_organization(db, membership.organization_id, REFRESH_SECONDS)
 
 
 class RunAction(BaseModel):

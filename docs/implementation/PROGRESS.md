@@ -77,6 +77,11 @@ refresh is reviewed before Apply, preserving customer configuration and layout.
   concrete deliverables and test the inquiry-to-paying-customer journey.
 - [ ] **Readiness for first paying customers:** prove a supported end-to-end
   delivery on a test customer before claiming broader enterprise readiness.
+- [ ] **New learners launching AI-generated apps** (requested 6 November 2026):
+  help beginners bring an AI-built app, launch it, start their business and grow.
+  This means plain-language guidance, guided setup and safe defaults. Vercel,
+  Render, Neon and Cloudinary are first-class launch targets alongside AWS. Next
+  step: a guided "launch your app" flow from repository to live, monitored site.
 
 Clarification retained: an earlier interpretation was that our team would build
 new websites/custom applications around customer business needs, with business
@@ -151,6 +156,19 @@ workflow is verified; this list does not mean every item must be rebuilt.
   HTTPS health checks, alerts, and confirmed and audited actions. Live acceptance
   waits on deploying migration `c14d2e3f4a5b` and entering real tokens.
   [Evidence](2026-11-06-hosting-providers.md).
+  Update, 6 November 2026:
+  - Deployed. The customer connected real Vercel (6 projects), Render and Neon
+    accounts in production.
+  - Resources are identified by GitHub repository and project.
+  - LIVE badges on the AWS diagram (6 components matched), with health-coloured
+    borders.
+  - One combined locations map.
+  - Background monitoring every 5 minutes.
+  - Outage and recovery notifications.
+  - 24-hour uptime.
+
+  Remaining for acceptance: one live outage/recovery observed end to end, and
+  Cloudinary connected.
 
 ## Dashboard and customer-management requests
 
