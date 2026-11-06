@@ -56,7 +56,7 @@ function UptimeBar({ uptime }: { uptime?: Resource["uptime_24h"] }) {
   const tone = uptime.percent == null ? "text-slate-500" : uptime.percent >= 99.5 ? "text-emerald-700" : uptime.percent >= 95 ? "text-amber-700" : "text-rose-700";
   return <div className="mt-1.5" title={`${uptime.checks} checks in the last 24 hours`}>
     <div className="flex h-2 gap-px" aria-hidden>{uptime.timeline.map((up, i) => <span key={i} className={`flex-1 rounded-[1px] ${up ? "bg-emerald-400" : "bg-rose-500"}`} />)}</div>
-    <p className={`mt-0.5 text-[11px] font-medium ${tone}`}>{uptime.percent?.toFixed(uptime.percent === 100 ? 0 : 2)}% up · last 24 h</p>
+    <p className={`mt-0.5 text-[11px] font-medium ${tone}`}>{uptime.percent?.toFixed(uptime.percent === 100 ? 0 : 2)}% of {uptime.checks} checks answered · last 24 h</p>
   </div>;
 }
 function bytes(value?: number | null) { if (value == null) return "—"; const units = ["B", "KB", "MB", "GB", "TB"]; let n = value, i = 0; while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; } return `${n.toFixed(n < 10 && i ? 1 : 0)} ${units[i]}`; }

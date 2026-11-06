@@ -128,7 +128,7 @@ export function LaunchWizard() {
               : <p className="mt-3 text-sm text-slate-500">Ask your business owner or an administrator to start this.</p>}
             {plan.step === "analyze" && plan.repositories.length === 0 && <p className="mt-3 text-sm text-slate-500">No repository is linked yet. <Link href="/onboarding" className="font-semibold text-cyan-700 underline">Connect GitHub</Link></p>}
           </> : <>
-            <p className="mt-1 text-sm text-slate-600">We found {plan.parts.length} part{plan.parts.length === 1 ? "" : "s"}. Each goes to a service that is free to start and built for it.</p>
+            <p className="mt-1 text-sm text-slate-600">We found {plan.parts.length} part{plan.parts.length === 1 ? "" : "s"}. Each goes to a service built for it, with a free plan to start on.</p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{plan.parts.map(part => { const Icon = ROLE[part.role].icon; return (
               <div key={part.id} className="rounded-xl border border-slate-200 p-3 text-sm">
                 <p className="flex items-center gap-2 font-semibold"><Icon className="h-4 w-4 text-cyan-700" />{ROLE[part.role].title}</p>
@@ -281,7 +281,7 @@ function ConnectStep({ plan, canManage, onDone, onError }: { plan: Plan; canMana
 function Shell({ children }: { children: React.ReactNode }) {
   return <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
     <h1 className="flex items-center gap-2 text-2xl font-bold text-slate-950"><Rocket className="h-6 w-6 text-cyan-700" />Launch your app</h1>
-    <p className="mt-1 max-w-3xl text-sm text-slate-600">Put your AI-built app online in four guided steps. Everything runs on free plans in accounts you own, and LaunchComply keeps watching it after launch.</p>
+    <p className="mt-1 max-w-3xl text-sm text-slate-600">Put your AI-built app online in four guided steps, in accounts you own. New parts start on each provider&apos;s free plan where one exists. Check its limits before relying on it for paying customers. LaunchComply keeps checking your app after launch.</p>
     <div className="mt-6">{children}</div>
   </div>;
 }
