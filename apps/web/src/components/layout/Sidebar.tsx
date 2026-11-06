@@ -21,12 +21,14 @@ import {
   LogOut,
   Search,
   LifeBuoy,
+  Sparkles,
 } from "lucide-react";
 import { Dialog } from "@/components/ui/Dialog";
 import { useAccount } from "@/components/auth/AccountProvider";
 
 export const MAIN_NAV = [
   { name: "Home", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Launch your app", href: "/dashboard/launch", icon: Sparkles },
   { name: "My business assets", href: "/dashboard/applications", icon: Boxes },
   { name: "Business architecture", href: "/dashboard/architecture", icon: Network },
   { name: "Deployments", href: "/dashboard/deployments", icon: Rocket },

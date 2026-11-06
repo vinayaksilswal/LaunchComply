@@ -80,8 +80,19 @@ refresh is reviewed before Apply, preserving customer configuration and layout.
 - [ ] **New learners launching AI-generated apps** (requested 6 November 2026):
   help beginners bring an AI-built app, launch it, start their business and grow.
   This means plain-language guidance, guided setup and safe defaults. Vercel,
-  Render, Neon and Cloudinary are first-class launch targets alongside AWS. Next
-  step: a guided "launch your app" flow from repository to live, monitored site.
+  Render, Neon and Cloudinary are first-class launch targets alongside AWS.
+  **Guided launch implemented (6 November 2026).** "Launch your app" in the
+  sidebar runs four steps:
+  1. Read the analyzed code to find the website, backend, database and media parts.
+  2. Connect free accounts.
+  3. Create each part with one confirmed click: Neon database, Render backend on
+     the free plan, Vercel website.
+  4. Connect the parts server-side: database URL and Cloudinary settings to the
+     backend, the API address to the website. No secret is shown or stored.
+
+  Verified with pytest against a stateful provider fixture and a local browser
+  journey. Remaining: the first real launch on a learner's own accounts.
+  [Evidence](2026-11-06-hosting-providers.md).
 
 Clarification retained: an earlier interpretation was that our team would build
 new websites/custom applications around customer business needs, with business

@@ -127,3 +127,41 @@ proposal and the current hosting as two options in one architecture tab.
   outlined in their live health colour.
 - Tests: transitions, uptime window, outage→recovery notifications, and a
   background cycle covering every business. 15 hosting tests pass.
+
+## Guided launch for new learners (6 November)
+
+- `app/services/launch/plan.py` builds a plan from the saved repository analysis:
+  - manifest folders and dependencies (Next.js, Vite/React, Express/Fastify/Nest,
+    FastAPI/Flask/Django);
+  - Postgres drivers or `DATABASE_URL`-style names, which add a database part;
+  - Cloudinary usage, which adds a media part;
+  - the env var names each folder reads;
+  - suggested Render build/start commands, with the Python entry module from the
+    analyzed `main.py`/`app.py`.
+
+  Parts already running are matched by repository and folder (databases through
+  the backend's live link, or by name).
+- `app/services/launch/provision.py`, called only after owner/admin confirmation:
+  - creates a Vercel project linked to GitHub and starts its first production deploy;
+  - creates a Render web service on the free plan, region chosen by the user;
+  - creates a Neon project, discarding the connection string Neon returns.
+
+  The "connect" step fetches the Neon pooled connection URI server-side, sets it,
+  and Cloudinary settings in the names the code reads, on the Render service, then
+  redeploys. It sets the website's API-address variable to an https address that
+  must belong to the Render service, then redeploys. Values are never returned,
+  logged or stored. Audit: `LAUNCH_PART_CREATED`, `LAUNCH_PART_FAILED`,
+  `LAUNCH_PARTS_CONNECTED`, with names only.
+- `/dashboard/launch` ("Launch your app" in the sidebar) is a four-step wizard in
+  plain language, with free-account links, "let the provider read GitHub" links,
+  editable commands, a confirmation per action, and polling while builds run.
+- Bug found and fixed while testing: provisioning bound the HTTP client at import,
+  so test transports did not apply and a test reached Neon's real API with a fake
+  key. It now looks the client up at call time.
+- Verification: `tests/test_launch.py` (plan detection; full create→connect flow
+  on a stateful fixture with secret-leak checks, confirmation gate, no duplicate
+  creation, API-address host check, audit; tenant isolation). Local browser
+  journey through all four steps against the fixture world; every launch request
+  returned 200.
+- Not yet proven: a real launch on a learner's own Vercel/Render/Neon accounts.
+  Vercel and Render must already be allowed to read the GitHub repository.

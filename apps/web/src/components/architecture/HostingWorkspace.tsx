@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, CircleDashed, ExternalLink, KeyRound, Load
 import { apiClient, ApiError } from "@/lib/api";
 import { useAccount } from "@/components/auth/AccountProvider";
 
-type Provider = "VERCEL" | "RENDER" | "NEON" | "CLOUDINARY";
+export type Provider = "VERCEL" | "RENDER" | "NEON" | "CLOUDINARY";
 type Status = "HEALTHY" | "DEPLOYING" | "DEGRADED" | "FAILED" | "SUSPENDED" | "UNKNOWN";
 
 interface Deployment { id: string; state: string; target: string; created_at?: string | null; url?: string | null; commit?: string; message?: string; branch?: string | null }
@@ -22,13 +22,13 @@ interface Resource {
   presets?: { id: string; name: string; unsigned: boolean; folder?: string | null }[];
   folders?: { id: string; name: string; path: string }[];
 }
-interface Connection { id: string; provider: Provider; label: string; account_name?: string | null; account_ref: string; credential_hint: string; status: string; last_error?: string | null; last_synced_at?: string | null; resource_count: number }
+export interface Connection { id: string; provider: Provider; label: string; account_name?: string | null; account_ref: string; credential_hint: string; status: string; last_error?: string | null; last_synced_at?: string | null; resource_count: number }
 interface Alert { severity: "critical" | "warning" | "info"; provider: Provider; resource_id: string | null; resource: string; message: string }
 interface Probe { url: string; ok: boolean; status_code: number | null; latency_ms: number | null; error: string | null; resource_id: string; checked_at: string }
 interface Project { key: string; name: string; repo: string | null; repo_url: string | null; resource_ids: string[]; applications: { id: string; name: string }[] }
 interface Overview { connections: Connection[]; resources: Resource[]; projects?: Project[]; alerts: Alert[]; probes: Probe[]; last_synced_at: string | null; summary: Record<Status, number>; scope: string }
 interface ActionSpec { name: string; label: string; risk: "LOW" | "MEDIUM" | "HIGH"; kinds: string[]; description: string; params: Record<string, string>; may_change_bill: boolean }
-interface Catalog { providers: { provider: Provider; label: string; credential_fields: Record<string, string>; actions: ActionSpec[] }[]; scope: string }
+export interface Catalog { providers: { provider: Provider; label: string; credential_fields: Record<string, string>; actions: ActionSpec[] }[]; scope: string }
 
 const LABEL: Record<Provider, string> = { VERCEL: "Vercel", RENDER: "Render", NEON: "Neon", CLOUDINARY: "Cloudinary" };
 const LANES: { id: string; title: string; match: (r: Resource) => boolean }[] = [
@@ -354,9 +354,9 @@ function ActionForm({ resource, actions, canManage, onDone }: { resource: Resour
   );
 }
 
-function ProvidersDialog({ catalog, connections, canManage, onClose, onChanged, onConnected }: { catalog: Catalog; connections: Connection[]; canManage: boolean; onClose: () => void; onChanged: () => void; onConnected: () => void }) {
+export function ProvidersDialog({ catalog, connections, canManage, onClose, onChanged, onConnected, initialProvider }: { catalog: Catalog; connections: Connection[]; canManage: boolean; onClose: () => void; onChanged: () => void; onConnected: () => void; initialProvider?: Provider }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const [provider, setProvider] = useState<Provider>("VERCEL");
+  const [provider, setProvider] = useState<Provider>(initialProvider ?? "VERCEL");
   const [label, setLabel] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
   const [rotating, setRotating] = useState<Connection | null>(null);
@@ -403,14 +403,14 @@ function ProvidersDialog({ catalog, connections, canManage, onClose, onChanged, 
             <h3 className="font-semibold">{rotating ? `Rotate credential for ${rotating.label}` : "Connect a provider"}</h3>
             {!rotating && <div className="grid grid-cols-2 gap-2">
               <label className="text-xs text-slate-600">Provider<select className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm" value={provider} onChange={e => { setProvider(e.target.value as Provider); setValues({}); }}>{catalog.providers.map(p => <option key={p.provider} value={p.provider}>{p.label}</option>)}</select></label>
-              <label className="text-xs text-slate-600">Label<input className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm" placeholder={`e.g. Tech Invenso ${LABEL[provider]}`} value={label} onChange={e => setLabel(e.target.value)} /></label>
+              <label className="text-xs text-slate-600">Label<input className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm" placeholder={`e.g. My ${LABEL[provider]} account`} value={label} onChange={e => setLabel(e.target.value)} /></label>
             </div>}
             {Object.entries(fields).map(([field, kind]) => (
               <label key={field} className="block text-xs text-slate-600">{CREDENTIAL_LABEL[field] ?? field}
                 <input className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 font-mono text-sm" type={kind === "secret" ? "password" : "text"} autoComplete="off" required={kind !== "optional"} value={values[field] ?? ""} onChange={e => setValues(v => ({ ...v, [field]: e.target.value }))} />
               </label>
             ))}
-            <p className="text-xs text-slate-500">The credential is verified with {LABEL[rotating?.provider ?? provider]}, encrypted at rest and never shown again. Use a token scoped to the Tech Invenso team or workspace where the provider supports it.</p>
+            <p className="text-xs text-slate-500">The credential is verified with {LABEL[rotating?.provider ?? provider]}, encrypted at rest and never shown again. Where the provider allows it, limit the key to the team or workspace that holds your app.</p>
             <div className="flex gap-2"><button disabled={busy} className="rounded-lg bg-slate-950 px-3 py-2 font-semibold text-white disabled:opacity-40">{busy ? "Verifying…" : rotating ? "Verify and replace" : "Verify and connect"}</button>{rotating && <button type="button" onClick={() => setRotating(null)} className="px-3 py-2 text-slate-600">Cancel</button>}</div>
           </form>
         ) : <p className="mt-4 text-slate-500">Only owners and administrators can connect providers.</p>}

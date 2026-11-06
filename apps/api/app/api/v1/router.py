@@ -31,6 +31,7 @@ from app.api.v1.platform_admin import router as platform_admin_router
 from app.api.v1.enterprise import router as enterprise_router
 from app.api.v1.assurance import router as assurance_router, public_assurance_router
 from app.api.v1.hosting import router as hosting_router
+from app.api.v1.launch import router as launch_router
 
 api_v1_router = APIRouter()
 
@@ -50,6 +51,7 @@ api_v1_router.include_router(deployments_router)
 api_v1_router.include_router(cloud_router)
 api_v1_router.include_router(aws_account_connection_router)
 api_v1_router.include_router(hosting_router)
+api_v1_router.include_router(launch_router)
 api_v1_router.include_router(audit_router)
 api_v1_router.include_router(services_router)
 api_v1_router.include_router(source_control_router)
