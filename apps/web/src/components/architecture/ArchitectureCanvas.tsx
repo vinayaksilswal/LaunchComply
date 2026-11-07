@@ -52,7 +52,7 @@ import { ResourceConfigurationPanel, type ResourceConfiguration } from "./Resour
 import { ArchitectEditScope, type ArchitectScope } from "./ArchitectEditScope";
 import { GraphChangeReview } from "./GraphChangeReview";
 import { ResourceChangeReview } from "./ResourceChangeReview";
-import { newComponentPosition } from "./manualPlacement";
+import { newComponentPosition, settleLayout, layoutOnlyChange } from "./manualPlacement";
 import { ArchitectQuestions, type ArchitectQuestion } from "./ArchitectQuestions";
 import { ArchitectureHistory } from "./ArchitectureHistory";
 import { CanonicalDesignPanel } from "./CanonicalDesignPanel";
@@ -213,8 +213,11 @@ export function ArchitectureCanvas() {
   );
   const canEdit = canRefresh && !draft?.source_changed;
   const canEditGraph = canEdit && !draft?.proposal;
+  // Moving cards never changes what is deployed, so layout stays editable while code findings are stale.
+  const canEditLayout = canRefresh && !draft?.proposal;
+  const layoutOnly = !!draft && dirty && layoutOnlyChange(draft.graph, graph);
   const restoreHistory = (direction: "undo" | "redo") => {
-    if (busy || preview || !canEditGraph || view !== "cloud" || (direction === "undo" ? !canUndo : !canRedo)) return;
+    if (busy || preview || !canEditLayout || view !== "cloud" || (direction === "undo" ? !canUndo : !canRedo)) return;
     setCloudFocus(null);
     drag.current = null;
     const restored = direction === "undo" ? undo() : redo();
@@ -222,7 +225,7 @@ export function ArchitectureCanvas() {
   };
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey || busy || preview || !canEditGraph || view !== "cloud") return;
+      if (!(event.ctrlKey || event.metaKey) || event.altKey || busy || preview || !canEditLayout || view !== "cloud") return;
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog']") || document.querySelector("[role='dialog']")) return;
       const key = event.key.toLowerCase();
@@ -236,7 +239,7 @@ export function ArchitectureCanvas() {
     };
     document.addEventListener("keydown", keydown);
     return () => document.removeEventListener("keydown", keydown);
-  }, [busy, preview, canEditGraph, view, undo, redo, canUndo, canRedo, draft?.graph]);
+  }, [busy, preview, canEditLayout, view, undo, redo, canUndo, canRedo, draft?.graph]);
   const adopt = (result: Draft, operationName: string) => {
     endEdit();
     setWorkspace((current) =>
@@ -557,7 +560,8 @@ export function ArchitectureCanvas() {
             <Download className="w-4 h-4" />
           </button>
           <button
-            disabled={!draft || !dirty || !!busy || !canEditGraph}
+            disabled={!draft || !dirty || !!busy || !(canEditGraph || (canEditLayout && layoutOnly))}
+            title={!canEditGraph && canEditLayout && dirty && !layoutOnly ? "Refresh code findings to save changes other than moving components." : undefined}
             onClick={() =>
               draft &&
               operation("save", "save", { expected_id: draft.id, graph })
@@ -676,8 +680,8 @@ export function ArchitectureCanvas() {
                 {hasTopology && <button aria-pressed={showResourceLinks} onClick={() => setShowResourceLinks(value => !value)} className="rounded-lg border px-2 py-1.5 text-xs">{showResourceLinks ? "Hide resource links" : "Resource links"}</button>}
                 <RequestFlows graph={shown} onFocus={id => { setSelected(id); setChatVisible(true); setAssistantMinimized(false); }} />
                 <SecureTrafficDesign graph={graph} disabled={!draft || !!busy || preview || !canEdit || !!draft.proposal} onApply={next => { setGraph(next); setArrangedView(false); setCloudFocus(null); setSelected(null); autoFit.current = true; }} />
-                <button aria-label="Undo architecture change" title="Undo · Ctrl+Z / Cmd+Z" disabled={!canUndo || !!busy || preview || !canEditGraph} onClick={() => restoreHistory("undo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Undo2 className="w-4 h-4" /></button>
-                <button aria-label="Redo architecture change" title="Redo · Ctrl+Shift+Z / Ctrl+Y" disabled={!canRedo || !!busy || preview || !canEditGraph} onClick={() => restoreHistory("redo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Redo2 className="w-4 h-4" /></button>
+                <button aria-label="Undo architecture change" title="Undo · Ctrl+Z / Cmd+Z" disabled={!canUndo || !!busy || preview || !canEditLayout} onClick={() => restoreHistory("undo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Undo2 className="w-4 h-4" /></button>
+                <button aria-label="Redo architecture change" title="Redo · Ctrl+Shift+Z / Ctrl+Y" disabled={!canRedo || !!busy || preview || !canEditLayout} onClick={() => restoreHistory("redo")} className="rounded-lg border p-1.5 disabled:opacity-40"><Redo2 className="w-4 h-4" /></button>
                 <button aria-pressed={arrangedView} onClick={() => { setArrangedView(value => !value); setCloudFocus(null); }} className="rounded-lg border px-2 py-1.5 text-xs">{arrangedView ? "Arranged view" : "Saved layout"}</button>
                 {(cloudFocus ? <button onClick={() => setCloudFocus(null)} className="rounded-lg border px-2 py-1.5 text-xs">Show full design</button> : <button disabled={!selected} onClick={() => setCloudFocus(selected)} className="rounded-lg border px-2 py-1.5 text-xs disabled:opacity-40">Focus connections</button>)}
               </>}
@@ -913,7 +917,7 @@ export function ArchitectureCanvas() {
                     setNewConnection("");
                   }}
                   onNodePointerDown={
-                    view === "cloud" && !preview && canEditGraph && !busy
+                    view === "cloud" && !preview && canEditLayout && !busy
                       ? (event, item) => {
                           if (event.button !== 0 || !event.isPrimary || !diagram.current) return;
                           const origin = diagram.current.getBoundingClientRect();
@@ -969,10 +973,13 @@ export function ArchitectureCanvas() {
                   }}
                   onPointerUp={(event) => {
                     if (drag.current?.pointerId !== event.pointerId) return;
+                    const dropped = drag.current.moved ? drag.current.id : null;
                     drag.current = null;
+                    // Snap the dropped card and move any cards it now covers, so the layout stays tidy.
+                    if (dropped) setGraph(current => settleLayout(current, dropped));
                     endEdit();
                   }}
-                  onNodeMove={view === "cloud" && !preview && canEditGraph && !busy ? (item, dx, dy) => {
+                  onNodeMove={view === "cloud" && !preview && canEditLayout && !busy ? (item, dx, dy) => {
                     autoFit.current = false;
                     keepEditZoom.current = true;
                     setArrangedView(false);
@@ -998,7 +1005,7 @@ export function ArchitectureCanvas() {
             <span className="inline-flex gap-2 items-center">
               <MousePointer2 className="w-3.5 h-3.5" />
               Select a component to inspect
-              {view === "cloud" && canEdit ? " · Drag to arrange · Arrow keys to move · Ctrl+Z to undo" : ""}
+              {view === "cloud" && canEditLayout ? " · Drag to arrange (cards snap and make room) · Arrow keys to move · Ctrl+Z to undo" : ""}
             </span>
             {draft && view === "cloud" && (
               <button

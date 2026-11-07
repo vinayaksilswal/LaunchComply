@@ -371,11 +371,29 @@ async def save_version(db, membership, app, arch, graph, action, updates=None, *
     await db.refresh(record)
     return output(record)
 
+def layout_only(saved: dict, proposed: dict) -> bool:
+    """True when only node positions differ: same nodes, fields and connections."""
+    def strip(graph):
+        nodes = {n["id"]: {k: v for k, v in n.items() if k not in ("x", "y")} for n in graph.get("nodes", [])}
+        return nodes, sorted((e["source"], e["target"], e.get("label")) for e in graph.get("edges", []))
+    moved = {n["id"]: (n.get("x"), n.get("y")) for n in proposed.get("nodes", [])} != {n["id"]: (n.get("x"), n.get("y")) for n in saved.get("nodes", [])}
+    return moved and strip(saved) == strip(proposed) and len(saved.get("nodes", [])) == len(proposed.get("nodes", []))
+
+
 @router.post("/{application_id}/save")
 async def save(application_id: str, payload: Save, membership=Depends(editor), db: AsyncSession = Depends(get_db)):
     app = await application(db, application_id, membership, lock=True)
+    graph = payload.graph.model_dump()
+    arch = await latest(db, app)
+    # Moving components never changes what is deployed, so a layout-only save is
+    # allowed while code findings are stale. Any other change still needs a refresh.
+    if arch and arch.id == payload.expected_id and effective_spec(arch).get("source_changed")             and layout_only(effective_spec(arch)["graph"], graph):
+        require_legacy_writer(arch)
+        if pending_proposal(effective_spec(arch)):
+            raise HTTPException(409, "Apply or discard the pending AI proposal before saving layout changes.")
+        return await save_version(db, membership, app, arch, graph, "ARCHITECTURE_LAYOUT_SAVED")
     arch = await current(db, app, payload.expected_id)
-    return await save_version(db, membership, app, arch, payload.graph.model_dump(), "ARCHITECTURE_DRAFT_SAVED")
+    return await save_version(db, membership, app, arch, graph, "ARCHITECTURE_DRAFT_SAVED")
 
 
 class ConfigureResource(BaseModel):

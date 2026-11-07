@@ -120,3 +120,40 @@ async def test_source_change_during_ai_response_rejects_late_proposal(github_set
     current = (await client.get(path, headers=headers)).json()["architecture"]
     assert current["source_changed"] and not current.get("proposal")
     assert current["graph"] == design["graph"]
+
+
+@pytest.mark.asyncio
+async def test_layout_only_moves_save_while_source_is_stale(github_setup, monkeypatch):
+    client, headers, _, _ = github_setup
+    asset = await linked_app(github_setup)
+    analysis_provider(monkeypatch)
+    path = f"/api/v1/architecture/workspace/{asset}"
+    design = (await client.post(path + "/analyze", headers=headers)).json()
+    repo_ids = [r["id"] for r in (await client.get(f"/api/v1/applications/{asset}/workspace", headers=headers)).json()["repositories"]]
+    assert (await client.put(f"/api/v1/applications/{asset}/repositories", headers=headers,
+                             json={"repository_ids": [], "expected_repository_ids": repo_ids})).status_code == 200
+    stale = (await client.get(path, headers=headers)).json()["architecture"]
+    assert stale["source_changed"]
+    before = await stored_versions(asset)
+
+    moved = copy.deepcopy(stale["graph"])
+    moved["nodes"][0]["x"] += 200
+    moved["nodes"][0]["y"] += 40
+    saved = await client.post(path + "/save", headers=headers, json={"expected_id": stale["id"], "graph": moved})
+    assert saved.status_code == 200, saved.text
+    current = (await client.get(path, headers=headers)).json()["architecture"]
+    assert current["source_changed"], "a layout save does not clear the stale-source warning"
+    assert current["graph"]["nodes"][0]["x"] == moved["nodes"][0]["x"]
+    after = await stored_versions(asset)
+    assert after[: len(before)] == before or set(before) <= set(after), "earlier versions are unchanged"
+
+    renamed = copy.deepcopy(current["graph"])
+    renamed["nodes"][0]["label"] = "Something else"
+    assert (await client.post(path + "/save", headers=headers, json={"expected_id": current["id"], "graph": renamed})).status_code == 409
+    unchanged = await client.post(path + "/save", headers=headers, json={"expected_id": current["id"], "graph": current["graph"]})
+    assert unchanged.status_code == 409, "a no-op save is not a layout change"
+    rewired = copy.deepcopy(current["graph"])
+    rewired["edges"] = rewired["edges"][1:]
+    if current["graph"]["edges"]:
+        assert (await client.post(path + "/save", headers=headers, json={"expected_id": current["id"], "graph": rewired})).status_code == 409
+    assert (await client.post(path + "/approve-design", headers=headers, json={"expected_id": current["id"]})).status_code == 409
