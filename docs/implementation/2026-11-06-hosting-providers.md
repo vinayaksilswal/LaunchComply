@@ -214,3 +214,21 @@ proposal and the current hosting as two options in one architecture tab.
   - the PostgreSQL race is not yet proven on real PostgreSQL;
   - GitHub ref/root and analysis freshness come from the existing A04 evidence;
   - no real launch on disposable provider accounts yet.
+
+## Health-check redirect hardening and rollout check (7 November)
+
+- Production rollout of `0cccec3` verified from outside. `/health` reports
+  HEALTHY with the database connected; `/api/v1/launch/...` answers 401
+  (authentication required), so the route is deployed. The hosted schema check
+  that gates startup passed, so the `launch_steps` table exists in production.
+- Health probes no longer follow redirects automatically. Each hop (at most 3)
+  is re-validated as public HTTPS with every resolved address global before it
+  is requested. Only status and headers are read; bodies are never downloaded.
+  A redirect to a metadata/private/plain-HTTP target stops the check and is
+  reported as a failed check.
+- Test `test_probe_revalidates_every_redirect_hop`: redirects to
+  `http://169.254.169.254` and to a non-public HTTPS host are never requested; a
+  relative hop is followed; a loop stops after 4 requests.
+- Residual risk, recorded: DNS is resolved for validation and again by the HTTP
+  client (a rebinding window). Pinning the connection to the validated address
+  is the remaining fix.

@@ -80,8 +80,12 @@ def probe_targets(resource: dict) -> list[str]:
     return urls
 
 
+MAX_REDIRECTS = 3
+
+
 def client() -> httpx.AsyncClient:
-    return httpx.AsyncClient(timeout=httpx.Timeout(10.0), follow_redirects=True, max_redirects=3,
+    # Redirects are followed manually so every hop is re-validated as a public HTTPS address.
+    return httpx.AsyncClient(timeout=httpx.Timeout(10.0), follow_redirects=False,
                              headers={"User-Agent": "LaunchComply-HealthCheck/1.0"})
 
 
@@ -91,11 +95,26 @@ async def probe(http: httpx.AsyncClient, url: str) -> dict:
         result["error"] = "Skipped: not a public HTTPS address."
         return result
     started = time.perf_counter()
+    target = url
     try:
-        response = await http.get(url)
-        result["status_code"] = response.status_code
-        result["ok"] = response.status_code < 500
-    except httpx.TimeoutException:
+        async with asyncio.timeout(20):
+            for hop in range(MAX_REDIRECTS + 1):
+                # Status line and headers only; the body is never downloaded.
+                async with http.stream("GET", target) as response:
+                    status, location = response.status_code, response.headers.get("location")
+                if status in (301, 302, 303, 307, 308) and location:
+                    if hop == MAX_REDIRECTS:
+                        result["error"] = "Too many redirects."
+                        break
+                    target = str(httpx.URL(target).join(location))
+                    if not await public_https(target):
+                        result["error"] = "Stopped: redirected to an address that is not public HTTPS."
+                        break
+                    continue
+                result["status_code"] = status
+                result["ok"] = status < 500
+                break
+    except (httpx.TimeoutException, TimeoutError):
         result["error"] = "Timed out after 10s."
     except httpx.HTTPError as exc:
         result["error"] = type(exc).__name__

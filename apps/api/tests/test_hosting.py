@@ -441,3 +441,42 @@ async def test_background_cycle_refreshes_each_business_once(hosting, monkeypatc
     assert scheduler.interval_seconds() == 0
     monkeypatch.setenv("HOSTING_MONITOR_INTERVAL_SECONDS", "5")
     assert scheduler.interval_seconds() == 60
+
+
+@pytest.mark.asyncio
+async def test_probe_revalidates_every_redirect_hop(monkeypatch):
+    seen = []
+
+    async def public(url):
+        host = httpx.URL(url).host
+        return url.startswith("https://") and host.endswith(".example")
+    monkeypatch.setattr(monitoring, "public_https", public)
+
+    def site(request):
+        seen.append(str(request.url))
+        path = request.url.path
+        if request.url.host == "metadata.internal" or request.url.host == "169.254.169.254":
+            raise AssertionError("must never request a non-public redirect target")
+        if path == "/to-metadata":
+            return httpx.Response(302, headers={"location": "http://169.254.169.254/latest/meta-data/"})
+        if path == "/to-internal-https":
+            return httpx.Response(301, headers={"location": "https://metadata.internal/"})
+        if path == "/hop":
+            return httpx.Response(302, headers={"location": "/final"})
+        if path == "/final":
+            return httpx.Response(200, content=b"x" * 10)
+        if path == "/loop":
+            return httpx.Response(302, headers={"location": "/loop"})
+        return httpx.Response(404)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(site), follow_redirects=False) as http:
+        blocked = await monitoring.probe(http, "https://app.example/to-metadata")
+        assert not blocked["ok"] and "not public HTTPS" in blocked["error"]
+        internal = await monitoring.probe(http, "https://app.example/to-internal-https")
+        assert not internal["ok"] and "not public HTTPS" in internal["error"]
+        followed = await monitoring.probe(http, "https://app.example/hop")
+        assert followed["ok"] and followed["status_code"] == 200 and seen[-1] == "https://app.example/final"
+        loop = await monitoring.probe(http, "https://app.example/loop")
+        assert not loop["ok"] and loop["error"] == "Too many redirects."
+        assert seen.count("https://app.example/loop") == monitoring.MAX_REDIRECTS + 1
+    assert monitoring.client().follow_redirects is False
