@@ -159,3 +159,38 @@ def attach_status(plan: dict, resources: list[dict]) -> dict:
         else:
             part["live"] = None
     return plan
+
+
+FINGERPRINT_FIELDS = ("id", "role", "provider", "repo", "root_dir", "branch", "framework", "runtime")
+
+
+def fingerprint(part: dict, connection_id: str | None) -> str:
+    """Identity of what the owner reviewed: detected source/target, not editable names or commands."""
+    import json
+    data = {k: part.get(k) for k in FINGERPRINT_FIELDS} | {"connection_id": connection_id}
+    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+
+PORT = re.compile(r"\$\{?PORT\}?")
+
+
+def readiness(part: dict, parts: list[dict], source_changed: bool, start_command: str | None = None) -> tuple[list[str], list[str]]:
+    """Plain-language blockers (must fix before creating) and warnings (worth checking)."""
+    blockers, warnings = [], []
+    if source_changed and part["role"] in ("frontend", "backend"):
+        blockers.append("Your code changed since LaunchComply last read it. Run “Look at my code” again so the plan matches it.")
+    if part["role"] == "backend":
+        command = part.get("start_command") if start_command is None else start_command
+        if part.get("runtime") != "docker":
+            if not command:
+                blockers.append("Enter the command that starts your backend.")
+            elif not PORT.search(command):
+                blockers.append("Render tells your app which port to use in $PORT. Your start command must listen on it, for example “--port $PORT”.")
+        if any(p["role"] == "database" for p in parts) and part.get("database_url_key") == "DATABASE_URL" and "DATABASE_URL" not in part.get("env_keys", []):
+            warnings.append("Your backend code does not read DATABASE_URL by name. Check which setting it uses for the database before connecting.")
+    if part["role"] == "frontend":
+        if any(p["role"] == "backend" for p in parts) and not part.get("api_url_key"):
+            warnings.append("Your website code does not read an API address setting, so it may call a fixed address. Check it points at your new backend.")
+        if not part.get("framework"):
+            warnings.append("The website framework was not recognised. Vercel will try to detect it.")
+    return blockers, warnings

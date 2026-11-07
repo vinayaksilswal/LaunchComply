@@ -32,9 +32,14 @@ async def create_vercel_project(cred: dict, part: dict, name: str) -> dict:
             body["rootDirectory"] = part["root_dir"]
         project = await call(http, "VERCEL", "POST", f"{VERCEL.base}/v11/projects", headers=VERCEL.headers(cred),
                              params=VERCEL.query(cred), json=body)
-        deployment = await call(http, "VERCEL", "POST", f"{VERCEL.base}/v13/deployments", headers=VERCEL.headers(cred),
-            params=VERCEL.query(cred), json={"name": name, "project": project["id"], "target": "production",
-                "gitSource": {"type": "github", "org": owner, "repo": repo, "ref": part.get("branch") or "main"}})
+        try:
+            deployment = await call(http, "VERCEL", "POST", f"{VERCEL.base}/v13/deployments", headers=VERCEL.headers(cred),
+                params=VERCEL.query(cred), json={"name": name, "project": project["id"], "target": "production",
+                    "gitSource": {"type": "github", "org": owner, "repo": repo, "ref": part.get("branch") or "main"}})
+        except ProviderError as exc:
+            # The project exists now; report the deploy problem instead of treating creation as failed.
+            return {"resource_id": project["id"], "message": f"Vercel project {name} created, but its first deployment did not start: {exc.message} "
+                    "Push a commit or use Redeploy in Current hosting.", "warning": True}
     return {"resource_id": project["id"], "message": f"Vercel project {name} created and the first deployment started.",
             "deployment_id": deployment.get("id")}
 
@@ -122,5 +127,35 @@ def cloudinary_env(cred: dict, env_keys: list[str]) -> dict[str, str]:
                               "CLOUDINARY_API_SECRET": cred["api_secret"]}.items() if k in keys}
 
 
-__all__ = ["create_vercel_project", "create_render_service", "create_neon_project", "neon_connection_uri", "set_render_env",
+async def find_by_name(provider: str, cred: dict, owner_id: str, name: str) -> str | None:
+    """Provider ID of a resource with exactly this name in the account, or None."""
+    async with client() as http:
+        if provider == "VERCEL":
+            try:
+                project = await call(http, "VERCEL", "GET", f"{VERCEL.base}/v9/projects/{quote(name, safe='')}",
+                                     headers=VERCEL.headers(cred), params=VERCEL.query(cred))
+            except ProviderError as exc:
+                if exc.status == 404:
+                    return None
+                raise
+            return project.get("id") if project.get("name") == name else None
+        if provider == "RENDER":
+            rows = await call(http, "RENDER", "GET", f"{RENDER.base}/services", headers=RENDER.headers(cred),
+                              params={"name": name, "ownerId": owner_id, "limit": 20})
+            return next(((r.get("service") or r).get("id") for r in rows or [] if (r.get("service") or r).get("name") == name), None)
+        if provider == "NEON":
+            params = {"limit": 400, "search": name, **({"org_id": cred["org_id"]} if cred.get("org_id") else {})}
+            projects = (await call(http, "NEON", "GET", f"{NEON.base}/projects", headers=NEON.headers(cred), params=params)).get("projects") or []
+            return next((p.get("id") for p in projects if p.get("name") == name), None)
+    return None
+
+
+def redact(text: str, secrets: list[str]) -> str:
+    """Remove secret values a provider might echo back in an error message."""
+    for secret in sorted({s for s in secrets if s and len(s) >= 6}, key=len, reverse=True):
+        text = text.replace(secret, "[hidden]")
+    return text
+
+
+__all__ = ["find_by_name", "redact", "create_vercel_project", "create_render_service", "create_neon_project", "neon_connection_uri", "set_render_env",
            "set_vercel_env_and_redeploy", "cloudinary_env", "RENDER_REGIONS", "NEON_REGIONS", "Cloudinary"]

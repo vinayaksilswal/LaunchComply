@@ -601,3 +601,4 @@ from app.models.service_delivery import ServiceDeliveryReport
 from app.models.service_payments import ServicePaymentQuote, ServiceCheckout, ServicePaymentEvent
 from app.models.source_archive import ApplicationSourceArchive
 from app.models.hosting import HostingProviderConnection
+from app.models.launch import LaunchStep

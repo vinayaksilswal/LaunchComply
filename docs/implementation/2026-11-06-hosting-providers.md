@@ -165,3 +165,52 @@ proposal and the current hosting as two options in one architecture tab.
   returned 200.
 - Not yet proven: a real launch on a learner's own Vercel/Render/Neon accounts.
   Vercel and Render must already be allowed to read the GitHub repository.
+
+## Guided launch hardening (handover H03/H04, first slice)
+
+- `launch_steps` table (additive migration `d25e3f4a5b6c`, after `c14d2e3f4a5b`):
+  one row per application part, committed as `CREATING` before any provider call.
+  Outcomes are `CREATED`, `FAILED` (provider definitely refused) or `AMBIGUOUS`
+  (timeout, dropped connection, provider 5xx or an exceeded 90 s budget). A
+  `CREATING` row older than 5 minutes counts as `AMBIGUOUS`.
+- No duplicate creation:
+  - an `AMBIGUOUS` or `CREATING` step is reconciled by looking the exact
+    requested name up at the provider before any new attempt;
+  - `POST /launch/{app}/parts/{part}/check` resolves an unconfirmed step
+    explicitly;
+  - a fresh `CREATING` step refuses concurrent attempts, and the unique constraint
+    refuses racing inserts;
+  - before a fresh create, a resource with the same name that LaunchComply did
+    not record is refused. It is never adopted or modified.
+- Exact confirmation: each part carries a fingerprint (detected
+  source/target/framework/runtime/account). A create with a different fingerprint
+  is refused ("plan changed since you reviewed it").
+- Readiness blockers, enforced server-side and shown in the UI:
+  - code changed since the analysis;
+  - backend start command missing or not using `$PORT`.
+
+  Warnings: backend not reading `DATABASE_URL`, website without an API-address
+  variable, unrecognized framework.
+- Account choice: with several connections for a provider, the owner must pick
+  one. Connecting parts uses the account that owns each live resource.
+- Redaction: secret values sent during "connect" are removed from any provider
+  error text before it reaches the browser or the audit log.
+- Vercel: if the project is created but its first deploy fails, the step is
+  `CREATED` with a warning, not a failure.
+- Wording: uptime reads "% of N checks answered · last 24 h". Launch copy no
+  longer claims everything is free.
+- Tests: `tests/test_launch.py` has 8 cases:
+  - timeout after the provider created the database: retry reconciles, exactly
+    one `POST /projects`;
+  - check endpoint;
+  - blockers, stale fingerprint and name clash never reach the provider;
+  - echoed-secret redaction;
+  - in-progress refusal.
+
+  Local browser check: the blocker appears and disables the button, and a create
+  succeeds through the UI.
+- Still open from H03/H04 and H05:
+  - creation runs inside the request rather than a durable C02 worker;
+  - the PostgreSQL race is not yet proven on real PostgreSQL;
+  - GitHub ref/root and analysis freshness come from the existing A04 evidence;
+  - no real launch on disposable provider accounts yet.

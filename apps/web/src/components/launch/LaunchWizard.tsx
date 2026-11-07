@@ -14,9 +14,12 @@ interface Part {
   id: string; role: Role; provider: Provider; explanation: string; framework_label?: string; repo: string | null; root_dir: string | null;
   branch: string | null; env_keys: string[]; runtime?: string; build_command?: string | null; start_command?: string | null;
   api_url_key?: string | null; database_url_key?: string | null; suggested_name: string; live: Live | null;
+  fingerprint: string; connection_id: string | null; blockers: string[]; warnings: string[];
+  step: { status: "CREATING" | "CREATED" | "FAILED" | "AMBIGUOUS"; name: string; error: string | null } | null;
 }
-interface Account { provider: Provider; label: string; connected: boolean; account: string | null; signup_url: string; github_access_url?: string | null }
-interface Plan { application: { id: string; name: string }; step: Step; accounts: Account[]; parts: Part[]; repositories: string[]; scope: string;
+interface Account { provider: Provider; label: string; connected: boolean; account: string | null; signup_url: string; github_access_url?: string | null;
+  connections: { id: string; label: string; account: string }[] }
+interface Plan { application: { id: string; name: string }; step: Step; source_changed: boolean; accounts: Account[]; parts: Part[]; repositories: string[]; scope: string;
   regions: { RENDER: string[]; NEON: string[] }; free_plan_note: string }
 
 const ROLE: Record<Role, { title: string; icon: typeof Globe }> = {
@@ -121,6 +124,10 @@ export function LaunchWizard() {
       {plan && <div className="mt-6 space-y-5">
         <Card>
           <h2 className="text-lg font-semibold">1. What your app is made of</h2>
+          {plan.source_changed && <div role="alert" className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Your code changed since LaunchComply last read it, so the plan may be out of date.
+            {canManage && <button disabled={busy === "analyze"} onClick={() => void analyze()} className="font-semibold underline">{busy === "analyze" ? "Reading…" : "Read my code again"}</button>}
+          </div>}
           {!plan.parts.length ? <>
             <p className="mt-1 text-sm text-slate-600">LaunchComply needs to look at your code first. It reads which frameworks you use and which settings your code expects. Your code is not run or changed.</p>
             {canManage ? <button disabled={busy === "analyze"} onClick={() => void analyze()} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">
@@ -183,14 +190,28 @@ function PartStep({ appId, part, plan, canManage, accountReady, onDone, onError 
   const [confirmed, setConfirmed] = useState(false);
   const [running, setRunning] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const choices = plan.accounts.find(a => a.provider === part.provider)?.connections ?? [];
+  const [connectionId, setConnectionId] = useState(part.connection_id ?? "");
+  const portMissing = part.role === "backend" && part.runtime !== "docker" && !!start && !/\$\{?PORT\}?/.test(start);
+  const blockers = [...part.blockers.filter(b => !b.includes("$PORT")), ...(portMissing ? ["Render tells your app which port to use in $PORT. Your start command must listen on it, for example “--port $PORT”."] : [])];
+
+  const check = async () => {
+    setRunning(true); onError(null); setNote(null);
+    try {
+      const result = await apiClient<{ message: string }>(`/launch/${appId}/parts/${part.id}/check`, { method: "POST", timeout: 60000 });
+      setNote(result.message); await onDone();
+    } catch (e) { onError(message(e)); }
+    finally { setRunning(false); }
+  };
 
   const create = async () => {
     setRunning(true); onError(null); setNote(null);
     try {
-      const body: Record<string, unknown> = { confirm: true, name };
+      const body: Record<string, unknown> = { confirm: true, name, fingerprint: part.fingerprint };
+      if (connectionId) body.connection_id = connectionId;
       if (regions.length) body.region = region;
       if (part.role === "backend" && part.runtime !== "docker") { body.build_command = build; body.start_command = start; }
-      const result = await apiClient<{ message: string }>(`/launch/${appId}/parts/${part.id}`, { method: "POST", body: JSON.stringify(body), timeout: 180000 });
+      const result = await apiClient<{ message: string; status?: string }>(`/launch/${appId}/parts/${part.id}`, { method: "POST", body: JSON.stringify(body), timeout: 180000 });
       setNote(result.message); setConfirmed(false); await onDone();
     } catch (e) { onError(message(e)); }
     finally { setRunning(false); }
@@ -209,8 +230,16 @@ function PartStep({ appId, part, plan, canManage, accountReady, onDone, onError 
   return <div className="rounded-xl border border-slate-200 p-4 text-sm">
     <p className="flex items-center gap-2 font-semibold"><Icon className="h-5 w-5 text-cyan-700" />{ROLE[part.role].title} → {PROVIDER[part.provider]}
       <span className="font-normal text-slate-500">{part.repo ? `${part.repo}${part.root_dir ? "/" + part.root_dir : ""}` : ""}</span></p>
-    {!accountReady ? <p className="mt-2 text-slate-500">Connect your {PROVIDER[part.provider]} account in step 2 first.</p> : !canManage ? <p className="mt-2 text-slate-500">An owner or administrator can put this online.</p> : <>
+    {part.step?.status === "AMBIGUOUS" && <div role="status" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-900">
+      We asked {PROVIDER[part.provider]} to create “{part.step.name}” but did not get a clear answer, so it may already exist. Nothing will be created again until we check.
+      {canManage && <button disabled={running} onClick={() => void check()} className="ml-2 font-semibold underline">{running ? "Checking…" : "Check again"}</button>}
+    </div>}
+    {part.step?.status === "CREATING" && <p role="status" className="mt-3 text-sky-800">Creating “{part.step.name}”… reload in a moment.</p>}
+    {part.step?.status === "FAILED" && part.step.error && <p className="mt-3 text-rose-700">Last try did not work: {part.step.error} You can fix it and try again.</p>}
+    {!accountReady ? <p className="mt-2 text-slate-500">Connect your {PROVIDER[part.provider]} account in step 2 first.</p> : !canManage ? <p className="mt-2 text-slate-500">An owner or administrator can put this online.</p> : part.step?.status === "AMBIGUOUS" || part.step?.status === "CREATING" ? null : <>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {choices.length > 1 && <label className="text-xs text-slate-600 sm:col-span-2">Which {PROVIDER[part.provider]} account<select value={connectionId} onChange={e => setConnectionId(e.target.value)} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
+          <option value="">Choose an account…</option>{choices.map(c => <option key={c.id} value={c.id}>{c.label} · {c.account}</option>)}</select></label>}
         <label className="text-xs text-slate-600">Name<input value={name} onChange={e => setName(e.target.value.toLowerCase())} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 font-mono text-sm" /></label>
         {regions.length > 0 && <label className="text-xs text-slate-600">Where it runs<select value={region} onChange={e => setRegion(e.target.value)} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
           {regions.map(r => <option key={r} value={r}>{REGION_LABEL[r] ?? r}</option>)}</select></label>}
@@ -221,9 +250,11 @@ function PartStep({ appId, part, plan, canManage, accountReady, onDone, onError 
         </>}
         {part.role === "backend" && part.runtime === "docker" && <p className="text-xs text-slate-500 sm:col-span-2">Your backend has a Dockerfile, so Render builds it from that.</p>}
       </div>
+      {blockers.length > 0 && <ul className="mt-3 space-y-1 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-800">{blockers.map(b => <li key={b}>Fix first: {b}</li>)}</ul>}
+      {part.warnings.length > 0 && <ul className="mt-3 space-y-1 text-amber-800">{part.warnings.map(w => <li key={w}>Check: {w}</li>)}</ul>}
       <label className="mt-3 flex items-start gap-2 text-slate-700"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="mt-0.5" />
-        Create “{name}” on my {PROVIDER[part.provider]} account on the free plan.</label>
-      <button disabled={!confirmed || running || name.length < 2} onClick={() => void create()} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2 font-semibold text-white disabled:opacity-40">
+        Create “{name}” on my {PROVIDER[part.provider]} account, on its free plan where one is available.</label>
+      <button disabled={!confirmed || running || name.length < 2 || blockers.length > 0 || (choices.length > 1 && !connectionId)} onClick={() => void create()} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2 font-semibold text-white disabled:opacity-40">
         {running ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}{running ? "Creating…" : "Put it online"}</button>
       {note && <p role="status" className="mt-2 text-emerald-700">{note}</p>}
     </>}

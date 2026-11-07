@@ -42,7 +42,7 @@ def test_plan_detects_parts_commands_and_variables():
 
 
 def provider_world(calls):
-    world = {"neon": [], "render": [], "vercel": [], "env": {}}
+    world = {"neon": [], "render": [], "vercel": [], "env": {}, "neon_timeout_once": False, "render_env_echo_500": False}
 
     def respond(request: httpx.Request):
         calls.append(request)
@@ -51,6 +51,10 @@ def provider_world(calls):
         if host == "api.vercel.com":
             if path == "/v2/user": return httpx.Response(200, json={"user": {"id": "u1", "username": "learner"}})
             if path == "/v9/projects": return httpx.Response(200, json={"projects": world["vercel"]})
+            if path.startswith("/v9/projects/") and path.count("/") == 3 and method == "GET":
+                wanted = path.rsplit("/", 1)[1]
+                project = next((p for p in world["vercel"] if wanted in (p["id"], p["name"])), None)
+                return httpx.Response(200, json=project) if project else httpx.Response(404, json={"error": {"message": "not found"}})
             if path == "/v11/projects" and method == "POST":
                 project = {"id": "prj_new", "name": body["name"], "framework": body.get("framework"), "rootDirectory": body.get("rootDirectory"),
                            "link": {"type": "github", "org": body["gitRepository"]["repo"].split("/")[0], "repo": body["gitRepository"]["repo"].split("/")[1], "productionBranch": "main"},
@@ -65,7 +69,9 @@ def provider_world(calls):
                 world["env"][("vercel", body["key"])] = body["value"]; return httpx.Response(201, json={})
         if host == "api.render.com":
             if path == "/v1/owners": return httpx.Response(200, json=[{"owner": {"id": "tea_1", "name": "learner"}}])
-            if path == "/v1/services" and method == "GET": return httpx.Response(200, json=[{"service": s} for s in world["render"]])
+            if path == "/v1/services" and method == "GET":
+                wanted = request.url.params.get("name")
+                return httpx.Response(200, json=[{"service": s} for s in world["render"] if not wanted or s["name"] == wanted])
             if path == "/v1/services" and method == "POST":
                 assert body["serviceDetails"]["plan"] == "free" and body["ownerId"] == "tea_1"
                 service = {"id": "srv_new", "name": body["name"], "type": "web_service", "suspended": "not_suspended", "repo": body["repo"],
@@ -77,6 +83,8 @@ def provider_world(calls):
             if path == "/v1/services/srv_new/deploys" and method == "POST": return httpx.Response(201, json={"id": "dep_2"})
             if path == "/v1/services/srv_new/env-vars": return httpx.Response(200, json=[])
             if path == "/v1/services/srv_new/custom-domains": return httpx.Response(200, json=[])
+            if path.startswith("/v1/services/srv_new/env-vars/") and method == "PUT" and world["render_env_echo_500"]:
+                return httpx.Response(500, json={"message": f"could not save value {body['value']}"})
             if path.startswith("/v1/services/srv_new/env-vars/") and method == "PUT":
                 world["env"][("render", path.rsplit("/", 1)[1])] = body["value"]; return httpx.Response(200, json={})
         if host == "console.neon.tech":
@@ -85,6 +93,9 @@ def provider_world(calls):
             if path == "/api/v2/projects" and method == "POST":
                 project = {"id": "proj_new", "name": body["project"]["name"], "region_id": body["project"]["region_id"], "pg_version": 17}
                 world["neon"].append(project)
+                if world["neon_timeout_once"]:
+                    world["neon_timeout_once"] = False
+                    raise httpx.ReadTimeout("simulated: created, but the answer never arrived", request=request)
                 return httpx.Response(201, json={"project": project, "connection_uris": [{"connection_uri": DB_URI}]})
             if path == "/api/v2/projects/proj_new/branches": return httpx.Response(200, json={"branches": [{"id": "br_1", "name": "main", "default": True}]})
             if path == "/api/v2/projects/proj_new/endpoints": return httpx.Response(200, json={"endpoints": [{"id": "ep-new-123", "branch_id": "br_1", "current_state": "idle", "host": "ep-new-123.ap-southeast-1.aws.neon.tech"}]})
@@ -141,19 +152,20 @@ async def test_guided_launch_creates_free_resources_and_wires_them(launch):
     parts = {p["role"]: p for p in plan["parts"]}
 
     before = len(calls)
-    refused = await client.post(f"/api/v1/launch/{app_id}/parts/{parts['database']['id']}", headers=headers, json={"name": "my-shop-db"})
+    fp = {role: part["fingerprint"] for role, part in parts.items()}
+    refused = await client.post(f"/api/v1/launch/{app_id}/parts/{parts['database']['id']}", headers=headers, json={"name": "my-shop-db", "fingerprint": fp["database"]})
     assert refused.status_code == 428 and len(calls) == before
 
-    created = await client.post(f"/api/v1/launch/{app_id}/parts/{parts['database']['id']}", headers=headers, json={"name": "my-shop-db", "confirm": True})
+    created = await client.post(f"/api/v1/launch/{app_id}/parts/{parts['database']['id']}", headers=headers, json={"name": "my-shop-db", "confirm": True, "fingerprint": fp["database"]})
     assert created.status_code == 200, created.text
     assert not leaks(created.text)
     backend = await client.post(f"/api/v1/launch/{app_id}/parts/{parts['backend']['id']}", headers=headers,
-                                json={"name": "shop-api", "confirm": True, "region": "singapore"})
+                                json={"name": "shop-api", "confirm": True, "region": "singapore", "fingerprint": fp["backend"]})
     assert backend.status_code == 200, backend.text
     assert world["render"][0]["rootDir"] == "backend" and world["render"][0]["_start"].startswith("uvicorn app.main:app")
-    frontend = await client.post(f"/api/v1/launch/{app_id}/parts/{parts['frontend']['id']}", headers=headers, json={"name": "shop-web", "confirm": True})
+    frontend = await client.post(f"/api/v1/launch/{app_id}/parts/{parts['frontend']['id']}", headers=headers, json={"name": "shop-web", "confirm": True, "fingerprint": fp["frontend"]})
     assert frontend.status_code == 200, frontend.text
-    again = await client.post(f"/api/v1/launch/{app_id}/parts/{parts['frontend']['id']}", headers=headers, json={"name": "shop-web", "confirm": True})
+    again = await client.post(f"/api/v1/launch/{app_id}/parts/{parts['frontend']['id']}", headers=headers, json={"name": "shop-web", "confirm": True, "fingerprint": fp["frontend"]})
     assert again.status_code == 409, "a part that is already running is not created twice"
 
     plan = (await client.get(f"/api/v1/launch/{app_id}", headers=headers)).json()
@@ -183,3 +195,98 @@ async def test_launch_is_tenant_scoped(launch):
     outsider = {"Authorization": f"Bearer {other['access_token']}", "X-Organization-ID": other["organization_id"]}
     assert (await client.get(f"/api/v1/launch/{app_id}", headers=outsider)).status_code == 404
     assert (await client.post(f"/api/v1/launch/{app_id}/connect", headers=outsider, json={"confirm": True})).status_code == 404
+
+
+async def connect_accounts(client, headers, app_id):
+    bodies = [{"provider": "VERCEL", "label": "Vercel", "credentials": {"token": "vercel_tok_1234"}},
+              {"provider": "RENDER", "label": "Render", "credentials": {"api_key": "rnd_key_12345"}},
+              {"provider": "NEON", "label": "Neon", "credentials": {"api_key": "neon_key_12345"}},
+              {"provider": "CLOUDINARY", "label": "Cloudinary", "credentials": {"cloud_name": "shopcloud", "api_key": "999", "api_secret": CLOUD_SECRET}}]
+    for body in bodies:
+        assert (await client.post("/api/v1/hosting/connections", headers=headers, json=body)).status_code == 200
+    plan = (await client.get(f"/api/v1/launch/{app_id}", headers=headers)).json()
+    return {p["role"]: p for p in plan["parts"]}
+
+
+@pytest.mark.asyncio
+async def test_timeout_after_create_is_reconciled_never_duplicated(launch):
+    client, headers, app_id, world, calls = launch
+    parts = await connect_accounts(client, headers, app_id)
+    url = f"/api/v1/launch/{app_id}/parts/{parts['database']['id']}"
+    body = {"name": "my-shop-db", "confirm": True, "fingerprint": parts["database"]["fingerprint"]}
+    world["neon_timeout_once"] = True
+    unsure = await client.post(url, headers=headers, json=body)
+    assert unsure.status_code == 202 and unsure.json()["status"] == "AMBIGUOUS", unsure.text
+    assert len(world["neon"]) == 1, "the provider did create it"
+    retried = await client.post(url, headers=headers, json=body)
+    assert retried.status_code in (200, 409), retried.text
+    posts = [c for c in calls if c.url.host == "console.neon.tech" and c.method == "POST" and c.url.path == "/api/v2/projects"]
+    assert len(posts) == 1 and len(world["neon"]) == 1, "retry must reconcile, not create a second database"
+    plan = (await client.get(f"/api/v1/launch/{app_id}", headers=headers)).json()
+    database = next(p for p in plan["parts"] if p["role"] == "database")
+    assert database["live"] and database["step"]["status"] == "CREATED"
+
+
+@pytest.mark.asyncio
+async def test_check_endpoint_resolves_unconfirmed_step(launch):
+    client, headers, app_id, world, calls = launch
+    parts = await connect_accounts(client, headers, app_id)
+    world["neon_timeout_once"] = True
+    await client.post(f"/api/v1/launch/{app_id}/parts/{parts['database']['id']}", headers=headers,
+                      json={"name": "my-shop-db", "confirm": True, "fingerprint": parts["database"]["fingerprint"]})
+    checked = await client.post(f"/api/v1/launch/{app_id}/parts/{parts['database']['id']}/check", headers=headers)
+    assert checked.status_code == 200 and checked.json()["status"] == "CREATED", checked.text
+    assert (await client.post(f"/api/v1/launch/{app_id}/parts/{parts['database']['id']}/check", headers=headers)).status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_blockers_name_clash_and_stale_plan_never_reach_provider(launch):
+    client, headers, app_id, world, calls = launch
+    parts = await connect_accounts(client, headers, app_id)
+    backend = parts["backend"]
+    assert backend["blockers"] == []
+    url = f"/api/v1/launch/{app_id}/parts/{backend['id']}"
+    base = {"name": "shop-api", "confirm": True, "fingerprint": backend["fingerprint"]}
+    creates = lambda: len([c for c in calls if c.method == "POST" and c.url.path == "/v1/services"])
+    no_port = await client.post(url, headers=headers, json={**base, "start_command": "uvicorn app.main:app --port 8000"})
+    assert no_port.status_code == 409 and "$PORT" in no_port.json()["detail"]
+    stale = await client.post(url, headers=headers, json={**base, "fingerprint": "0" * 64})
+    assert stale.status_code == 409 and "changed since you reviewed" in stale.json()["detail"]
+    world["render"].append({"id": "srv_existing", "name": "shop-api", "type": "web_service", "suspended": "not_suspended",
+                            "repo": "https://github.com/someone/else", "serviceDetails": {}})
+    clash = await client.post(url, headers=headers, json=base)
+    assert clash.status_code == 409 and "already has something named shop-api" in clash.json()["detail"]
+    assert creates() == 0 and world["render"][-1]["id"] == "srv_existing", "existing resources are never adopted or changed"
+
+
+@pytest.mark.asyncio
+async def test_provider_error_echoing_a_secret_is_redacted(launch):
+    client, headers, app_id, world, calls = launch
+    parts = await connect_accounts(client, headers, app_id)
+    for role, name in (("database", "my-shop-db"), ("backend", "shop-api"), ("frontend", "shop-web")):
+        response = await client.post(f"/api/v1/launch/{app_id}/parts/{parts[role]['id']}", headers=headers,
+                                     json={"name": name, "confirm": True, "fingerprint": parts[role]["fingerprint"]})
+        assert response.status_code == 200, response.text
+    world["render_env_echo_500"] = True
+    failed = await client.post(f"/api/v1/launch/{app_id}/connect", headers=headers, json={"confirm": True})
+    assert failed.status_code == 424, failed.text
+    assert "dbsecret_SENSITIVE" not in failed.text and CLOUD_SECRET not in failed.text and "[hidden]" in failed.text
+
+
+@pytest.mark.asyncio
+async def test_create_already_in_progress_is_refused_without_provider_call(launch):
+    from datetime import datetime, timezone
+    from app.models.launch import LaunchStep
+    client, headers, app_id, world, calls = launch
+    parts = await connect_accounts(client, headers, app_id)
+    database = parts["database"]
+    async with AsyncSessionLocal() as db:
+        db.add(LaunchStep(organization_id=headers["X-Organization-ID"], application_id=app_id, part_id=database["id"], role="database",
+                          provider="NEON", resource_name="my-shop-db", fingerprint=database["fingerprint"], status="CREATING",
+                          attempt_started_at=datetime.now(timezone.utc), created_by="someone"))
+        await db.commit()
+    before = len(calls)
+    busy = await client.post(f"/api/v1/launch/{app_id}/parts/{database['id']}", headers=headers,
+                             json={"name": "my-shop-db", "confirm": True, "fingerprint": database["fingerprint"]})
+    assert busy.status_code == 409 and "being created right now" in busy.json()["detail"]
+    assert not [c for c in calls[before:] if c.method == "POST"]

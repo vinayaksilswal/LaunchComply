@@ -23,9 +23,10 @@ PROVIDER_FAILED = 424
 
 
 class ProviderError(Exception):
-    def __init__(self, message: str, status: int = PROVIDER_FAILED):
+    def __init__(self, message: str, status: int = PROVIDER_FAILED, ambiguous: bool = False):
         super().__init__(message)
-        self.message, self.status = message, status
+        # ambiguous: the provider may have applied the request (timeout, dropped connection, 5xx).
+        self.message, self.status, self.ambiguous = message, status, ambiguous
 
 
 def client() -> httpx.AsyncClient:
@@ -41,9 +42,9 @@ async def call(http: httpx.AsyncClient, provider: str, method: str, url: str, **
     try:
         response = await http.request(method, url, **kwargs)
     except httpx.TimeoutException:
-        raise ProviderError(f"{name} did not respond in time. Nothing was changed by LaunchComply.", PROVIDER_FAILED) from None
+        raise ProviderError(f"{name} did not respond in time. It may or may not have applied the request.", PROVIDER_FAILED, ambiguous=True) from None
     except httpx.HTTPError:
-        raise ProviderError(f"Could not reach {name}.", PROVIDER_FAILED) from None
+        raise ProviderError(f"Could not reach {name}.", PROVIDER_FAILED, ambiguous=True) from None
     if response.status_code in (401, 403):
         raise ProviderError(f"{name} rejected the credential or it lacks permission for this request.", 400)
     if response.status_code == 404:
@@ -58,13 +59,14 @@ async def call(http: httpx.AsyncClient, provider: str, method: str, url: str, **
             detail = (error.get("message") if isinstance(error, dict) else error) or body.get("message") or ""
         except (ValueError, AttributeError):
             pass
-        raise ProviderError(f"{name} refused the request ({response.status_code}). {str(detail)[:200]}".strip(), PROVIDER_FAILED)
+        raise ProviderError(f"{name} refused the request ({response.status_code}). {str(detail)[:200]}".strip(), PROVIDER_FAILED,
+                            ambiguous=response.status_code >= 500)
     if not response.content:
         return {}
     try:
         return response.json()
     except ValueError:
-        raise ProviderError(f"{name} returned an unreadable response.", PROVIDER_FAILED) from None
+        raise ProviderError(f"{name} returned an unreadable response.", PROVIDER_FAILED, ambiguous=True) from None
 
 
 HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9-]+(\.[a-z0-9-]+)+$")
