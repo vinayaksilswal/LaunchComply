@@ -232,3 +232,33 @@ proposal and the current hosting as two options in one architecture tab.
 - Residual risk, recorded: DNS is resolved for validation and again by the HTTP
   client (a rebinding window). Pinning the connection to the validated address
   is the remaining fix.
+
+## Provider API contract check against official docs (7 November)
+
+Each request the launch flow makes was compared with the current official docs
+(Render API reference, Neon API v2 at neon.com/docs, Vercel REST API).
+
+- Confirmed:
+  - Render: `POST /v1/services` fields `type`, `name`, `ownerId`, `repo`, `branch`,
+    `rootDir`, `serviceDetails.runtime` (`env` is deprecated),
+    `envSpecificDetails.buildCommand/startCommand`, region `singapore`, response
+    `{service, deployId}`; `GET /v1/services?name=&ownerId=` (the code still
+    filters for an exact name match); `PUT /services/{id}/env-vars/{key}` with
+    `{value}`; `POST /services/{id}/deploys` with `clearCache`.
+  - Neon: `GET /projects` with `search`/`limit`/`org_id`; `POST /projects`
+    `{project: {name, region_id, org_id}}`; `GET .../connection_uri` (requires
+    `database_name` and `role_name`) returning `{uri}`; branch databases with
+    `name` and `owner_name`.
+  - Vercel: `POST /v11/projects` with `framework`, `rootDirectory`,
+    `gitRepository {type, repo}`; `POST /v13/deployments` with
+    `gitSource {type, org, repo, ref}` (`repoId` not required).
+- Changed: Render `autoDeploy: "yes"` (deprecated) is replaced by
+  `autoDeployTrigger: "commit"`.
+- Not confirmed from the docs read:
+  - the Render web-service `plan: "free"` value in create-service details;
+  - the Neon region ID list;
+  - the Vercel 404 for an unknown project and the `/v10/projects/{id}/env?upsert`
+    page.
+
+  The first real launch must confirm these. Provider refusals are shown to the
+  owner and recorded as FAILED steps, so a wrong value does not create anything.

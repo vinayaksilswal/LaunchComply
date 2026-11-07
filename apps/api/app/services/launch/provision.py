@@ -56,7 +56,7 @@ async def create_render_service(cred: dict, owner_id: str, part: dict, name: str
             raise ProviderError("Enter the build and start commands for your backend.", 422)
         details["envSpecificDetails"] = {"buildCommand": build_command, "startCommand": start_command}
     body = {"type": "web_service", "name": name, "ownerId": owner_id, "repo": f"https://github.com/{part['repo']}",
-            "branch": part.get("branch") or "main", "autoDeploy": "yes", "serviceDetails": details}
+            "branch": part.get("branch") or "main", "autoDeployTrigger": "commit", "serviceDetails": details}
     if part.get("root_dir"):
         body["rootDir"] = part["root_dir"]
     async with client() as http:
