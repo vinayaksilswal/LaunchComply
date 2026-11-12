@@ -26,42 +26,43 @@ import {
 import { Dialog } from "@/components/ui/Dialog";
 import { useAccount } from "@/components/auth/AccountProvider";
 
+// Everyday actions first; specialist pages live in the folding groups below.
 export const MAIN_NAV = [
   { name: "Home", href: "/dashboard", icon: LayoutDashboard },
   { name: "Launch your app", href: "/dashboard/launch", icon: Sparkles },
   { name: "My business assets", href: "/dashboard/applications", icon: Boxes },
   { name: "Business architecture", href: "/dashboard/architecture", icon: Network },
-  { name: "Deployments", href: "/dashboard/deployments", icon: Rocket },
   { name: "Service requests", href: "/dashboard/services", icon: LifeBuoy },
-  { name: "Security", href: "/dashboard/security", icon: ShieldCheck },
-  { name: "Compliance", href: "/dashboard/compliance", icon: FileCheck2 },
-  { name: "Team", href: "/dashboard/team", icon: Users },
-  { name: "Billing", href: "/dashboard/billing", icon: DollarSign },
   { name: "Support", href: "/dashboard/support", icon: LifeBuoy },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 const groups = [
   {
-    name: "Monitor your assets",
+    name: "Keep it running",
     items: [
       { name: "Service health", href: "/dashboard/operations", icon: Activity },
-      { name: "Activity log", href: "/dashboard/logs", icon: Activity },
+      { name: "Deployments", href: "/dashboard/deployments", icon: Rocket },
       { name: "Incidents", href: "/dashboard/incidents", icon: AlertTriangle },
       { name: "Backups", href: "/dashboard/backups", icon: DatabaseBackup },
       { name: "Cloud costs", href: "/dashboard/cost", icon: DollarSign },
+      { name: "Activity log", href: "/dashboard/logs", icon: Activity },
     ],
   },
   {
     name: "Protect your business",
     items: [
-      {
-        name: "Evidence & controls",
-        href: "/dashboard/assurance",
-        icon: ShieldCheck,
-      },
+      { name: "Security", href: "/dashboard/security", icon: ShieldCheck },
+      { name: "Compliance", href: "/dashboard/compliance", icon: FileCheck2 },
+      { name: "Evidence & controls", href: "/dashboard/assurance", icon: ShieldCheck },
     ],
   },
-
+  {
+    name: "Team & billing",
+    items: [
+      { name: "Team", href: "/dashboard/team", icon: Users },
+      { name: "Billing", href: "/dashboard/billing", icon: DollarSign },
+    ],
+  },
 ];
 export function Sidebar() {
   const { user, organization, loading, error, chooseOrganization, logout } =
