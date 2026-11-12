@@ -516,7 +516,7 @@ export function ArchitectureCanvas() {
   return (
     <div className="bg-white h-full min-h-0 overflow-hidden flex flex-col text-slate-900">
       {draft?.read_only && <div role="status" className="shrink-0 flex flex-wrap items-center gap-3 border-b border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-950"><span>{draft.read_only_reason}</span><CanonicalDesignPanel applicationId={appId} savedId={draft.id} disabled={!!busy} /></div>}
-      {draft?.source_changed && <div role="alert" className="shrink-0 px-5 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-900">{draft.proposal?.kind === "SOURCE_REFRESH" ? "Source update ready for review. Preview and apply or discard it in the assistant." : <>Repository links changed. This diagram shows previous sources. <button disabled={!!busy || dirty || !canRefresh} onClick={() => operation("analyze", "analyze")} className="font-semibold underline">Refresh code findings</button> before making or approving changes.</>}</div>}
+      {draft?.source_changed && <div role="alert" className="shrink-0 px-5 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-900">{draft.proposal?.kind === "SOURCE_REFRESH" ? "Source update ready for review. Preview and apply or discard it in the assistant." : <>Your code changed since LaunchComply last read it, so this diagram may be out of date. You can still move things around. <button disabled={!!busy || dirty || !canRefresh} onClick={() => operation("analyze", "analyze")} className="font-semibold underline">{busy === "analyze" ? "Reading your code…" : "Read my code again"}</button> to edit details or ask the assistant.</>}</div>}
       <header className="px-3 py-1.5 shrink-0 border-b border-slate-200 flex flex-wrap gap-2 items-center justify-between">
         <div className="flex gap-3 items-center">
           <span className="p-1.5 rounded-lg bg-cyan-50 text-cyan-700">
@@ -1321,9 +1321,9 @@ export function ArchitectureCanvas() {
                     <GitBranch className="w-3.5 h-3.5" />
                     Source evidence · {draft.evidence.files.length} manifests
                   </summary>
-                  {draft.evidence.repositories?.length ? <ul className="mt-3 space-y-2">{draft.evidence.repositories.map(repo => <li key={repo.id} className="break-all text-slate-500">{repo.full_name} · {repo.branch} @ {repo.commit.slice(0, 8)}</li>)}</ul> : <p className="text-slate-500 mt-3 break-all">
+                  {draft.evidence.repositories?.length ? <ul className="mt-3 space-y-2">{draft.evidence.repositories.map(repo => <li key={repo.id} className="break-all text-slate-500">{repo.full_name} · {repo.branch} @ {(repo.commit || "unknown").slice(0, 8)}</li>)}</ul> : <p className="text-slate-500 mt-3 break-all">
                     {draft.evidence.repository} · {draft.evidence.branch} @{" "}
-                    {draft.evidence.commit.slice(0, 8)}
+                    {(draft.evidence.commit || "unknown").slice(0, 8)}
                   </p>}
                   <p className="text-slate-500 leading-5 mt-2">
                     {draft.evidence.scope}
@@ -1349,15 +1349,15 @@ export function ArchitectureCanvas() {
               {!draft?.messages.length && (
                 <div className="pt-2">
                   <p className="text-sm text-slate-700 leading-6">
-                    Use this space to simplify services, explore availability,
-                    or refine trust boundaries.
+                    Ask anything about your app in your own words. The assistant explains in plain language and never changes anything unless you approve it.
                   </p>
+                  {!canEdit && <p className="mt-2 text-xs text-amber-800">Read your code again first (yellow banner above), so the assistant answers about your latest version.</p>}
                   <div className="space-y-2 mt-4">
                     {[
-                      "Explain the architecture and its assumptions",
-                      "How can we simplify this design?",
-                      "Separate public and private services",
-                      "List the services and deployment sizing decisions we still need to confirm",
+                      "Explain my app in simple words: what each part does",
+                      "Is anything risky or missing before I launch?",
+                      "How can I make this simpler or cheaper to run?",
+                      "What do I still need to decide, and what do you recommend?",
                     ].map((text) => (
                       <button
                         key={text}
@@ -1421,7 +1421,7 @@ export function ArchitectureCanvas() {
                     !!busy ||
                     dirty || !!draft.proposal || !workspace?.capabilities.scoped_ai_edits
                   }
-                  placeholder="Ask about your architecture…"
+                  placeholder="Ask in your own words, e.g. “Is my app ready for customers?”"
                   rows={3}
                   className="w-full text-sm resize-none outline-none bg-white disabled:opacity-50"
                 />

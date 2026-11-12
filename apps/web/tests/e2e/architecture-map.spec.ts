@@ -158,7 +158,7 @@ test("removing a source preserves saved history and warns in the architecture wo
   await page.getByRole("button", { name: `Remove repository ${repositories[0].full_name}`, exact: true }).click();
   await expect(page.getByText("No repositories linked. Add your frontend and backend repositories to start.")).toBeVisible();
   await page.getByRole("link", { name: "Open business architecture", exact: false }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "Repository links changed" })).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: "Your code changed since LaunchComply last read it" })).toBeVisible();
   const current = await (await request.get(path, { headers })).json();
   expect(current.architecture.source_changed).toBe(true);
   expect(current.architecture.graph).toEqual(original.graph);
