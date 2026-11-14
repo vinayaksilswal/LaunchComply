@@ -47,6 +47,12 @@ const sections: { title: string; body: string[] }[] = [
     ],
   },
   {
+    title: "Counting visits (optional)",
+    body: [
+      "If you choose Allow on the cookie question, the public pages of this website use Google Analytics and, where enabled, the Meta Pixel to count visits and to learn which adverts led to a sign-up. Those companies set cookies and receive the page address you visited. Pages inside your workspace are never measured. If you choose No thanks, nothing is loaded. You can change your mind by clearing this site's data in your browser.",
+    ],
+  },
+  {
     title: "Keeping and deleting your information",
     body: [
       "We keep your information while your account is open. You can disconnect GitHub or any hosting provider at any time, which removes the stored access key. To close your account and have your information deleted, contact us; some records may be kept where the law requires it.",

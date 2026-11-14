@@ -103,3 +103,29 @@ async def test_requests_require_own_application_and_valid_service(business_clien
     assert (await client.post("/api/v1/business-requests", headers=owner, json=payload)).status_code == 404
     assert (await client.post("/api/v1/business-requests", headers=owner, json=payload | {"service_code": "FAKE_CERTIFICATION"})).status_code == 422
     assert (await client.post("/api/v1/business-requests", json=payload)).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_launch_help_request_can_be_quoted_without_aws(business_client):
+    """A beginner's guided-launch help request needs no AWS design or connection to be reviewed and quoted."""
+    client, owner, other, operator = business_client
+    payload = {"request_id": str(uuid.uuid4()), "service_code": "LAUNCH_HELP", "notes": "My backend will not start on Render."}
+    created = await client.post("/api/v1/business-requests", headers=owner, json=payload)
+    assert created.status_code == 200
+    request_id = created.json()["id"]
+    listed = (await client.get("/api/v1/business-requests?service_code=LAUNCH_HELP", headers=owner)).json()["requests"]
+    assert [row["title"] for row in listed] == ["Launch my app with me"]
+    assert (await client.get("/api/v1/business-requests", headers=other)).json()["requests"] == []
+    status_url = f"/api/v1/admin/operations-queue/{request_id}"
+    assert (await client.patch(status_url, headers=operator, json={"expected_status": "REQUESTED", "status": "REVIEWING", "note": "Scope review"})).status_code == 200
+    quote = {"quote_id": str(uuid.uuid4()), "title": "Guided launch session", "currency": "INR", "amount_minor": 499900, "delivery_ready": True,
+             "scope": "One working session to launch the customer's app on Vercel, Render and Neon in their own accounts."}
+    assert (await client.post(status_url + "/quote", headers=owner, json=quote)).status_code == 403
+    published = await client.post(status_url + "/quote", headers=operator, json=quote)
+    assert published.status_code == 200, published.text
+    assert published.json()["status"] == "OPEN"
+    visible = (await client.get(f"/api/v1/service-payments/quotes?request_id={request_id}", headers=owner)).json()
+    assert visible["quotes"][0]["amount_minor"] == 499900
+    # No provider is configured in tests, so checkout must refuse rather than pretend to charge.
+    refused = await client.post(f"/api/v1/service-payments/quotes/{quote['quote_id']}/checkout", headers=owner, json={"provider": "RAZORPAY", "accepted_scope": True})
+    assert refused.status_code == 503

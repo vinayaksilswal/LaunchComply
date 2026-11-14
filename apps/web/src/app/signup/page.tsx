@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
+import { trackConversion } from "@/components/marketing/Analytics";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
 import {
@@ -67,6 +68,7 @@ function SignupForm() {
           );
         setActiveOrganizationId((await response.json()).organization_id);
       }
+      trackConversion("sign_up");
       router.push(
         inviteToken && !search.get("next") ? "/dashboard" : destination,
       );

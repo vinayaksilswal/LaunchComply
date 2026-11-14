@@ -18,7 +18,7 @@ from app.models.service_payments import ServicePaymentQuote, ServiceCheckout
 from app.services.commercial.request_workflow import activity, TRANSITIONS, require_real_service_payment, latest_report, delivery_acceptance
 
 router = APIRouter(tags=["Business Requests"])
-Code = Literal["DEPLOYMENT_HELP", "SECURITY_ASSESSMENT", "COMPLIANCE_HELP", "AWS_CONNECTION", "BACKUP_REVIEW", "COST_REVIEW", "SUPPORT", "VAPT_ASSESSMENT", "ISO27001_HELP", "SOC2_HELP", "PRIVACY_HELP"]
+Code = Literal["LAUNCH_HELP", "DEPLOYMENT_HELP", "SECURITY_ASSESSMENT", "COMPLIANCE_HELP", "AWS_CONNECTION", "BACKUP_REVIEW", "COST_REVIEW", "SUPPORT", "VAPT_ASSESSMENT", "ISO27001_HELP", "SOC2_HELP", "PRIVACY_HELP"]
 State = Literal["REQUESTED", "REVIEWING", "IN_PROGRESS", "WAITING_CUSTOMER", "DELIVERED", "CLOSED"]
 SERVICE_FAMILIES = {
     "security": {"SECURITY_ASSESSMENT", "VAPT_ASSESSMENT"},
@@ -114,7 +114,7 @@ async def create(payload: CreateRequest, membership=Depends(editor), db: AsyncSe
         if existing.organization_id == membership.organization_id and existing.service_code == payload.service_code and existing.customer_notes == notes:
             return {"id": existing.id, "status": existing.status}
         raise HTTPException(409, "This request identifier has already been used.")
-    titles = {"DEPLOYMENT_HELP": "Help deploy my app", "SECURITY_ASSESSMENT": "Review app security", "COMPLIANCE_HELP": "Prepare business compliance", "AWS_CONNECTION": "Connect AWS monitoring", "BACKUP_REVIEW": "Review backups and recovery", "COST_REVIEW": "Connect cloud cost reporting", "SUPPORT": "Help with my workspace", "VAPT_ASSESSMENT": "Vulnerability assessment application", "ISO27001_HELP": "ISO 27001 preparation application", "SOC2_HELP": "SOC 2 preparation application", "PRIVACY_HELP": "Privacy review application"}
+    titles = {"LAUNCH_HELP": "Launch my app with me", "DEPLOYMENT_HELP": "Help deploy my app", "SECURITY_ASSESSMENT": "Review app security", "COMPLIANCE_HELP": "Prepare business compliance", "AWS_CONNECTION": "Connect AWS monitoring", "BACKUP_REVIEW": "Review backups and recovery", "COST_REVIEW": "Connect cloud cost reporting", "SUPPORT": "Help with my workspace", "VAPT_ASSESSMENT": "Vulnerability assessment application", "ISO27001_HELP": "ISO 27001 preparation application", "SOC2_HELP": "SOC 2 preparation application", "PRIVACY_HELP": "Privacy review application"}
     item = ServiceRequest(id=str(payload.request_id), organization_id=membership.organization_id,
         service_code=payload.service_code, title=f"{payload.compliance_framework} preparation application" if payload.compliance_framework else titles[payload.service_code], status="REQUESTED", customer_notes=notes,
         estimated_delivery="Awaiting operations review")

@@ -160,6 +160,15 @@ workflow is verified; this list does not mean every item must be rebuilt.
   the dashboard map, with freshness and source coverage.
 - [ ] Security findings, drift detection, backup/recovery and operational actions.
 - [ ] Cost visibility, budgets and usage controls for an affordable service.
+- [ ] **Make it ready to advertise and sell to non-coders** (requested 14 November
+  2026): optimise the plan, track it, and reach real users and first revenue.
+  Plan re-ordered into a launch-first track: [LAUNCH_TRACK.md](LAUNCH_TRACK.md)
+  (L01-L12, with a launch gate and the owner's actions). Done so far: public site
+  for non-coders, beginner launch guide, privacy and terms pages, sign-up straight
+  into the guided launch, the paid "Launch my app with me" service on the real
+  quote and checkout flow, consent-based advert measurement (inactive until IDs
+  are set). Not yet met: first real launch, first real payment, real email,
+  custom domain. The launch gate is **not** accepted.
 - [ ] Connect a client's existing AWS account (e.g. 703671900516) to LaunchComply
   through an AWS MCP connection, with OpenRouter as the AI, to see everything in it,
   show its real architecture, then propose and later manage a data backup solution

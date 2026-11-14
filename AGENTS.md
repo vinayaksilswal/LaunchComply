@@ -7,6 +7,8 @@ next eligible card in `docs/implementation/WORK_PACKAGES.md`. The overview is
 orders future work; older reports retain historical evidence, not current release
 authority. Inspect actual code before relying on an audit finding.
 
+- Launch-first ordering (14 Nov 2026): read `docs/implementation/LAUNCH_TRACK.md`;
+  its L-items come before the remaining AWS cards unless the user says otherwise.
 - Keep scope on architecture, source analysis, scoped AI, supported AWS deployment
   and operations unless the user changes it. Do not resume the unrelated HRMS
   CORS issue. Preserve customer diagrams, configurations, IDs and old versions.

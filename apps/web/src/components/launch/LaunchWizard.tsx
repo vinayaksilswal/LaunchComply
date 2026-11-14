@@ -172,6 +172,14 @@ export function LaunchWizard() {
         </Card>}
 
         {plan.parts.length > 0 && index >= 3 && <ConnectStep plan={plan} canManage={canManage} onDone={load} onError={setError} />}
+
+        <section aria-label="Get help launching" className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyan-100 bg-cyan-50/60 p-5">
+          <div className="max-w-2xl">
+            <h2 className="text-base font-semibold text-slate-900">Stuck, or would you rather do this with a person?</h2>
+            <p className="mt-1 text-sm text-slate-600">Ask for a launch session. Someone reviews your app, tells you what needs changing and goes through the launch with you. You get a fixed quote first, and nothing is charged until you accept it.</p>
+          </div>
+          <Link href={`/dashboard/services?service=LAUNCH_HELP&application=${encodeURIComponent(plan.application.id)}`} className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white">Launch it with me <ArrowUpRight className="h-4 w-4" /></Link>
+        </section>
       </div>}
 
       {dialog && catalog && <ProvidersDialog catalog={catalog} connections={connections} canManage={canManage} initialProvider={dialog}
