@@ -3,11 +3,12 @@ import Link from "next/link";
 import {
   ArrowRight,
   Github,
-  Network,
-  ShieldCheck,
-  FileCheck2,
   Rocket,
-  LifeBuoy,
+  Activity,
+  ShieldCheck,
+  GraduationCap,
+  CreditCard,
+  Check,
 } from "lucide-react";
 import {
   PublicShell,
@@ -17,46 +18,51 @@ import {
   container,
   primaryLink,
   secondaryLink,
+  signupFor,
 } from "@/components/marketing/PublicShell";
 
 export const metadata: Metadata = {
   title: "LaunchComply — From Localhost to Real Business",
   description:
-    "You built your app. Plan its cloud architecture, request deployment and security help, and track actual service reports in your business workspace.",
+    "Built an app with AI? LaunchComply reads your code, explains it in plain words, and guides you step by step to put it online on free hosting, then keeps watch on it.",
 };
 
 export default function LandingPage() {
   const features = [
     {
-      title: "Understand your app",
+      title: "Put your app online",
       description:
-        "Connect GitHub and turn dependency evidence into a cloud proposal you can refine.",
-      href: "/architecture",
-      icon: Network,
+        "A guided, four-step launch: LaunchComply reads your code, then sets up your website, backend and database on your own free hosting accounts. You confirm every step.",
+      href: signupFor("/onboarding"),
+      link: "Start my launch",
+      icon: Rocket,
       color: "bg-cyan-50 text-cyan-700",
     },
     {
-      title: "Get help launching",
+      title: "Know it is working",
       description:
-        "Request deployment support and work through your hosting needs with operations.",
+        "See each part of your app in plain words: working, updating or needs attention. Get told when visitors cannot open your site, and when it recovers.",
       href: "/deployment",
-      icon: Rocket,
+      link: "How it works",
+      icon: Activity,
       color: "bg-blue-50 text-blue-700",
     },
     {
-      title: "Review app security",
+      title: "Learn as you go",
       description:
-        "Agree an assessment scope, follow progress, and read the actual report.",
-      href: "/security",
-      icon: ShieldCheck,
+        "No jargon. Every step explains what it does and why, and the assistant answers questions about your own app. It never changes anything unless you approve it.",
+      href: "/docs",
+      link: "Read the guides",
+      icon: GraduationCap,
       color: "bg-violet-50 text-violet-700",
     },
     {
-      title: "Prepare for business",
+      title: "Get ready for customers",
       description:
-        "Request compliance preparation and keep the resulting records together.",
-      href: "/compliance",
-      icon: FileCheck2,
+        "When you start selling, request a security check or compliance preparation from people who do it for a living, and keep the real reports in one place.",
+      href: "/services",
+      link: "See the services",
+      icon: ShieldCheck,
       color: "bg-emerald-50 text-emerald-700",
     },
   ];
@@ -68,7 +74,7 @@ export default function LandingPage() {
         <div>
           <p className="inline-flex items-center gap-2 rounded-full border border-cyan-100 bg-cyan-50/60 px-3 py-1.5 text-xs font-medium text-cyan-800">
             <span className="h-1.5 w-1.5 rounded-full bg-cyan-600" />
-            Architecture planning & assisted launch
+            For people who built an app with AI
           </p>
           <h1 className="mt-6 text-[2.7rem] font-semibold leading-[1.08] tracking-[-0.045em] text-slate-950 sm:text-6xl">
             From localhost
@@ -76,30 +82,35 @@ export default function LandingPage() {
             to <span className="text-cyan-700">real business.</span>
           </h1>
           <p className="mt-6 max-w-lg text-lg leading-8 text-slate-600">
-            Turn your code into a clear AWS launch plan.
+            Your app works on your computer. Put it online for real customers,
+            step by step, without learning to be a cloud engineer.
           </p>
           <p className="mt-4 max-w-lg text-sm leading-7 text-slate-500">
-            Connect your code, shape a cloud design, and request deployment,
-            security, or compliance help. Founders and agencies can review the
-            decisions and track an assisted delivery in one workspace.
+            Connect your code from GitHub. LaunchComply reads it, tells you in
+            plain words what it is made of, and guides you through launching it
+            on free hosting accounts that you own.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/contact#consultation" className={primaryLink}>
-              Discuss your launch
+            <Link href={signupFor("/onboarding")} className={primaryLink}>
+              Launch my app
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <Link href="/signup" className={secondaryLink}>
-              Start with your code
+            <Link href="/docs" className={secondaryLink}>
+              See how it works
             </Link>
           </div>
-          <div className="mt-7 flex flex-wrap gap-5 text-xs text-slate-500">
+          <div className="mt-7 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-500">
             <span className="flex items-center gap-1.5">
-              <Github className="h-3.5 w-3.5" />
-              Connect multiple repositories
+              <CreditCard className="h-3.5 w-3.5" />
+              No card needed to start
             </span>
             <span className="flex items-center gap-1.5">
-              <LifeBuoy className="h-3.5 w-3.5" />
-              Review scope before service work
+              <Github className="h-3.5 w-3.5" />
+              Works with your GitHub code
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Check className="h-3.5 w-3.5" />
+              You approve every step
             </span>
           </div>
         </div>
@@ -107,18 +118,19 @@ export default function LandingPage() {
           title="Your path from prototype to launch"
           steps={[
             {
-              title: "Connect and understand",
+              title: "Connect your code",
               description:
-                "Your repository, dependency evidence, and cloud proposal",
+                "Pick your GitHub repository. LaunchComply finds your website, backend and database.",
             },
             {
-              title: "Request and review",
+              title: "Launch it, step by step",
               description:
-                "The scope, status, and next steps for your business",
+                "Connect free hosting accounts and confirm each part. The parts are wired together for you.",
             },
             {
-              title: "Keep the actual outcome",
-              description: "Delivered reports and saved workspace records",
+              title: "Share your link",
+              description:
+                "Your app gets a public address. LaunchComply keeps checking that it answers.",
             },
           ]}
         />
@@ -128,27 +140,28 @@ export default function LandingPage() {
           className={`${container} flex flex-wrap items-center justify-between gap-5 py-6`}
         >
           <p className="text-sm font-medium text-slate-700">
-            A clear next step for founders and development agencies.
+            Built with Cursor, Lovable, Bolt, Replit, v0, ChatGPT or Claude?
           </p>
           <p className="max-w-xl text-sm leading-6 text-slate-500">
-            Whether you wrote the code yourself or built it with AI, start with
-            the app you have.
+            If your code is on GitHub, you can start. Guided launch currently
+            supports websites built with Next.js, Vite or React, and backends
+            built with Node.js or Python.
           </p>
         </div>
       </section>
       <section className={`${container} py-16`}>
         <div className="max-w-2xl">
           <p className="text-xs font-semibold uppercase tracking-widest text-cyan-700">
-            One connected workspace
+            Everything in one place
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Less guesswork.
+            Launch it. Watch it.
             <br />
-            More visible progress.
+            Grow it.
           </h2>
           <p className="mt-4 text-sm leading-7 text-slate-500">
-            Start with a focused workflow. Keep the design, requests, and
-            delivered results connected to your business.
+            Start with the launch. Come back for the rest when your business
+            needs it.
           </p>
         </div>
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -156,7 +169,7 @@ export default function LandingPage() {
             const Icon = item.icon;
             return (
               <Link
-                key={item.href}
+                key={item.title}
                 href={item.href}
                 className="group flex flex-col rounded-2xl border border-slate-200 p-6 transition hover:border-cyan-300 hover:shadow-sm"
               >
@@ -170,7 +183,7 @@ export default function LandingPage() {
                   {item.description}
                 </p>
                 <span className="mt-auto flex items-center gap-2 text-xs font-semibold text-cyan-700">
-                  Explore workflow
+                  {item.link}
                   <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-1" />
                 </span>
               </Link>
@@ -182,27 +195,27 @@ export default function LandingPage() {
         <div className={`${container} grid gap-10 py-14 lg:grid-cols-2`}>
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-cyan-700">
-              A workspace that tells the truth
+              Honest by design
             </p>
             <h2 className="mt-4 text-3xl font-semibold leading-tight tracking-tight">
-              Know what&apos;s planned.
+              Your app. Your accounts.
               <br />
-              See what&apos;s been delivered.
+              Your decisions.
             </h2>
           </div>
           <div className="space-y-6">
             {[
               {
-                title: "Your business, your records",
-                text: "Your account, apps, requests, and reports come from your business records. Empty pages stay empty until work is recorded.",
+                title: "You own everything",
+                text: "Your app runs in hosting accounts that belong to you (Vercel, Render, Neon and Cloudinary). If you ever leave LaunchComply, your app keeps running.",
               },
               {
-                title: "A request is the beginning",
-                text: "Applying starts an operations review. Scope and required authorization come before delivery or testing.",
+                title: "Nothing happens behind your back",
+                text: "LaunchComply shows exactly what it is about to create and waits for your confirmation. Your passwords and secret keys are never shown on screen.",
               },
               {
-                title: "Evidence over assumptions",
-                text: "A design draft is labeled as a proposal. Completed work has an actual published report you can read and download.",
+                title: "If your app is not ready, we say so",
+                text: "AI-written code does not always run online as it is. LaunchComply points out what is blocking the launch and what to fix, instead of pretending it worked.",
               },
             ].map((item) => (
               <div key={item.title}>
@@ -218,23 +231,38 @@ export default function LandingPage() {
       <FAQ
         items={[
           {
-            question: "I built my app with AI. Where do I start?",
+            question: "I built my app with AI and I am not a programmer. Can I use this?",
             answer:
-              "Create a business account, name your application, and authorize its GitHub repository. If you are unsure how to launch it, request deployment help from your workspace.",
+              "Yes, that is who it is for. You need your code in a GitHub repository. LaunchComply reads it, explains each part in plain words, and walks you through the launch one confirmed step at a time.",
           },
           {
-            question: "Does clicking Get started deploy my app automatically?",
+            question: "What does it cost?",
             answer:
-              "No. It creates your workspace. You can plan the architecture and apply for help; operations reviews scope and access before the agreed deployment work.",
+              "Creating an account and using the guided launch does not need a card. Your app runs on the free plans of the hosting providers, in accounts you own; if you later outgrow a free plan, that provider bills you directly. Expert services such as security assessments are quoted separately before any work starts.",
           },
           {
-            question: "How do I get an assessment or compliance report?",
+            question: "Which apps can be launched?",
             answer:
-              "Apply from the relevant service page. You can follow status and read the actual report once operations publishes it to your request.",
+              "Today the guided launch supports a website built with Next.js, Vite or React, a backend built with Node.js or Python, a PostgreSQL database and image storage. If your app is different, LaunchComply tells you what it found and you can ask for hands-on deployment help.",
+          },
+          {
+            question: "Does LaunchComply change my code?",
+            answer:
+              "No. It reads your repository to understand it. It does not edit or push code. If something in your code blocks the launch, it tells you what to change.",
+          },
+          {
+            question: "Is my app secure and compliant once it is online?",
+            answer:
+              "Being online is not the same as being secure or certified. The launch uses safe defaults and encrypted connections, and you can request a security assessment or compliance preparation when you are ready. LaunchComply does not issue certifications.",
           },
         ]}
       />
-      <PublicCTA />
+      <PublicCTA
+        title="Your app deserves real visitors."
+        description="Create your free workspace, connect your code, and follow the guided launch."
+        destination="/onboarding"
+        action="Launch my app"
+      />
     </PublicShell>
   );
 }

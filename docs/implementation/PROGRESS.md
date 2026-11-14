@@ -160,6 +160,11 @@ workflow is verified; this list does not mean every item must be rebuilt.
   the dashboard map, with freshness and source coverage.
 - [ ] Security findings, drift detection, backup/recovery and operational actions.
 - [ ] Cost visibility, budgets and usage controls for an affordable service.
+- [ ] Connect a client's existing AWS account (e.g. 703671900516) to LaunchComply
+  through an AWS MCP connection, with OpenRouter as the AI, to see everything in it,
+  show its real architecture, then propose and later manage a data backup solution
+  (requested 13 November 2026). Access: support both a read-only role and a
+  read-only key. **Planned, implement later:** [D05](WORK_PACKAGES.md).
 - [ ] Manage and monitor Tech Invenso's real Vercel, Render, Neon and Cloudinary
   hosting from LaunchComply, with the AWS proposal and current hosting as two options
   in one architecture tab (requested 6 November 2026). **Implemented and verified

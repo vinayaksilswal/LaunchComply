@@ -20,11 +20,11 @@ export default function PricingPage() {
       title: "Start your workspace",
       label: "Begin with your app",
       description:
-        "Create your business account and get your next steps organized.",
+        "Create your account and follow the guided launch. No card needed.",
       items: [
-        "Business account and application workspace",
-        "GitHub connection and design planning",
-        "Service requests and delivered reports",
+        "Guided launch on free hosting accounts you own",
+        "Plain-language overview and health checks for your app",
+        "GitHub connection, app design and service requests",
       ],
       action: "Create workspace",
       destination: "/onboarding",

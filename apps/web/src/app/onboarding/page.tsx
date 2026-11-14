@@ -82,7 +82,8 @@ export default function OnboardingPage() {
         result = await apiClient<{ id: string }>("/onboarding/upload", { method: "POST", body, timeout: 60000 });
       } else result = await apiClient<{ id: string }>("/onboarding/workspace", { method: "POST", body: JSON.stringify({ name: appName.trim(), repository_ids: selectedRepos, request_id: requestId }) });
       sessionStorage.removeItem("lc_onboarding_pending"); sessionStorage.removeItem(key);
-      router.push(`/dashboard/architecture?application=${encodeURIComponent(result.id)}`);
+      // GitHub-connected apps go straight to the guided launch; uploaded snapshots can only be reviewed.
+      router.push(`/dashboard/${source === "github" ? "launch" : "architecture"}?application=${encodeURIComponent(result.id)}`);
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Unable to create your workspace."); setBusy(null); }
   }
   return <div className="min-h-dvh bg-slate-50 text-slate-900 flex flex-col">
@@ -108,7 +109,7 @@ export default function OnboardingPage() {
           <p className="text-xs leading-5 text-slate-500">Include package.json, requirements.txt, or pyproject.toml. Leave out passwords, environment files, private keys, installed dependencies, and Git history. Your package is stored encrypted; code is not executed.</p>
         </section>}
         {error && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 text-rose-700 p-4 text-sm"><p>{error}</p><Link href="/dashboard/support" className="inline-block mt-2 font-semibold underline">Get workspace help</Link></div>}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-slate-100 pt-5"><p className="text-xs text-slate-500 max-w-sm">Creating a workspace does not deploy resources or start an assessment.</p><button type="submit" disabled={!!busy || !appName.trim() || (source === "github" ? !selectedRepos.length : !file)} className={primary}>{busy === "create" ? <><Loader2 className="w-4 h-4 animate-spin" />{source === "upload" ? "Uploading & preparing…" : "Creating workspace…"}</> : <>Continue to business architecture<ArrowRight className="w-4 h-4" /></>}</button></div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-slate-100 pt-5"><p className="text-xs text-slate-500 max-w-sm">Nothing is put online yet. Next, LaunchComply reads your code and shows you each step before anything is created.</p><button type="submit" disabled={!!busy || !appName.trim() || (source === "github" ? !selectedRepos.length : !file)} className={primary}>{busy === "create" ? <><Loader2 className="w-4 h-4 animate-spin" />{source === "upload" ? "Uploading & preparing…" : "Creating workspace…"}</> : <>{source === "github" ? "Continue to launch" : "Continue to business architecture"}<ArrowRight className="w-4 h-4" /></>}</button></div>
       </form>
     </main><footer className="p-6 border-t border-slate-200 bg-white text-center text-xs text-slate-500">LaunchComply</footer>
   </div>;

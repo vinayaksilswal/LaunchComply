@@ -37,8 +37,8 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
               LaunchComply
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-6 text-slate-500">
-              From localhost to real business. A workspace for your app, its
-              cloud design, and the help you need to move forward.
+              From localhost to real business. Put the app you built online,
+              keep watch on it, and get help when your business needs it.
             </p>
           </div>
           <FooterLinks title="Platform" items={PUBLIC_NAV.slice(0, 4)} />
@@ -56,6 +56,8 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
               { label: "Contact & support", href: "/contact" },
               { label: "Platform status", href: "/status" },
               { label: "Sign in", href: "/login" },
+              { label: "Privacy", href: "/privacy" },
+              { label: "Terms", href: "/terms" },
             ]}
           />
         </div>
@@ -63,7 +65,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
           className={`${container} flex flex-wrap justify-between gap-3 border-t border-slate-200 py-6 text-xs text-slate-500`}
         >
           <p>LaunchComply</p>
-          <p>Plan clearly. Request help. Keep the actual results.</p>
+          <p>Launch it. Watch it. Grow it.</p>
         </div>
       </footer>
     </div>

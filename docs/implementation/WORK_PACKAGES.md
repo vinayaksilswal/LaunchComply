@@ -686,6 +686,56 @@ cost/alert freshness meets documented bounds.
 **Evidence/recovery:** timed drill and revised runbooks; restrict operational
 claims/support scope when evidence fails, without hiding incidents.
 
+### D05 — Read-only customer AWS account review through MCP
+
+**Depends on:** D02 (inventory ownership), C01 (tenant authorization). **Release:** R3.
+**Status:** planned, not started (requested 13 November 2026; implement later).
+
+**Seams:** `services/infrastructure/aws_account_connection.py`, `api/v1/aws_account_connection.py`,
+`services/architecture/routing.py` (OpenRouter), `services/hosting/vault.py`,
+`components/workspace/AwsAccountConnection.tsx`, architecture Overview/diagram.
+
+Let a business connect an existing AWS account (for example a client account), see
+everything it contains in plain language, and get the real architecture drawn, with
+the AI (OpenRouter, free routes only, never a silent paid fallback) reading the
+account through an AWS MCP server.
+
+1. **Two read-only access methods (customer chose "support both"):**
+   - Recommended: a one-click CloudFormation read-only role with a per-tenant
+     ExternalId, assumed by LaunchComply's own AWS identity. Render has no AWS
+     workload identity, so the platform signs in with a Tech Invenso platform key
+     (Render secret) and assumes the platform role first; update the runtime-identity
+     check in `platform_session` accordingly.
+   - Fallback: a read-only IAM access key pasted by the customer, sealed with the
+     vault, never logged or returned, with a rotation reminder.
+   Both use AWS-managed `ReadOnlyAccess` (or `ViewOnlyAccess` + Backup/Cost reads);
+   the current four-call observer policy is too narrow.
+2. **MCP read path:** evaluate `awslabs.aws-api-mcp-server` (1.6.0 seen 13 Nov 2026)
+   with `READ_OPERATIONS_ONLY=true` and short-lived credentials per session. First
+   check that its awscli/botocore pins are compatible with `boto3==1.43.110`; if not,
+   run it as an isolated process/venv or expose an in-house read-only MCP server on
+   boto3. Server-side allow-list of read operations regardless of the MCP mode.
+3. **Inventory:** all enabled regions plus global services: EC2/EBS/snapshots, VPC
+   and networking, ELB, ECS/EKS/Lambda, RDS/Aurora/DynamoDB, S3 (names, region,
+   versioning, encryption; never object contents), AWS Backup plans/vaults/recovery
+   points, CloudWatch alarms, CloudTrail, IAM summary (no secrets), Organizations,
+   Cost Explorer by service. Paginate with bounded budgets; record coverage gaps.
+4. **AI:** OpenRouter tool loop over the MCP read tools; AWS names/tags/descriptions
+   are untrusted content (prompt-injection boundary). AI explains and proposes;
+   nothing writes to AWS in this package.
+5. **Project + architecture:** add the account as a business asset/project and
+   render the observed architecture (separate from designed/proposed diagrams).
+6. **Backup proposal (follow-on, separate approval):** propose an AWS Backup plan
+   from the observed data stores with estimated cost; implementing it is a
+   billable change that needs explicit customer authorization per AGENTS.md.
+
+**Acceptance:** pytest for both access methods (mocked STS/MCP), refusal of any
+non-read operation, ExternalId confused-deputy checks, secret redaction; one real
+read-only review of a consenting account with evidence. No changes made in the
+customer account other than the access role/key the customer created.
+**Evidence/recovery:** dated report; disconnect removes stored credentials and
+tells the customer how to delete the role/key in AWS.
+
 ## E. Commercial sustainability and enterprise extension
 
 ### E01 — Metered entitlements and paid design pilot

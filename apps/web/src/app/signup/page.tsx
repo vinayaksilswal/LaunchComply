@@ -224,6 +224,13 @@ function SignupForm() {
             </>
           )}
         </button>
+        <p className="text-xs leading-5 text-slate-500">
+          By creating a workspace you agree to the{" "}
+          <Link href="/terms" target="_blank" className="font-semibold text-cyan-700">Terms</Link>{" "}
+          and{" "}
+          <Link href="/privacy" target="_blank" className="font-semibold text-cyan-700">Privacy page</Link>.
+          No card needed.
+        </p>
       </form>
       <p className="mt-6 text-sm text-slate-500">
         Already have an account?{" "}

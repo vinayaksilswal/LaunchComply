@@ -9,6 +9,21 @@ export const GUIDES: Record<
     note: string;
   }
 > = {
+  "launch-your-ai-app": {
+    title: "Launch the app you built with AI",
+    description: "From code on your computer to a public link your customers can open, explained without jargon.",
+    steps: [
+      { title: "Put your code on GitHub", text: "GitHub is a free website that stores your code safely. Most AI builders (Cursor, Lovable, Bolt, Replit, v0) have a button to push or export your project to GitHub. Keep the repository private if you prefer; LaunchComply only sees the repositories you choose." },
+      { title: "Create your workspace and connect your code", text: "Sign up, give your app a name, and choose its repository. LaunchComply reads the code. It does not change it. If your website and your backend are in two repositories, select both." },
+      { title: "See what your app is made of", text: "Open Launch your app and press Look at my code. Most apps have up to four parts: a website (what visitors see), a backend server (the logic behind it), a database (where information is kept) and image storage. LaunchComply shows which parts it found." },
+      { title: "Connect free hosting accounts", text: "Each part runs at a hosting provider: the website on Vercel, the backend on Render, the database on Neon and images on Cloudinary. All have free plans. You create the accounts, so you own them, and paste in an access key for each. Keys are stored encrypted and never shown again." },
+      { title: "Create each part, one confirmed click at a time", text: "LaunchComply shows exactly what it will create and waits for you to confirm. If something would stop your app from running online, for example a start command that ignores the port the host provides, it tells you what to fix first. The first build of a backend can take several minutes." },
+      { title: "Connect the parts and share your link", text: "Press Connect and go live. LaunchComply gives the backend its database address and tells the website where the backend is, without showing you any secret. Your website gets a public address you can share. The Overview page then tells you, in plain words, whether each part is working." },
+    ],
+    next: "/signup?next=%2Fonboarding",
+    nextLabel: "Start my launch",
+    note: "Free hosting plans have limits: for example, a free backend goes to sleep when nobody is using it and takes a moment to wake up. Being online does not mean an app is secure or certified. Not every app can be launched automatically; LaunchComply tells you when yours needs changes or hands-on help.",
+  },
   "first-business-launch": {
     title: "Plan your first business launch",
     description: "A practical path from connected code to a reviewed, assisted deployment engagement.",

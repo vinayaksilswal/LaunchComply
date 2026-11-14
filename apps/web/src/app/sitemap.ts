@@ -12,6 +12,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "/docs",
     "/about",
     "/contact",
+    "/privacy",
+    "/terms",
     ...Object.keys(GUIDES).map((slug) => `/docs/${slug}`),
   ];
   return paths.map((path) => ({

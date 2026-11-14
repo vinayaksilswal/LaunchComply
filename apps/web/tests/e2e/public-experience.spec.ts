@@ -40,6 +40,8 @@ test("Every public navigation destination has its own useful page", async ({
     "/about",
     "/contact",
     "/status",
+    "/privacy",
+    "/terms",
   ];
   const links = new Set<string>();
   for (const path of paths) {
@@ -73,6 +75,7 @@ test("Public guides, metadata and missing pages are valid", async ({
   request,
 }) => {
   for (const slug of [
+    "launch-your-ai-app",
     "getting-started",
     "github",
     "architecture",
